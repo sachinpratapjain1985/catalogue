@@ -68,7 +68,58 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
+// Function to auto-seed/enforce the admin user
+import bcrypt from 'bcryptjs';
+import { query } from './db';
+
+async function seedAdmin(retries = 10, delay = 3000): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      // Check if users table exists
+      const tableCheck = await query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users'
+        );
+      `);
+
+      if (tableCheck.rows[0].exists) {
+        const adminCheck = await query('SELECT id FROM users WHERE username = $1', ['admin']);
+        const adminHash = await bcrypt.hash('adminpassword', 10);
+
+        if (adminCheck.rows.length === 0) {
+          console.log('[Auto-Seed] Seeding default admin user...');
+          await query(
+            `INSERT INTO users (username, password_hash, role, status) VALUES ($1, $2, $3, $4)`,
+            ['admin', adminHash, 'superadmin', 'active']
+          );
+          console.log('[Auto-Seed] Default admin user seeded successfully!');
+        } else {
+          console.log('[Auto-Seed] Enforcing default admin credentials...');
+          await query(
+            'UPDATE users SET password_hash = $1, status = $2, role = $3 WHERE username = $4',
+            [adminHash, 'active', 'superadmin', 'admin']
+          );
+          console.log('[Auto-Seed] Default admin credentials verified & updated successfully!');
+        }
+        return; // Success, exit
+      } else {
+        console.log(`[Auto-Seed] Users table does not exist yet (attempt ${i + 1}/${retries}). Waiting for schema to initialize...`);
+      }
+    } catch (err) {
+      console.warn(`[Auto-Seed] DB check failed (attempt ${i + 1}/${retries}):`, err);
+    }
+    // Wait before retrying
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  console.error('[Auto-Seed] Failed to verify or seed admin user after maximum retries.');
+}
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  // Run admin seed in the background on startup
+  seedAdmin();
 });
+

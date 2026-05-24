@@ -124,7 +124,7 @@ if [ $? -eq 0 ]; then
   echo ""
   echo "Nginx Isolation Reminder:"
   echo "----------------------------------------------------------------------"
-  echo "To bind to catalogue.desukafashion.com without affecting the LMS, "
+  echo "To bind to catalog.desukafashion.com without affecting the LMS, "
   echo "we have created a standalone configuration file 'catalogue.nginx.conf'."
   echo "You can place this in your Nginx configurations directory on the host"
   echo "(e.g., /etc/nginx/sites-enabled/) and restart Nginx."
