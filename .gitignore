@@ -1,0 +1,60 @@
+# ==============================================================================
+# Git Ignore - Catalogue Management System (Root Workspace)
+# ==============================================================================
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Node.js (Backend & Frontend dependencies/builds)
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vite / Frontend build artifacts
+frontend/dist/
+frontend/node_modules/
+
+# Express Backend build artifacts
+backend/dist/
+backend/node_modules/
+backend/.env
+
+# Android Project (CatalogApp) ignores
+CatalogApp/.gradle/
+CatalogApp/local.properties
+CatalogApp/.idea/
+CatalogApp/app/build/
+CatalogApp/build/
+CatalogApp/captures/
+CatalogApp/.externalNativeBuild/
+CatalogApp/.cxx/
+CatalogApp/sentry-properties.bak
+CatalogApp/*.apk
+CatalogApp/*.ap_
+CatalogApp/*.aab
+CatalogApp/app/src/main/assets/
+
+# Local database volumes / uploads data (handled by Docker)
+pgdata/
+uploads-data/
+backend/uploads/
+uploads/
+
+# Code Editors & IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

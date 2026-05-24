@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Map the app cache directory where WhatsApp images are downloaded -->
+    <cache-path name="shared_catalogs" path="shared_catalogs/" />
+</paths>

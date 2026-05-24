@@ -1,0 +1,422 @@
+package com.example.catalogapp.ui
+
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.catalogapp.data.*
+import com.example.catalogapp.utils.SharingUtils
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SalesDashboard(
+    sessionManager: SessionManager,
+    onLogout: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    
+    var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf<CategoryDto?>(null) }
+    var items by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    
+    // Selection state
+    val selectedItems = remember { mutableStateListOf<SKUItemDto>() }
+    
+    // Loading/Error states
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+    
+    // Sharing dialogue progress state
+    var isSharing by remember { mutableStateOf(false) }
+    var shareProgressMsg by remember { mutableStateOf("") }
+
+    val apiService = NetworkClient.getApiService(sessionManager)
+
+    val loadCategories = {
+        isLoading = true
+        errorMsg = ""
+        coroutineScope.launch {
+            try {
+                categories = apiService.getCategories()
+            } catch (e: Exception) {
+                errorMsg = "Connection error. Pull to refresh."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadCategories()
+    }
+
+    val loadItems = { category: CategoryDto ->
+        isLoading = true
+        selectedItems.clear()
+        coroutineScope.launch {
+            try {
+                items = apiService.getCategoryItems(category.id)
+            } catch (e: Exception) {
+                errorMsg = "Failed to fetch designs."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = selectedCategory?.name ?: "Sales Catalogue",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                },
+                navigationIcon = {
+                    if (selectedCategory != null) {
+                        IconButton(onClick = { 
+                            selectedCategory = null 
+                            items = emptyList()
+                            selectedItems.clear()
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { 
+                        if (selectedCategory != null) loadItems(selectedCategory!!) else loadCategories()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        },
+        bottomBar = {
+            if (selectedItems.isNotEmpty()) {
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Between
+                    ) {
+                        Column {
+                            Text(
+                                text = "${selectedItems.size} items selected",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                text = "Ready to share actual photos",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                isSharing = true
+                                coroutineScope.launch {
+                                    SharingUtils.downloadAndShareImages(
+                                        context = context,
+                                        selectedItems = selectedItems.toList(),
+                                        sessionManager = sessionManager,
+                                        onProgress = { shareProgressMsg = it },
+                                        onError = {
+                                            isSharing = false
+                                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+                                    isSharing = false
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, size = 18.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Share via WhatsApp", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (isLoading && items.isEmpty() && categories.isEmpty()) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (errorMsg.isNotEmpty()) {
+                Text(
+                    text = errorMsg,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
+                )
+            } else if (selectedCategory == null) {
+                // Categories List Selection
+                if (categories.isEmpty()) {
+                    Text(
+                        text = "No folder categories available.",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(categories) { category ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        selectedCategory = category
+                                        loadItems(category)
+                                    },
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    horizontalArrangement = Arrangement.Between,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = category.name,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Browse available designs",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Default.Share, 
+                                        contentDescription = null, 
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // SKU Showcase Grid Selection
+                if (items.isEmpty()) {
+                    Text(
+                        text = "No available items found in this section.",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(items, key = { it.id }) { item ->
+                            val isSelected = selectedItems.any { it.id == item.id }
+                            SalesItemCard(
+                                item = item,
+                                isSelected = isSelected,
+                                sessionManager = sessionManager,
+                                onSelectToggle = {
+                                    if (isSelected) {
+                                        selectedItems.removeAll { it.id == item.id }
+                                    } else {
+                                        selectedItems.add(item)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Sharing Progress Modal Dialog
+            if (isSharing) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    confirmButton = {},
+                    title = { Text("Preparing Share Bundle") },
+                    text = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp)
+                        ) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = shareProgressMsg,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SalesItemCard(
+    item: SKUItemDto,
+    isSelected: Boolean,
+    sessionManager: SessionManager,
+    onSelectToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelectToggle() }
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                // Async image display
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(item.getFullImageUrl(sessionManager.getServerUrl()))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.sku_id,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+
+                Column(
+                    modifier = Modifier.padding(10.dp)
+                ) {
+                    Text(
+                        text = item.sku_id,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    
+                    if (!item.material.isNullOrBlank()) {
+                        Text(
+                            text = "Material: ${item.material}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    if (!item.description.isNullOrBlank()) {
+                        Text(
+                            text = item.description,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.Between
+                    ) {
+                        Text(
+                            text = "${item.sets_count} sets",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Qty: ${item.total_pieces}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Overlay Selection indicator checkmark icon
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .background(Color.Black.copy(alpha = 0.3f))
+                )
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .align(Alignment.TopEnd)
+                        .size(28.dp)
+                        .background(Color.White, shape = RoundedCornerShape(50%))
+                )
+            }
+        }
+    }
+}

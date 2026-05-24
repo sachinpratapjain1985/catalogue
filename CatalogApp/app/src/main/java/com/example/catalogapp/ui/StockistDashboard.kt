@@ -1,0 +1,374 @@
+package com.example.catalogapp.ui
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.catalogapp.data.*
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StockistDashboard(
+    sessionManager: SessionManager,
+    onLogout: () -> Unit
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf<CategoryDto?>(null) }
+    var items by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+    
+    val apiService = NetworkClient.getApiService(sessionManager)
+
+    // Load categories on start
+    val loadCategories = {
+        isLoading = true
+        errorMsg = ""
+        coroutineScope.launch {
+            try {
+                categories = apiService.getCategories()
+            } catch (e: Exception) {
+                errorMsg = "Failed to load folders. Pull to refresh."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadCategories()
+    }
+
+    val loadItems = { category: CategoryDto ->
+        isLoading = true
+        coroutineScope.launch {
+            try {
+                items = apiService.getCategoryItems(category.id)
+            } catch (e: Exception) {
+                errorMsg = "Failed to load SKU list."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = selectedCategory?.name ?: "Stock Folders",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                },
+                navigationIcon = {
+                    if (selectedCategory != null) {
+                        IconButton(onClick = { 
+                            selectedCategory = null 
+                            items = emptyList()
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { 
+                        if (selectedCategory != null) loadItems(selectedCategory!!) else loadCategories()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Log out")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (isLoading && items.isEmpty() && categories.isEmpty()) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (errorMsg.isNotEmpty()) {
+                Text(
+                    text = errorMsg,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
+                )
+            } else if (selectedCategory == null) {
+                // Category List Screen
+                if (categories.isEmpty()) {
+                    Text(
+                        text = "No folder categories assigned to you.",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(categories) { category ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        selectedCategory = category
+                                        loadItems(category)
+                                    },
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                              ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    horizontalArrangement = Arrangement.Between,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = category.name,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${category.sku_count} articles tracked",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Text(
+                                        text = "Open >",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // SKU Stock Management Screen
+                if (items.isEmpty()) {
+                    Text(
+                        text = "No SKU items found in this folder.",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(1),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(items, key = { it.id }) { item ->
+                            StockItemCard(
+                                item = item,
+                                sessionManager = sessionManager,
+                                apiService = apiService
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StockItemCard(
+    item: SKUItemDto,
+    sessionManager: SessionManager,
+    apiService: CatalogApiService
+) {
+    // Current stock states
+    var sets by remember { mutableStateOf(item.sets_count) }
+    var isAvailable by remember { mutableStateOf(item.is_available) }
+    var isUpdating by remember { mutableStateOf(false) }
+    var isSuccess by remember { mutableStateOf(false) }
+    
+    val scope = rememberCoroutineScope()
+    val totalQty = sets * item.pieces_per_set
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Image Preview (using Coil)
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(item.getFullImageUrl(sessionManager.getServerUrl()))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = item.sku_id,
+                modifier = Modifier
+                    .size(90.dp)
+                    .clickable { /* Could show full-screen image preview if needed */ },
+                contentScale = ContentScale.Crop
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // SKU Details and stock selectors
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = item.sku_id,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Pack size: ${item.pieces_per_set} pieces/set",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Sets counter increment / decrement
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = { if (sets > 0) sets-- },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+
+                    Text(
+                        text = "$sets sets",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    IconButton(
+                        onClick = { sets++ },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", size = 16.dp)
+                    }
+                }
+                
+                Text(
+                    text = "Total pieces: $totalQty",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            // Right actions column (Available yes/no, Save button)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = 4.dp)
+            ) {
+                // Availability Toggle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (isAvailable) "Available" else "No Stock",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                    Switch(
+                        checked = isAvailable,
+                        onCheckedChange = { isAvailable = it },
+                        modifier = Modifier.scale(0.75f)
+                    )
+                }
+
+                // Save Changes button
+                Button(
+                    onClick = {
+                        isUpdating = true
+                        isSuccess = false
+                        scope.launch {
+                            try {
+                                apiService.updateStock(
+                                    item.id,
+                                    StockUpdateRequest(setsCount = sets, isAvailable = isAvailable)
+                                )
+                                isSuccess = true
+                            } catch (e: Exception) {
+                                // show error toast / dialog
+                            } finally {
+                                isUpdating = false
+                            }
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp),
+                    enabled = !isUpdating,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSuccess) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(size = 14.dp, color = Color.White)
+                    } else if (isSuccess) {
+                        Icon(Icons.Default.Check, contentDescription = "Saved", size = 14.dp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Saved", fontSize = 11.sp)
+                    } else {
+                        Text("Update", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Scale helper forCompose switch
+import androidx.compose.ui.draw.scale
