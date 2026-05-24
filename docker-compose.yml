@@ -33,8 +33,11 @@ services:
       - DB_NAME=catalogue_db
       - JWT_SECRET=super_secret_key_change_me_in_prod
       - UPLOAD_DIR=/app/uploads
+      - SSL_CERT_PATH=/etc/letsencrypt/live/lms.desukafashion.com/fullchain.pem
+      - SSL_KEY_PATH=/etc/letsencrypt/live/lms.desukafashion.com/privkey.pem
     volumes:
       - uploads-data:/app/uploads
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - db
 

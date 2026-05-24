@@ -116,9 +116,37 @@ async function seedAdmin(retries = 10, delay = 3000): Promise<void> {
   console.error('[Auto-Seed] Failed to verify or seed admin user after maximum retries.');
 }
 
+// Secure Server Bootloader (HTTP / HTTPS auto-detection)
+import https from 'https';
+import http from 'http';
+
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/lms.desukafashion.com/fullchain.pem';
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/lms.desukafashion.com/privkey.pem';
+
+let server;
+let isHttps = false;
+
+if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
+  try {
+    console.log(`[SSL] Certificates detected at: ${SSL_CERT_PATH}. Initializing HTTPS...`);
+    const sslOptions = {
+      cert: fs.readFileSync(SSL_CERT_PATH),
+      key: fs.readFileSync(SSL_KEY_PATH)
+    };
+    server = https.createServer(sslOptions, app);
+    isHttps = true;
+  } catch (err) {
+    console.error('[SSL] Failed to initialize HTTPS server, falling back to HTTP:', err);
+    server = http.createServer(app);
+  }
+} else {
+  console.log('[SSL] Certificates not detected. Initializing standard HTTP server...');
+  server = http.createServer(app);
+}
+
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT} via ${isHttps ? 'HTTPS' : 'HTTP'}`);
   // Run admin seed in the background on startup
   seedAdmin();
 });
