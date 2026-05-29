@@ -16,6 +16,19 @@ import java.io.InputStream
 
 object SharingUtils {
 
+    private fun sanitizeDescription(desc: String?): String {
+        if (desc.isNullOrBlank()) {
+            return "DESUKA by VS FASHION Gandhi Nagar Delhi."
+        }
+        return desc
+            .replace("old stock", "", ignoreCase = true)
+            .replace("new stock", "", ignoreCase = true)
+            .replace("old", "", ignoreCase = true)
+            .replace("new", "", ignoreCase = true)
+            .trim()
+            .ifBlank { "DESUKA by VS FASHION Gandhi Nagar Delhi." }
+    }
+
     /**
      * Downloads list of selected images to cache and shares them over WhatsApp.
      */
@@ -88,7 +101,7 @@ object SharingUtils {
                         if (!item.material.isNullOrBlank()) {
                             append("Material: ${item.material}\n")
                         }
-                        val desc = if (!item.description.isNullOrBlank()) item.description else "DESUKA by VS FASHION Gandhi Nagar Delhi."
+                        val desc = sanitizeDescription(item.description)
                         append("Description: $desc\n")
                         append("Pack Details: ${item.pieces_per_set} pieces per set\n")
                         append("Available: Yes\n\n")
@@ -110,7 +123,7 @@ object SharingUtils {
                             if (!item.material.isNullOrBlank()) {
                                 append("  Material: ${item.material}\n")
                             }
-                            val desc = if (!item.description.isNullOrBlank()) item.description else "DESUKA by VS FASHION Gandhi Nagar Delhi."
+                            val desc = sanitizeDescription(item.description)
                             append("  Description: $desc\n")
                             append("  Pack details: ${item.pieces_per_set} pc/set\n\n")
                         }
