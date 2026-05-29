@@ -19,7 +19,7 @@ interface Category {
 interface User {
   id: number;
   username: string;
-  role: 'superadmin' | 'stockist' | 'sales';
+  role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
   status: 'active' | 'disabled';
   working_hours_start: string;
   working_hours_end: string;
@@ -53,7 +53,7 @@ export default function Users({ token }: UsersProps) {
   const [editUserId, setEditUserId] = useState<number | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'superadmin' | 'stockist' | 'sales'>('stockist');
+  const [role, setRole] = useState<'superadmin' | 'manager' | 'both' | 'stockist' | 'sales'>('stockist');
   const [status, setStatus] = useState<'active' | 'disabled'>('active');
   const [workingHoursStart, setWorkingHoursStart] = useState('08:00:00');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('20:00:00');
@@ -125,7 +125,7 @@ export default function Users({ token }: UsersProps) {
       status,
       workingHoursStart,
       workingHoursEnd,
-      categoryIds: role === 'stockist' ? selectedCatIds : []
+      categoryIds: (role === 'stockist' || role === 'both') ? selectedCatIds : []
     };
 
     try {
@@ -325,7 +325,9 @@ export default function Users({ token }: UsersProps) {
                 <select value={role} onChange={e => setRole(e.target.value as any)}>
                   <option value="stockist">Stockist (Stock Manager)</option>
                   <option value="sales">Sales User (Catalogue Share)</option>
-                  <option value="superadmin">Superadmin (Manager)</option>
+                  <option value="both">Both Rights (Sales + Stock)</option>
+                  <option value="manager">Manager (Access both + Web admin)</option>
+                  <option value="superadmin">Superadmin (Full Control)</option>
                 </select>
               </div>
 
@@ -365,7 +367,7 @@ export default function Users({ token }: UsersProps) {
             </div>
 
             {/* Folder accessibility checklist for Stockists */}
-            {role === 'stockist' && (
+            {(role === 'stockist' || role === 'both') && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.01)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.5rem' }}>
                   <FolderOpen size={12} />
@@ -504,7 +506,7 @@ export default function Users({ token }: UsersProps) {
                     </div>
                   </td>
                   <td style={{ maxWidth: '240px', fontSize: '0.85rem' }}>
-                    {u.role === 'stockist' ? (
+                    {(u.role === 'stockist' || u.role === 'both') ? (
                       u.assignedCategories.length === 0 ? (
                         <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>No folders assigned</span>
                       ) : (

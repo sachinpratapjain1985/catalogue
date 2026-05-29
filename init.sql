@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('superadmin', 'stockist', 'sales')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('superadmin', 'manager', 'both', 'stockist', 'sales')),
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
     working_hours_start TIME DEFAULT '00:00:00',
     working_hours_end TIME DEFAULT '23:59:59',
@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS items (
     pieces_per_set INTEGER NOT NULL DEFAULT 4 CHECK (pieces_per_set > 0),
     description TEXT,
     material VARCHAR(100),
+    rate INTEGER NOT NULL DEFAULT 0,
+    original_created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -77,11 +79,23 @@ CREATE TABLE IF NOT EXISTS stock_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create Rate Logs table (for rate change audit logs)
+CREATE TABLE IF NOT EXISTS rate_logs (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    old_rate INTEGER,
+    new_rate INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_stock_logs_item ON stock_logs(item_id);
 CREATE INDEX IF NOT EXISTS idx_stock_logs_user ON stock_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category_id);
 CREATE INDEX IF NOT EXISTS idx_devices_uuid ON devices(device_uuid);
+CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id);
 
 -- Insert default admin user (username: admin, password: adminpassword)
 -- Password hash generated using bcrypt ($2a$10$tMh5t5mE/wM/CcrC720kEuqE9j.u1DsnmF0q12cR1w1F7d1D1Gvq6)

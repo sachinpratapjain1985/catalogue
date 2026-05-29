@@ -41,7 +41,10 @@ data class SKUItemDto(
     val material: String?,
     val sets_count: Int,
     val total_pieces: Int,
-    val is_available: Boolean
+    val is_available: Boolean,
+    val rate: Int = 0,
+    val original_created_at: String? = null,
+    val age_in_days: Int? = null
 ) {
     // Helper to get full Image URL
     fun getFullImageUrl(baseUrl: String): String {
@@ -53,11 +56,23 @@ data class SKUItemDto(
             "$formattedBase$formattedPath"
         }
     }
+
+    // Helper to get compressed WebP/JPEG thumbnail URL for grid optimization
+    fun getThumbnailImageUrl(baseUrl: String): String {
+        val originalUrl = getFullImageUrl(baseUrl)
+        val lastDotIndex = originalUrl.lastIndexOf('.')
+        return if (lastDotIndex != -1 && !originalUrl.contains("-thumb.")) {
+            originalUrl.substring(0, lastDotIndex) + "-thumb" + originalUrl.substring(lastDotIndex)
+        } else {
+            originalUrl
+        }
+    }
 }
 
 data class StockUpdateRequest(
     val setsCount: Int?,
-    val isAvailable: Boolean?
+    val isAvailable: Boolean?,
+    val rate: Int? = null
 )
 
 data class StockUpdateResponse(
@@ -65,6 +80,7 @@ data class StockUpdateResponse(
     val sets_count: Int,
     val total_pieces: Int,
     val is_available: Boolean,
+    val rate: Int? = null,
     val updated_by: Int
 )
 
@@ -77,7 +93,11 @@ interface CatalogApiService {
     suspend fun getCategories(): List<CategoryDto>
 
     @GET("api/catalog/categories/{id}/items")
-    suspend fun getCategoryItems(@Path("id") categoryId: Int): List<SKUItemDto>
+    suspend fun getCategoryItems(
+        @Path("id") categoryId: Int,
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): List<SKUItemDto>
 
     @POST("api/catalog/items/{id}/stock")
     suspend fun updateStock(
@@ -89,8 +109,7 @@ interface CatalogApiService {
 // Network Client Provider
 object NetworkClient {
     // Replace with actual backend deployment address
-    // In emulator, 10.0.2.2 maps to the host's localhost (where backend port 5000 is running)
-    var baseUrl = "http://10.0.2.2:5000/"
+    var baseUrl = "https://catalog.desukafashion.com/"
         set(value) {
             field = value
             retrofitInstance = null
@@ -114,6 +133,11 @@ object NetworkClient {
                     // Inject authorization token if present
                     sessionManager.getToken()?.let {
                         requestBuilder.header("Authorization", "Bearer $it")
+                    }
+
+                    // Inject active role header if present
+                    sessionManager.getActiveRole()?.let {
+                        requestBuilder.header("x-active-role", it)
                     }
 
                     // Inject device ID header

@@ -13,6 +13,7 @@ class SessionManager(context: Context) {
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USERNAME = "username"
         private const val KEY_ROLE = "role"
+        private const val KEY_ACTIVE_ROLE = "active_role"
         private const val KEY_DEVICE_UUID = "device_uuid"
         private const val KEY_SERVER_URL = "server_url"
     }
@@ -23,11 +24,13 @@ class SessionManager(context: Context) {
             val newUuid = UUID.randomUUID().toString()
             prefs.edit().putString(KEY_DEVICE_UUID, newUuid).apply()
         }
+        // Initialize network client base URL from saved configuration
+        NetworkClient.baseUrl = getServerUrl()
     }
 
     // Server Config
     fun getServerUrl(): String {
-        return prefs.getString(KEY_SERVER_URL, "http://10.0.2.2:5000/") ?: "http://10.0.2.2:5000/"
+        return prefs.getString(KEY_SERVER_URL, "https://catalog.desukafashion.com/") ?: "https://catalog.desukafashion.com/"
     }
 
     fun setServerUrl(url: String) {
@@ -80,12 +83,22 @@ class SessionManager(context: Context) {
         return prefs.getString(KEY_USERNAME, null)
     }
 
+    // Active Role for dual-role users (both/manager)
+    fun saveActiveRole(role: String) {
+        prefs.edit().putString(KEY_ACTIVE_ROLE, role).apply()
+    }
+
+    fun getActiveRole(): String? {
+        return prefs.getString(KEY_ACTIVE_ROLE, null)
+    }
+
     fun logout() {
         prefs.edit().apply {
             remove(KEY_TOKEN)
             remove(KEY_USER_ID)
             remove(KEY_USERNAME)
             remove(KEY_ROLE)
+            remove(KEY_ACTIVE_ROLE)
         }.apply()
     }
 }

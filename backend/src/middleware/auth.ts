@@ -8,7 +8,7 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: number;
     username: string;
-    role: 'superadmin' | 'stockist' | 'sales';
+    role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
     deviceUuid?: string;
   };
 }
@@ -67,8 +67,8 @@ export const authenticateToken = async (
       }
     }
 
-    // 4. Device verification for mobile roles (stockist and sales)
-    if (user.role === 'stockist' || user.role === 'sales') {
+    // 4. Device verification for mobile roles (stockist, sales, both, manager)
+    if (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager') {
       const deviceUuid = req.headers['x-device-uuid'] as string || decoded.deviceUuid;
 
       if (!deviceUuid) {
@@ -96,11 +96,22 @@ export const authenticateToken = async (
       decoded.deviceUuid = deviceUuid;
     }
 
+    // Determine active role override
+    let activeRole = user.role;
+    const headerRole = req.headers['x-active-role'] as string;
+    if (headerRole === 'stockist' || headerRole === 'sales') {
+      if (user.role === 'both' || user.role === 'manager' || user.role === 'superadmin') {
+        activeRole = headerRole;
+      }
+    } else if (user.role === 'both') {
+      activeRole = 'sales';
+    }
+
     // Attach user information to request
     req.user = {
       id: user.id,
       username: user.username,
-      role: user.role,
+      role: activeRole as any,
       deviceUuid: decoded.deviceUuid,
     };
 
@@ -110,7 +121,7 @@ export const authenticateToken = async (
   }
 };
 
-export const requireRole = (roles: Array<'superadmin' | 'stockist' | 'sales'>) => {
+export const requireRole = (roles: Array<'superadmin' | 'manager' | 'both' | 'stockist' | 'sales'>) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     if (!req.user || !roles.includes(req.user.role)) {
       res.status(403).json({ error: 'Unauthorized to perform this action' });

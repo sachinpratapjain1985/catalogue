@@ -44,11 +44,14 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
   }
 });
 
-// GET /api/catalog/categories/:id/items - Retrieve SKU designs under a category
+// GET /api/catalog/categories/:id/items - Retrieve SKU designs under a category (with pagination and age calculation)
 router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const categoryId = parseInt(req.params.id);
   const userId = req.user?.id;
   const role = req.user?.role;
+  const page = req.query.page ? parseInt(req.query.page as string) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : null;
+  const offset = page && limit ? (page - 1) * limit : null;
 
   try {
     // If stockist, verify folder assignment permission
@@ -66,26 +69,38 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     let itemsRes;
     if (role === 'sales') {
       // Sales user only sees available stock items
-      itemsRes = await query(
-        `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material,
+      let queryStr = `
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+                (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available
          FROM items i
          JOIN stock s ON s.item_id = i.id
          WHERE i.category_id = $1 AND s.is_available = TRUE
-         ORDER BY i.sku_id ASC`,
-        [categoryId]
-      );
+         ORDER BY i.sku_id ASC
+      `;
+      const params: any[] = [categoryId];
+      if (limit !== null && offset !== null) {
+        queryStr += ` LIMIT $2 OFFSET $3`;
+        params.push(limit, offset);
+      }
+      itemsRes = await query(queryStr, params);
     } else {
       // Stockists and Admins see all items to maintain stock
-      itemsRes = await query(
-        `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material,
+      let queryStr = `
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+                (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available
          FROM items i
          JOIN stock s ON s.item_id = i.id
          WHERE i.category_id = $1
-         ORDER BY i.sku_id ASC`,
-        [categoryId]
-      );
+         ORDER BY i.sku_id ASC
+      `;
+      const params: any[] = [categoryId];
+      if (limit !== null && offset !== null) {
+        queryStr += ` LIMIT $2 OFFSET $3`;
+        params.push(limit, offset);
+      }
+      itemsRes = await query(queryStr, params);
     }
 
     res.json(itemsRes.rows);
@@ -95,22 +110,22 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   }
 });
 
-// POST /api/catalog/items/:id/stock - Update SKU stock (Stockist only)
+// POST /api/catalog/items/:id/stock - Update SKU stock & optional rate (Stockist/Manager/Admin)
 router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 0;
   const role = req.user?.role;
-  const { setsCount, isAvailable } = req.body;
+  const { setsCount, isAvailable, rate } = req.body;
 
-  if (role !== 'stockist' && role !== 'superadmin') {
-    res.status(403).json({ error: 'Only stockists or admins can modify stock levels' });
+  if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager') {
+    res.status(403).json({ error: 'Only stockists, managers or admins can modify stock levels or rates' });
     return;
   }
 
   try {
     // Get current item and stock state
     const currentRes = await query(
-      `SELECT i.id, i.category_id, i.pieces_per_set, s.sets_count, s.total_pieces, s.is_available 
+      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, s.sets_count, s.total_pieces, s.is_available 
        FROM items i
        JOIN stock s ON s.item_id = i.id
        WHERE i.id = $1`,
@@ -133,6 +148,24 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       if (permissionCheck.rows.length === 0) {
         res.status(403).json({ error: 'Permission denied for this category folder' });
         return;
+      }
+    }
+
+    // Handle optional rate update
+    let updatedRate = item.rate;
+    if (rate !== undefined) {
+      const rateVal = parseInt(rate);
+      if (rateVal !== item.rate) {
+        await query(
+          'UPDATE items SET rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [rateVal, itemId]
+        );
+        await query(
+          'INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)',
+          [itemId, userId, item.rate, rateVal]
+        );
+        updatedRate = rateVal;
+        console.log(`[Rate Log] Rate for item ${itemId} changed from ${item.rate} to ${rateVal} by user ${userId} via mobile/catalog route`);
       }
     }
 
@@ -184,6 +217,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       sets_count: targetSets,
       total_pieces: targetPieces,
       is_available: targetAvailable,
+      rate: updatedRate,
       updated_by: userId,
     });
   } catch (error) {

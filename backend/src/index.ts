@@ -70,7 +70,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Function to auto-seed/enforce the admin user
 import bcrypt from 'bcryptjs';
-import { query } from './db';
+import { query, runMigrations } from './db';
 
 async function seedAdmin(retries = 10, delay = 3000): Promise<void> {
   for (let i = 0; i < retries; i++) {
@@ -145,8 +145,13 @@ if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
 }
 
 // Start Server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT} via ${isHttps ? 'HTTPS' : 'HTTP'}`);
+  try {
+    await runMigrations();
+  } catch (e) {
+    console.error('Failed to run migrations on startup:', e);
+  }
   // Run admin seed in the background on startup
   seedAdmin();
 });

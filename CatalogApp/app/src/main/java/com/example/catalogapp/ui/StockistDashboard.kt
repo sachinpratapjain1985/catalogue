@@ -1,5 +1,6 @@
 package com.example.catalogapp.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,6 +29,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.catalogapp.data.*
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +46,9 @@ fun StockistDashboard(
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
     
+    var currentPage by remember { mutableStateOf(1) }
+    var hasMoreItems by remember { mutableStateOf(true) }
+    
     val apiService = NetworkClient.getApiService(sessionManager)
 
     // Load categories on start
@@ -51,6 +58,17 @@ fun StockistDashboard(
         coroutineScope.launch {
             try {
                 categories = apiService.getCategories()
+            } catch (e: retrofit2.HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                if (errorBody != null && errorBody.contains("pending")) {
+                    errorMsg = "Device pending approval. Please approve this device UUID in the Admin Web Portal.\nUUID: ${sessionManager.getDeviceUuid().take(12)}..."
+                } else if (errorBody != null && errorBody.contains("disabled")) {
+                    errorMsg = "Your account has been disabled."
+                } else if (errorBody != null && errorBody.contains("restricted")) {
+                    errorMsg = "Access restricted outside working hours."
+                } else {
+                    errorMsg = "Server returned error: ${e.message()}"
+                }
             } catch (e: Exception) {
                 errorMsg = "Failed to load folders. Pull to refresh."
             } finally {
@@ -63,11 +81,25 @@ fun StockistDashboard(
         loadCategories()
     }
 
-    val loadItems = { category: CategoryDto ->
-        isLoading = true
+    val loadItems = { category: CategoryDto, page: Int ->
+        if (page == 1) {
+            isLoading = true
+            items = emptyList()
+            currentPage = 1
+            hasMoreItems = true
+        }
         coroutineScope.launch {
             try {
-                items = apiService.getCategoryItems(category.id)
+                val fetched = apiService.getCategoryItems(category.id, page = page, limit = 30)
+                if (fetched.size < 30) {
+                    hasMoreItems = false
+                }
+                if (page == 1) {
+                    items = fetched
+                } else {
+                    items = items + fetched
+                }
+                currentPage = page
             } catch (e: Exception) {
                 errorMsg = "Failed to load SKU list."
             } finally {
@@ -98,7 +130,7 @@ fun StockistDashboard(
                 },
                 actions = {
                     IconButton(onClick = { 
-                        if (selectedCategory != null) loadItems(selectedCategory!!) else loadCategories()
+                        if (selectedCategory != null) loadItems(selectedCategory!!, 1) else loadCategories()
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -119,7 +151,12 @@ fun StockistDashboard(
                 .padding(paddingValues)
         ) {
             if (isLoading && items.isEmpty() && categories.isEmpty()) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             } else if (errorMsg.isNotEmpty()) {
                 Text(
                     text = errorMsg,
@@ -148,15 +185,15 @@ fun StockistDashboard(
                                     .fillMaxWidth()
                                     .clickable { 
                                         selectedCategory = category
-                                        loadItems(category)
+                                        loadItems(category, 1)
                                     },
                                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                              ) {
+                            ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(20.dp),
-                                    horizontalArrangement = Arrangement.Between,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
@@ -204,6 +241,28 @@ fun StockistDashboard(
                                 apiService = apiService
                             )
                         }
+
+                        if (hasMoreItems && items.isNotEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Button(
+                                        onClick = { loadItems(selectedCategory!!, currentPage + 1) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -217,14 +276,23 @@ fun StockItemCard(
     sessionManager: SessionManager,
     apiService: CatalogApiService
 ) {
-    // Current stock states
+    // Current stock and rate states
     var sets by remember { mutableStateOf(item.sets_count) }
     var isAvailable by remember { mutableStateOf(item.is_available) }
+    var rateText by remember { mutableStateOf(item.rate.toString()) }
     var isUpdating by remember { mutableStateOf(false) }
     var isSuccess by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val totalQty = sets * item.pieces_per_set
+
+    // Stock aging attributes
+    val age = item.age_in_days ?: 0
+    val ageColor = when {
+        age >= 90 -> Color(0xFFEF4444) // Red for very old
+        age >= 60 -> Color(0xFFF97316) // Orange for 60-90 days old
+        else -> Color(0xFF10B981) // Green for active new stock
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -233,19 +301,19 @@ fun StockItemCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Image Preview (using Coil)
+            // High-Performance Thumbnail Preview
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(item.getFullImageUrl(sessionManager.getServerUrl()))
+                    .data(item.getThumbnailImageUrl(sessionManager.getServerUrl()))
                     .crossfade(true)
                     .build(),
                 contentDescription = item.sku_id,
                 modifier = Modifier
-                    .size(90.dp)
-                    .clickable { /* Could show full-screen image preview if needed */ },
+                    .size(105.dp)
+                    .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
 
@@ -258,15 +326,24 @@ fun StockItemCard(
                 Text(
                     text = item.sku_id,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 16.sp
                 )
                 Text(
-                    text = "Pack size: ${item.pieces_per_set} pieces/set",
+                    text = "Pack: ${item.pieces_per_set} pcs/set",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                // Stock Age Badge
+                Text(
+                    text = "$age days old",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ageColor,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
                 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Sets counter increment / decrement
                 Row(
@@ -275,7 +352,7 @@ fun StockItemCard(
                 ) {
                     IconButton(
                         onClick = { if (sets > 0) sets-- },
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(30.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -289,10 +366,10 @@ fun StockItemCard(
 
                     IconButton(
                         onClick = { sets++ },
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(30.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", size = 16.dp)
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(14.dp))
                     }
                 }
                 
@@ -305,27 +382,46 @@ fun StockItemCard(
                 )
             }
 
-            // Right actions column (Available yes/no, Save button)
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Right actions column (Rate Input, Switch Availability, Update button)
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(start = 4.dp)
+                modifier = Modifier.width(100.dp)
             ) {
+                // Inline Rate Field (Pricing adjustments)
+                OutlinedTextField(
+                    value = rateText,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                            rateText = newValue
+                        }
+                    },
+                    label = { Text("Rate (₹)", fontSize = 9.sp) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
                 // Availability Toggle
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = if (isAvailable) "Available" else "No Stock",
-                        fontSize = 11.sp,
+                        text = if (isAvailable) "Active" else "Out",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                     Switch(
                         checked = isAvailable,
                         onCheckedChange = { isAvailable = it },
-                        modifier = Modifier.scale(0.75f)
+                        modifier = Modifier.scale(0.65f)
                     )
                 }
 
@@ -336,39 +432,45 @@ fun StockItemCard(
                         isSuccess = false
                         scope.launch {
                             try {
+                                val rateVal = rateText.toIntOrNull() ?: item.rate
                                 apiService.updateStock(
                                     item.id,
-                                    StockUpdateRequest(setsCount = sets, isAvailable = isAvailable)
+                                    StockUpdateRequest(setsCount = sets, isAvailable = isAvailable, rate = rateVal)
                                 )
                                 isSuccess = true
                             } catch (e: Exception) {
-                                // show error toast / dialog
+                                // silent catch or failure state
                             } finally {
                                 isUpdating = false
                             }
                         }
                     },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp),
                     enabled = !isUpdating,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSuccess) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                    )
+                        containerColor = if (isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     if (isUpdating) {
-                        CircularProgressIndicator(size = 14.dp, color = Color.White)
+                        Box(
+                            modifier = Modifier.size(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White)
+                        }
                     } else if (isSuccess) {
-                        Icon(Icons.Default.Check, contentDescription = "Saved", size = 14.dp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Saved", fontSize = 11.sp)
+                        Icon(Icons.Default.Check, contentDescription = "Saved", modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("Saved", fontSize = 10.sp)
                     } else {
-                        Text("Update", fontSize = 11.sp)
+                        Text("Save", fontSize = 10.sp)
                     }
                 }
             }
         }
     }
 }
-
-// Scale helper forCompose switch
-import androidx.compose.ui.draw.scale

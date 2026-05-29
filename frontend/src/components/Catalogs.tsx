@@ -28,6 +28,8 @@ interface SKUItem {
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
+  rate: number;
+  original_created_at: string;
 }
 
 interface CatalogsProps {
@@ -45,14 +47,24 @@ export default function Catalogs({ token }: CatalogsProps) {
   const [skuId, setSkuId] = useState('');
   const [selectedCatId, setSelectedCatId] = useState('');
   const [piecesPerSet, setPiecesPerSet] = useState(4);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState('DESUKA by VS FASHION Gandhi Nagar Delhi.');
   const [material, setMaterial] = useState('');
+  const [rate, setRate] = useState('');
+  const [stockType, setStockType] = useState<'new' | 'old'>('new');
+  const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  
+  // Inline editing states
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editSetsCount, setEditSetsCount] = useState(0);
+  const [editRate, setEditRate] = useState(0);
+  const [editIsAvailable, setEditIsAvailable] = useState(true);
   
   // Filters/Search
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCatId, setFilterCatId] = useState('');
+  const [filterAgeLimit, setFilterAgeLimit] = useState(false);
 
   // Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -171,6 +183,8 @@ export default function Catalogs({ token }: CatalogsProps) {
     formData.append('piecesPerSet', piecesPerSet.toString());
     formData.append('description', description.trim());
     formData.append('material', material.trim());
+    formData.append('rate', rate.trim() || '0');
+    formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
 
     try {
@@ -185,14 +199,16 @@ export default function Catalogs({ token }: CatalogsProps) {
       const data = await response.json();
 
       if (response.ok) {
-        // Add new item to state
         setItems([data, ...items]);
         
         // Reset form
         setSkuId('');
         setPiecesPerSet(4);
-        setDescription('');
+        setDescription('DESUKA by VS FASHION Gandhi Nagar Delhi.');
         setMaterial('');
+        setRate('');
+        setStockType('new');
+        setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
         setSelectedFile(null);
         setFilePreview(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -205,6 +221,35 @@ export default function Catalogs({ token }: CatalogsProps) {
       showError('Upload failed due to connection error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateSKU = async (itemId: number) => {
+    try {
+      const response = await fetch(`/api/admin/items/${itemId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          setsCount: editSetsCount,
+          rate: editRate,
+          isAvailable: editIsAvailable
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setItems(items.map(item => item.id === itemId ? data : item));
+        setEditingItemId(null);
+        showSuccess('SKU updated successfully');
+      } else {
+        showError(data.error || 'Failed to update SKU');
+      }
+    } catch (err) {
+      showError('Failed to save update');
     }
   };
 
@@ -241,11 +286,18 @@ export default function Catalogs({ token }: CatalogsProps) {
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
-  // Filter items
+  // Filter items including age limitation (>60 days)
   const filteredItems = items.filter(item => {
     const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCatId === '' || item.category_id === parseInt(filterCatId);
-    return matchesSearch && matchesCategory;
+    
+    let matchesAge = true;
+    if (filterAgeLimit) {
+      const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+      matchesAge = ageInDays >= 60;
+    }
+    
+    return matchesSearch && matchesCategory && matchesAge;
   });
 
   return (
@@ -367,6 +419,52 @@ export default function Catalogs({ token }: CatalogsProps) {
                   onChange={e => setMaterial(e.target.value)}
                 />
               </div>
+
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Rate / Price of Article (₹)</label>
+                <input 
+                  type="number" 
+                  placeholder="e.g. 1495" 
+                  value={rate}
+                  onChange={e => setRate(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', alignItems: 'center' }}>
+              <label style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Stock Classification:</label>
+              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  name="stockType" 
+                  checked={stockType === 'new'} 
+                  onChange={() => setStockType('new')} 
+                />
+                New Stock
+              </label>
+              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  name="stockType" 
+                  checked={stockType === 'old'} 
+                  onChange={() => setStockType('old')} 
+                />
+                Old Stock
+              </label>
+              
+              {stockType === 'old' && (
+                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
+                  <label style={{ margin: 0, fontSize: '0.85rem' }}>Creation Date:</label>
+                  <input 
+                    type="date" 
+                    value={originalCreatedAt} 
+                    onChange={e => setOriginalCreatedAt(e.target.value)}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', width: 'auto' }}
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -467,6 +565,16 @@ export default function Catalogs({ token }: CatalogsProps) {
                 ))}
               </select>
             </div>
+
+            {/* Filter Age */}
+            <button 
+              type="button"
+              className={`btn ${filterAgeLimit ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterAgeLimit(!filterAgeLimit)}
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              Older than 60 Days Only
+            </button>
           </div>
         </div>
 
@@ -477,54 +585,147 @@ export default function Catalogs({ token }: CatalogsProps) {
           </div>
         ) : (
           <div className="catalog-grid">
-            {filteredItems.map(item => (
-              <div key={item.id} className="catalog-card fade-in">
-                <div className="catalog-image-wrapper">
-                  <img src={item.image_path} alt={item.sku_id} className="catalog-image" />
-                  <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                    {item.is_available ? (
-                      <span className="badge badge-success" title="Available">
-                        <CheckCircle size={12} style={{ marginRight: '4px' }} />
-                        Available
+            {filteredItems.map(item => {
+              const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+              const isEditingThis = editingItemId === item.id;
+
+              return (
+                <div key={item.id} className="catalog-card fade-in" style={{
+                  border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
+                }}>
+                  <div className="catalog-image-wrapper">
+                    <img src={item.image_path} alt={item.sku_id} className="catalog-image" />
+                    <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                      {item.is_available ? (
+                        <span className="badge badge-success" title="Available">
+                          <CheckCircle size={12} style={{ marginRight: '4px' }} />
+                          Available
+                        </span>
+                      ) : (
+                        <span className="badge badge-danger" title="Unavailable">
+                          <XCircle size={12} style={{ marginRight: '4px' }} />
+                          No Stock
+                        </span>
+                      )}
+                      
+                      {ageInDays >= 60 && (
+                        <span className="badge badge-danger" style={{ background: '#f43f5e', border: 'none', color: '#fff' }}>
+                          OLD STOCK ({ageInDays}d)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="catalog-details">
+                    <div className="flex-between">
+                      <span className="sku-tag">{item.sku_id}</span>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        {!isEditingThis ? (
+                          <>
+                            <button 
+                              onClick={() => {
+                                setEditingItemId(item.id);
+                                setEditSetsCount(item.sets_count);
+                                setEditRate(item.rate);
+                                setEditIsAvailable(item.is_available);
+                              }}
+                              style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                              title="Edit Stock/Price"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteSKU(item.id, item.sku_id)}
+                              style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '2px' }}
+                              title="Delete SKU Design"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => handleUpdateSKU(item.id)}
+                              style={{ border: 'none', background: 'none', color: 'var(--color-success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}
+                            >
+                              Save
+                            </button>
+                            <button 
+                              onClick={() => setEditingItemId(null)}
+                              style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                      <span className="folder-tag">{item.category_name}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        Age: <strong>{ageInDays} days</strong>
                       </span>
+                    </div>
+
+                    {item.material && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
+                        Material: {item.material}
+                      </span>
+                    )}
+                    {item.description && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
+                        {item.description}
+                      </p>
+                    )}
+
+                    {/* Inline Editing Controls */}
+                    {isEditingThis ? (
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '0.65rem', marginBottom: '2px' }}>Sets Count</label>
+                            <input 
+                              type="number" 
+                              value={editSetsCount}
+                              onChange={e => setEditSetsCount(parseInt(e.target.value) || 0)}
+                              style={{ padding: '0.3rem', fontSize: '0.8rem', width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '0.65rem', marginBottom: '2px' }}>Rate (₹)</label>
+                            <input 
+                              type="number" 
+                              value={editRate}
+                              onChange={e => setEditRate(parseInt(e.target.value) || 0)}
+                              style={{ padding: '0.3rem', fontSize: '0.8rem', width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', margin: 0, textTransform: 'none', fontWeight: 600 }}>
+                          <input 
+                            type="checkbox"
+                            checked={editIsAvailable}
+                            onChange={e => setEditIsAvailable(e.target.checked)}
+                          />
+                          Available in Stock
+                        </label>
+                      </div>
                     ) : (
-                      <span className="badge badge-danger" title="Unavailable">
-                        <XCircle size={12} style={{ marginRight: '4px' }} />
-                        No Stock
-                      </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem' }}>
+                        <div>
+                          <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Qty: <strong>{item.total_pieces}</strong></span>
+                        </div>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                          ₹{item.rate || 0}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
-
-                <div className="catalog-details">
-                  <div className="flex-between">
-                    <span className="sku-tag">{item.sku_id}</span>
-                    <button 
-                      onClick={() => handleDeleteSKU(item.id, item.sku_id)}
-                      style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '2px' }}
-                      title="Delete SKU Design"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <span className="folder-tag">{item.category_name}</span>
-                  {item.material && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
-                      Material: {item.material}
-                    </span>
-                  )}
-                  {item.description && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
-                      {item.description}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem' }}>
-                    <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
-                    <span>Qty: <strong>{item.total_pieces}</strong></span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

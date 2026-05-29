@@ -165,7 +165,7 @@ fun LoginScreen(
                     enabled = !isLoading
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(size = 20.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
                     } else {
                         Text("Connect Session")
                     }
@@ -180,7 +180,7 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 12.dp)
         ) {
-            Icon(Icons.Default.Info, contentDescription = null, size = 16.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Device Whitelist UUID: ${deviceUuid.take(12)}...",
@@ -191,7 +191,7 @@ fun LoginScreen(
 
         // Settings Toggle for changing server IP address
         TextButton(onClick = { isSettingsOpen = !isSettingsOpen }) {
-            Icon(Icons.Default.Settings, contentDescription = null, size = 16.dp)
+            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("Connection Settings", fontSize = 13.sp)
         }
@@ -209,10 +209,4 @@ fun LoginScreen(
         }
     }
 }
-private fun CircularProgressIndicator(size: androidx.compose.ui.unit.Dp, color: androidx.compose.ui.graphics.Color) {
-    androidx.compose.material3.CircularProgressIndicator(
-        modifier = Modifier.size(size),
-        color = color,
-        strokeWidth = 2.dp
-    )
-}
+

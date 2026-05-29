@@ -16,7 +16,7 @@ import Reports from './components/Reports';
 export interface UserProfile {
   id: number;
   username: string;
-  role: 'superadmin' | 'stockist' | 'sales';
+  role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
 }
 
 function App() {
@@ -46,8 +46,8 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        // Check if user is admin
-        if (data.user.role !== 'superadmin') {
+        // Check if user is admin or manager
+        if (data.user.role !== 'superadmin' && data.user.role !== 'manager') {
           setLoginError('Access denied. Admin portal only.');
           handleLogout();
         } else {
@@ -82,7 +82,7 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        if (data.user.role !== 'superadmin') {
+        if (data.user.role !== 'superadmin' && data.user.role !== 'manager') {
           setLoginError('Access denied. Admin portal only.');
         } else {
           localStorage.setItem('admin_token', data.token);
@@ -196,16 +196,18 @@ function App() {
               Catalog folders
             </button>
           </li>
-          <li>
-            <button 
-              className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
-              style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
-            >
-              <UsersIcon size={20} />
-              User & Devices
-            </button>
-          </li>
+          {user.role === 'superadmin' && (
+            <li>
+              <button 
+                className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
+                onClick={() => setActiveTab('users')}
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
+              >
+                <UsersIcon size={20} />
+                User & Devices
+              </button>
+            </li>
+          )}
           <li>
             <button 
               className={`nav-link ${activeTab === 'reports' ? 'active' : ''}`}

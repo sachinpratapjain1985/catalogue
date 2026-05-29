@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import com.example.catalogapp.data.SessionManager
 import com.example.catalogapp.ui.LoginScreen
+import com.example.catalogapp.ui.RoleSelectionScreen
 import com.example.catalogapp.ui.SalesDashboard
 import com.example.catalogapp.ui.StockistDashboard
 
@@ -14,6 +15,7 @@ fun MainNavigation() {
     
     var token by remember { mutableStateOf(sessionManager.getToken()) }
     var role by remember { mutableStateOf(sessionManager.getUserRole()) }
+    var activeRole by remember { mutableStateOf(sessionManager.getActiveRole()) }
 
     if (token == null) {
         LoginScreen(
@@ -21,30 +23,52 @@ fun MainNavigation() {
             onLoginSuccess = {
                 token = sessionManager.getToken()
                 role = sessionManager.getUserRole()
+                activeRole = sessionManager.getActiveRole()
             }
         )
     } else {
-        when (role) {
-            "sales" -> {
-                SalesDashboard(
-                    sessionManager = sessionManager,
-                    onLogout = {
-                        sessionManager.logout()
-                        token = null
-                        role = null
-                    }
-                )
-            }
-            else -> {
-                // Stockist or Superadmin access stockist dashboard
-                StockistDashboard(
-                    sessionManager = sessionManager,
-                    onLogout = {
-                        sessionManager.logout()
-                        token = null
-                        role = null
-                    }
-                )
+        // Check if user has dual-access rights ("both" or "manager")
+        if ((role == "both" || role == "manager") && activeRole == null) {
+            RoleSelectionScreen(
+                onRoleSelected = { selectedRole ->
+                    sessionManager.saveActiveRole(selectedRole)
+                    activeRole = selectedRole
+                },
+                onLogout = {
+                    sessionManager.logout()
+                    token = null
+                    role = null
+                    activeRole = null
+                }
+            )
+        } else {
+            // Determine active display mode
+            val displayRole = if (role == "both" || role == "manager") activeRole else role
+            
+            when (displayRole) {
+                "sales" -> {
+                    SalesDashboard(
+                        sessionManager = sessionManager,
+                        onLogout = {
+                            sessionManager.logout()
+                            token = null
+                            role = null
+                            activeRole = null
+                        }
+                    )
+                }
+                else -> {
+                    // Stockist, Superadmin, or active Stockist mode
+                    StockistDashboard(
+                        sessionManager = sessionManager,
+                        onLogout = {
+                            sessionManager.logout()
+                            token = null
+                            role = null
+                            activeRole = null
+                        }
+                    )
+                }
             }
         }
     }

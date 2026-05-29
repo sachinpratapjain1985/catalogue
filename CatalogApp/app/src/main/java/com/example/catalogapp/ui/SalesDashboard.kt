@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -28,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -55,6 +57,10 @@ fun SalesDashboard(
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
     
+    // Pagination states
+    var currentPage by remember { mutableStateOf(1) }
+    var hasMoreItems by remember { mutableStateOf(true) }
+    
     // Sharing dialogue progress state
     var isSharing by remember { mutableStateOf(false) }
     var shareProgressMsg by remember { mutableStateOf("") }
@@ -67,6 +73,17 @@ fun SalesDashboard(
         coroutineScope.launch {
             try {
                 categories = apiService.getCategories()
+            } catch (e: retrofit2.HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                if (errorBody != null && errorBody.contains("pending")) {
+                    errorMsg = "Device pending approval. Please approve this device UUID in the Admin Web Portal.\nUUID: ${sessionManager.getDeviceUuid().take(12)}..."
+                } else if (errorBody != null && errorBody.contains("disabled")) {
+                    errorMsg = "Your account has been disabled."
+                } else if (errorBody != null && errorBody.contains("restricted")) {
+                    errorMsg = "Access restricted outside working hours."
+                } else {
+                    errorMsg = "Server returned error: ${e.message()}"
+                }
             } catch (e: Exception) {
                 errorMsg = "Connection error. Pull to refresh."
             } finally {
@@ -79,12 +96,26 @@ fun SalesDashboard(
         loadCategories()
     }
 
-    val loadItems = { category: CategoryDto ->
-        isLoading = true
-        selectedItems.clear()
+    val loadItems = { category: CategoryDto, page: Int ->
+        if (page == 1) {
+            isLoading = true
+            items = emptyList()
+            selectedItems.clear()
+            currentPage = 1
+            hasMoreItems = true
+        }
         coroutineScope.launch {
             try {
-                items = apiService.getCategoryItems(category.id)
+                val fetched = apiService.getCategoryItems(category.id, page = page, limit = 30)
+                if (fetched.size < 30) {
+                    hasMoreItems = false
+                }
+                if (page == 1) {
+                    items = fetched
+                } else {
+                    items = items + fetched
+                }
+                currentPage = page
             } catch (e: Exception) {
                 errorMsg = "Failed to fetch designs."
             } finally {
@@ -116,7 +147,7 @@ fun SalesDashboard(
                 },
                 actions = {
                     IconButton(onClick = { 
-                        if (selectedCategory != null) loadItems(selectedCategory!!) else loadCategories()
+                        if (selectedCategory != null) loadItems(selectedCategory!!, 1) else loadCategories()
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -142,7 +173,7 @@ fun SalesDashboard(
                             .fillMaxWidth()
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Between
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
                             Text(
@@ -176,7 +207,7 @@ fun SalesDashboard(
                             },
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, size = 18.dp)
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Share via WhatsApp", fontWeight = FontWeight.Bold)
                         }
@@ -191,7 +222,12 @@ fun SalesDashboard(
                 .padding(paddingValues)
         ) {
             if (isLoading && items.isEmpty() && categories.isEmpty()) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             } else if (errorMsg.isNotEmpty()) {
                 Text(
                     text = errorMsg,
@@ -220,7 +256,7 @@ fun SalesDashboard(
                                     .fillMaxWidth()
                                     .clickable { 
                                         selectedCategory = category
-                                        loadItems(category)
+                                        loadItems(category, 1)
                                     },
                                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                             ) {
@@ -228,7 +264,7 @@ fun SalesDashboard(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(20.dp),
-                                    horizontalArrangement = Arrangement.Between,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
@@ -285,6 +321,28 @@ fun SalesDashboard(
                                 }
                             )
                         }
+
+                        if (hasMoreItems && items.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Button(
+                                        onClick = { loadItems(selectedCategory!!, currentPage + 1) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -335,10 +393,10 @@ fun SalesItemCard(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column {
-                // Async image display
+                // High-Performance Thumbnail Image loading
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(item.getFullImageUrl(sessionManager.getServerUrl()))
+                        .data(item.getThumbnailImageUrl(sessionManager.getServerUrl()))
                         .crossfade(true)
                         .build(),
                     contentDescription = item.sku_id,
@@ -357,12 +415,21 @@ fun SalesItemCard(
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
+
+                    // Article Rate (Pricing info)
+                    Text(
+                        text = "Rate: ₹${item.rate}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                     
                     if (!item.material.isNullOrBlank()) {
                         Text(
                             text = "Material: ${item.material}",
                             fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                     }
@@ -381,7 +448,7 @@ fun SalesItemCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.Between
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = "${item.sets_count} sets",
@@ -414,7 +481,7 @@ fun SalesItemCard(
                         .padding(8.dp)
                         .align(Alignment.TopEnd)
                         .size(28.dp)
-                        .background(Color.White, shape = RoundedCornerShape(50%))
+                        .background(Color.White, shape = RoundedCornerShape(percent = 50))
                 )
             }
         }

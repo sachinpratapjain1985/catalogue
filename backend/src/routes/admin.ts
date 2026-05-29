@@ -4,13 +4,14 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { query } from '../db';
+import sharp from 'sharp';
 import { authenticateToken, requireRole, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
 // Apply admin guard to all routes in this file
 router.use(authenticateToken);
-router.use(requireRole(['superadmin']));
+router.use(requireRole(['superadmin', 'manager']));
 
 // Setup Multer for image uploads
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
@@ -53,6 +54,11 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
     const itemsCount = await query('SELECT COUNT(*) FROM items');
     const stockStats = await query(
       'SELECT SUM(sets_count) as total_sets, SUM(total_pieces) as total_pieces FROM stock WHERE is_available = true'
+    );
+
+    // Aging Stock count (older than 60 days)
+    const agingCount = await query(
+      `SELECT COUNT(*) FROM items WHERE original_created_at <= CURRENT_DATE - INTERVAL '60 days'`
     );
 
     // Additions & Reductions today
@@ -108,6 +114,7 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
         skus: parseInt(itemsCount.rows[0].count),
         totalSets: parseInt(stockStats.rows[0].total_sets || '0'),
         totalPieces: parseInt(stockStats.rows[0].total_pieces || '0'),
+        agingCount: parseInt(agingCount.rows[0].count),
         addedToday: {
           sets: parseInt(additionsToday.rows[0].sets || '0'),
           pieces: parseInt(additionsToday.rows[0].pieces || '0'),
@@ -228,12 +235,57 @@ router.get('/reports/reductions', async (req: AuthenticatedRequest, res: Respons
   }
 });
 
+// GET /api/admin/reports/aging - Aging stock report
+router.get('/reports/aging', async (req: Request, res: Response) => {
+  const { categoryId, search, minAgeDays } = req.query;
+  
+  let sql = `
+    SELECT i.id, i.sku_id, i.pieces_per_set, i.description, i.material, i.rate, 
+           i.original_created_at, i.created_at,
+           c.name as category_name,
+           s.sets_count, s.total_pieces, s.is_available,
+           (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days
+    FROM items i
+    JOIN categories c ON i.category_id = c.id
+    LEFT JOIN stock s ON s.item_id = i.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+  let paramCount = 1;
+
+  if (categoryId) {
+    sql += ` AND i.category_id = $${paramCount}`;
+    params.push(categoryId);
+    paramCount++;
+  }
+  if (search) {
+    sql += ` AND i.sku_id ILIKE $${paramCount}`;
+    params.push(`%${search}%`);
+    paramCount++;
+  }
+  if (minAgeDays) {
+    sql += ` AND (CURRENT_DATE - DATE(i.original_created_at)) >= $${paramCount}`;
+    params.push(parseInt(minAgeDays as string));
+    paramCount++;
+  }
+
+  sql += ' ORDER BY age_in_days DESC, i.sku_id ASC';
+
+  try {
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch aging report error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ==========================================
 // 2. USER MANAGEMENT ENDPOINTS
 // ==========================================
 
 // GET /api/admin/users
-router.get('/users', async (req: Request, res: Response) => {
+router.get('/users', requireRole(['superadmin']), async (req: Request, res: Response) => {
   try {
     // Get all users
     const usersRes = await query(
@@ -276,7 +328,7 @@ router.get('/users', async (req: Request, res: Response) => {
 });
 
 // POST /api/admin/users
-router.post('/users', async (req: Request, res: Response): Promise<void> => {
+router.post('/users', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds } = req.body;
 
   if (!username || !password || !role) {
@@ -332,7 +384,7 @@ router.post('/users', async (req: Request, res: Response): Promise<void> => {
 });
 
 // PUT /api/admin/users/:id
-router.put('/users/:id', async (req: Request, res: Response): Promise<void> => {
+router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
   const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds } = req.body;
 
@@ -395,7 +447,7 @@ router.put('/users/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // DELETE /api/admin/users/:id
-router.delete('/users/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
 
   try {
@@ -416,7 +468,7 @@ router.delete('/users/:id', async (req: Request, res: Response): Promise<void> =
 // ==========================================
 
 // GET /api/admin/devices
-router.get('/devices', async (req: Request, res: Response) => {
+router.get('/devices', requireRole(['superadmin']), async (req: Request, res: Response) => {
   try {
     const result = await query(
       `SELECT d.id, d.device_uuid, d.device_name, d.status, d.created_at, d.updated_at,
@@ -433,7 +485,7 @@ router.get('/devices', async (req: Request, res: Response) => {
 });
 
 // PUT /api/admin/devices/:id
-router.put('/devices/:id', async (req: Request, res: Response): Promise<void> => {
+router.put('/devices/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const deviceId = parseInt(req.params.id);
   const { status } = req.body;
 
@@ -464,7 +516,7 @@ router.put('/devices/:id', async (req: Request, res: Response): Promise<void> =>
 });
 
 // DELETE /api/admin/devices/:id
-router.delete('/devices/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/devices/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const deviceId = parseInt(req.params.id);
 
   try {
@@ -566,6 +618,18 @@ router.delete('/categories/:id', async (req: Request, res: Response): Promise<vo
           console.error('Failed to delete file', fullPath, e);
         }
       }
+      
+      // Also delete thumbnail
+      const ext = path.extname(item.image_path);
+      const baseName = path.basename(item.image_path, ext);
+      const thumbPath = path.join(uploadDir, `${baseName}-thumb${ext}`);
+      if (fs.existsSync(thumbPath)) {
+        try {
+          fs.unlinkSync(thumbPath);
+        } catch (e) {
+          console.error('Failed to delete thumbnail file', thumbPath, e);
+        }
+      }
     }
 
     const result = await query('DELETE FROM categories WHERE id = $1 RETURNING id', [categoryId]);
@@ -588,7 +652,7 @@ router.delete('/categories/:id', async (req: Request, res: Response): Promise<vo
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
               u.username as updated_by_user
@@ -607,7 +671,7 @@ router.get('/items', async (req: Request, res: Response) => {
 
 // POST /api/admin/items - Upload new SKU
 router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { skuId, categoryId, piecesPerSet, description, material } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, rate, originalCreatedAt } = req.body;
 
   if (!skuId || !categoryId || !req.file) {
     res.status(400).json({ error: 'SKU ID, Category ID, and image file are required' });
@@ -615,6 +679,17 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
   }
 
   const clientUserId = req.user?.id || 1; // Fallback to admin
+  const finalDescription = description && description.trim() !== '' ? description.trim() : 'DESUKA by VS FASHION Gandhi Nagar Delhi.';
+  const finalRate = parseInt(rate || '0');
+  let originalDate = new Date();
+  if (originalCreatedAt) {
+    originalDate = new Date(originalCreatedAt);
+  }
+
+  const ext = path.extname(req.file.filename);
+  const baseName = path.basename(req.file.filename, ext);
+  const thumbFilename = `${baseName}-thumb${ext}`;
+  const thumbPath = path.join(uploadDir, thumbFilename);
 
   try {
     // Check unique SKU ID
@@ -626,15 +701,25 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       return;
     }
 
+    // Generate thumbnail using sharp
+    try {
+      await sharp(req.file.path)
+        .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+        .toFile(thumbPath);
+      console.log(`[Thumbnail] Generated thumbnail at ${thumbPath}`);
+    } catch (thumbErr) {
+      console.error('[Thumbnail] Failed to generate thumbnail:', thumbErr);
+    }
+
     const imagePath = `/uploads/${req.file.filename}`;
     const pieces = parseInt(piecesPerSet || '4');
 
     // Insert Item
     const itemRes = await query(
-      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, rate, original_created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [skuId, parseInt(categoryId), imagePath, pieces, description || '', material || '']
+      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalRate, originalDate]
     );
 
     const newItem = itemRes.rows[0];
@@ -662,10 +747,15 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
     });
   } catch (error) {
     console.error('Create SKU design error:', error);
-    // Cleanup file in case of crash
+    // Cleanup files in case of crash
     if (req.file && fs.existsSync(req.file.path)) {
       try {
         fs.unlinkSync(req.file.path);
+      } catch (e) {}
+    }
+    if (fs.existsSync(thumbPath)) {
+      try {
+        fs.unlinkSync(thumbPath);
       } catch (e) {}
     }
     res.status(500).json({ error: 'Internal server error' });
@@ -693,10 +783,162 @@ router.delete('/items/:id', async (req: Request, res: Response): Promise<void> =
       }
     }
 
+    // Also delete thumbnail
+    const ext = path.extname(item.image_path);
+    const baseName = path.basename(item.image_path, ext);
+    const thumbPath = path.join(uploadDir, `${baseName}-thumb${ext}`);
+    if (fs.existsSync(thumbPath)) {
+      try {
+        fs.unlinkSync(thumbPath);
+      } catch (e) {
+        console.error('Failed to delete thumbnail file', thumbPath, e);
+      }
+    }
+
     await query('DELETE FROM items WHERE id = $1', [itemId]);
     res.json({ message: 'SKU and its image design deleted successfully' });
   } catch (error) {
     console.error('Delete item error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/admin/items/:id - Update SKU details, rate, or stock (Manager/Admin)
+router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const itemId = parseInt(req.params.id);
+  const userId = req.user?.id || 1;
+  const { skuId, categoryId, piecesPerSet, description, material, rate, setsCount, isAvailable, originalCreatedAt } = req.body;
+
+  try {
+    // 1. Get current item and stock state
+    const currentRes = await query(
+      `SELECT i.*, s.sets_count, s.total_pieces, s.is_available 
+       FROM items i
+       LEFT JOIN stock s ON s.item_id = i.id
+       WHERE i.id = $1`,
+      [itemId]
+    );
+
+    if (currentRes.rows.length === 0) {
+      res.status(404).json({ error: 'SKU not found' });
+      return;
+    }
+
+    const item = currentRes.rows[0];
+
+    // 2. Update items metadata if provided
+    let updateFields: string[] = [];
+    let params: any[] = [];
+    let paramIndex = 1;
+
+    if (skuId !== undefined) {
+      updateFields.push(`sku_id = $${paramIndex}`);
+      params.push(skuId.trim());
+      paramIndex++;
+    }
+    if (categoryId !== undefined) {
+      updateFields.push(`category_id = $${paramIndex}`);
+      params.push(parseInt(categoryId));
+      paramIndex++;
+    }
+    if (piecesPerSet !== undefined) {
+      updateFields.push(`pieces_per_set = $${paramIndex}`);
+      params.push(parseInt(piecesPerSet));
+      paramIndex++;
+    }
+    if (description !== undefined) {
+      updateFields.push(`description = $${paramIndex}`);
+      params.push(description.trim());
+      paramIndex++;
+    }
+    if (material !== undefined) {
+      updateFields.push(`material = $${paramIndex}`);
+      params.push(material.trim());
+      paramIndex++;
+    }
+    if (rate !== undefined) {
+      updateFields.push(`rate = $${paramIndex}`);
+      params.push(parseInt(rate));
+      paramIndex++;
+    }
+    if (originalCreatedAt !== undefined) {
+      updateFields.push(`original_created_at = $${paramIndex}`);
+      params.push(new Date(originalCreatedAt));
+      paramIndex++;
+    }
+
+    if (updateFields.length > 0) {
+      params.push(itemId);
+      const queryStr = `UPDATE items SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`;
+      await query(queryStr, params);
+    }
+
+    // 3. Log rate change if rate changed
+    if (rate !== undefined && parseInt(rate) !== item.rate) {
+      await query(
+        `INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)`,
+        [itemId, userId, item.rate, parseInt(rate)]
+      );
+      console.log(`[Rate Log] Rate for item ${itemId} changed from ${item.rate} to ${rate} by user ${userId}`);
+    }
+
+    // 4. Update stock levels if provided
+    const targetSets = setsCount !== undefined ? parseInt(setsCount) : item.sets_count;
+    const targetAvailable = isAvailable !== undefined ? !!isAvailable : item.is_available;
+    const piecesPerSetVal = piecesPerSet !== undefined ? parseInt(piecesPerSet) : item.pieces_per_set;
+    const targetPieces = targetSets * piecesPerSetVal;
+
+    const setsDiff = targetSets - item.sets_count;
+    const piecesDiff = targetPieces - item.total_pieces;
+
+    if (setsDiff !== 0 || targetAvailable !== item.is_available) {
+      let logType: 'addition' | 'reduction' | 'status_change' = 'status_change';
+      if (setsDiff > 0) {
+        logType = 'addition';
+      } else if (setsDiff < 0) {
+        logType = 'reduction';
+      }
+
+      await query(
+        `UPDATE stock 
+         SET sets_count = $1, total_pieces = $2, is_available = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
+         WHERE item_id = $5`,
+        [targetSets, targetPieces, targetAvailable, userId, itemId]
+      );
+
+      await query(
+        `INSERT INTO stock_logs (item_id, user_id, change_type, sets_changed, pieces_changed, 
+                                 previous_sets, new_sets, previous_available, new_available)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          itemId,
+          userId,
+          logType,
+          setsDiff,
+          piecesDiff,
+          item.sets_count,
+          targetSets,
+          item.is_available,
+          targetAvailable,
+        ]
+      );
+    }
+
+    // Fetch updated row
+    const updatedRes = await query(
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+              c.name as category_name,
+              s.sets_count, s.total_pieces, s.is_available
+       FROM items i
+       JOIN categories c ON i.category_id = c.id
+       LEFT JOIN stock s ON s.item_id = i.id
+       WHERE i.id = $1`,
+      [itemId]
+    );
+
+    res.json(updatedRes.rows[0]);
+  } catch (error) {
+    console.error('Update item details error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
