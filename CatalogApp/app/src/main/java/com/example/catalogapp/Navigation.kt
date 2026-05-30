@@ -54,6 +54,13 @@ fun MainNavigation() {
                             token = null
                             role = null
                             activeRole = null
+                        },
+                        onSwitchMode = {
+                            if (role == "both" || role == "manager") {
+                                val nextRole = "stockist"
+                                sessionManager.saveActiveRole(nextRole)
+                                activeRole = nextRole
+                            }
                         }
                     )
                 }
@@ -66,6 +73,13 @@ fun MainNavigation() {
                             token = null
                             role = null
                             activeRole = null
+                        },
+                        onSwitchMode = {
+                            if (role == "both" || role == "manager") {
+                                val nextRole = "sales"
+                                sessionManager.saveActiveRole(nextRole)
+                                activeRole = nextRole
+                            }
                         }
                     )
                 }

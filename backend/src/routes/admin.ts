@@ -363,8 +363,8 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     const newUser = insertRes.rows[0];
 
-    // Assign categories if role is stockist and categories provided
-    if (role === 'stockist' && Array.isArray(categoryIds) && categoryIds.length > 0) {
+    // Assign categories if role is stockist/both/manager and categories provided
+    if ((role === 'stockist' || role === 'both' || role === 'manager') && Array.isArray(categoryIds) && categoryIds.length > 0) {
       for (const catId of categoryIds) {
         await query(
           'INSERT INTO user_categories (user_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
@@ -423,8 +423,8 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
     const updatedUserRes = await query(updateQuery, params);
     const updatedUser = updatedUserRes.rows[0];
 
-    // Manage category assignments for stockists
-    if (role === 'stockist' && Array.isArray(categoryIds)) {
+    // Manage category assignments for stockists/both/manager
+    if ((role === 'stockist' || role === 'both' || role === 'manager') && Array.isArray(categoryIds)) {
       // Clear old permissions
       await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
       // Insert new ones
