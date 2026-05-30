@@ -392,9 +392,13 @@ fun SalesItemCard(
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column {
-                // High-Performance Thumbnail Image loading
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // High-Performance Thumbnail Image Box with overlays
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.75f) // Beautiful Portrait 3:4 aspect ratio
+            ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(imageUrl)
@@ -408,88 +412,100 @@ fun SalesItemCard(
                         }
                     },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
+                        .fillMaxSize()
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                     contentScale = ContentScale.Crop
                 )
 
-                Column(
-                    modifier = Modifier.padding(10.dp)
+                // Top-Left SKU Badge
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .align(Alignment.TopStart)
                 ) {
                     Text(
                         text = item.sku_id,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
                     )
+                }
 
-                    // Article Rate (Pricing info)
+                // Top-Right Stock Sets Badge
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .align(Alignment.TopEnd)
+                ) {
                     Text(
-                        text = "Rate: ₹${item.rate}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp)
+                        text = "${item.sets_count} sets",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    
-                    if (!item.material.isNullOrBlank()) {
-                        Text(
-                            text = "Material: ${item.material}",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
+                }
 
-                    if (!item.description.isNullOrBlank()) {
-                        Text(
-                            text = item.description,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                    
-                    Row(
+                // Overlay Selection indicator checkmark icon
+                if (isSelected) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "${item.sets_count} sets",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Qty: ${item.total_pieces}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                    )
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .align(Alignment.BottomEnd)
+                            .size(24.dp)
+                            .background(Color.White, shape = RoundedCornerShape(percent = 50))
+                    )
                 }
             }
 
-            // Overlay Selection indicator checkmark icon
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .background(Color.Black.copy(alpha = 0.3f))
+            // Compact bottom information container
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "₹${item.rate}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .align(Alignment.TopEnd)
-                        .size(28.dp)
-                        .background(Color.White, shape = RoundedCornerShape(percent = 50))
-                )
+                val detailText = when {
+                    !item.material.isNullOrBlank() -> item.material
+                    !item.description.isNullOrBlank() -> item.description
+                    else -> ""
+                }
+                if (detailText.isNotEmpty()) {
+                    Text(
+                        text = detailText,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 6.dp)
+                    )
+                }
             }
         }
     }
