@@ -282,6 +282,7 @@ fun StockItemCard(
     var rateText by remember { mutableStateOf(item.rate.toString()) }
     var isUpdating by remember { mutableStateOf(false) }
     var isSuccess by remember { mutableStateOf(false) }
+    var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
     
     val scope = rememberCoroutineScope()
     val totalQty = sets * item.pieces_per_set
@@ -307,10 +308,16 @@ fun StockItemCard(
             // High-Performance Thumbnail Preview
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(item.getThumbnailImageUrl(sessionManager.getServerUrl()))
+                    .data(imageUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = item.sku_id,
+                onError = {
+                    val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
+                    if (imageUrl != fallback) {
+                        imageUrl = fallback
+                    }
+                },
                 modifier = Modifier
                     .size(105.dp)
                     .clip(RoundedCornerShape(8.dp)),
@@ -401,7 +408,7 @@ fun StockItemCard(
                     label = { Text("Rate (₹)", fontSize = 9.sp) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(56.dp),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp)

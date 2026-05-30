@@ -380,6 +380,7 @@ fun SalesItemCard(
     sessionManager: SessionManager,
     onSelectToggle: () -> Unit
 ) {
+    var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -396,10 +397,16 @@ fun SalesItemCard(
                 // High-Performance Thumbnail Image loading
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(item.getThumbnailImageUrl(sessionManager.getServerUrl()))
+                        .data(imageUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = item.sku_id,
+                    onError = {
+                        val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
+                        if (imageUrl != fallback) {
+                            imageUrl = fallback
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
