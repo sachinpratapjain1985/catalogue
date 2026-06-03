@@ -751,12 +751,19 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       [newItem.id, clientUserId]
     );
 
-    res.status(201).json({
-      ...newItem,
-      sets_count: 0,
-      total_pieces: 0,
-      is_available: true,
-    });
+    // Fetch newly created row with all category/stock attributes for catalog state mapping
+    const completedRes = await query(
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at, i.created_at,
+              c.name as category_name,
+              s.sets_count, s.total_pieces, s.is_available
+       FROM items i
+       JOIN categories c ON i.category_id = c.id
+       LEFT JOIN stock s ON s.item_id = i.id
+       WHERE i.id = $1`,
+      [newItem.id]
+    );
+
+    res.status(201).json(completedRes.rows[0]);
   } catch (error) {
     console.error('Create SKU design error:', error);
     // Cleanup files in case of crash
