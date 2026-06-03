@@ -435,22 +435,35 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
     const updatedUserRes = await query(updateQuery, params);
     const updatedUser = updatedUserRes.rows[0];
 
-    // Manage category assignments for stockists/both/manager
-    if ((role === 'stockist' || role === 'both' || role === 'manager') && Array.isArray(categoryIds)) {
-      // Clear old permissions
-      await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
-      // Insert new ones
-      for (const catId of categoryIds) {
-        await query('INSERT INTO user_categories (user_id, category_id) VALUES ($1, $2)', [userId, catId]);
+    // Manage category assignments for stockists/both/manager using final database role
+    const finalRole = updatedUser.role;
+    const isMobileRole = finalRole === 'stockist' || finalRole === 'both' || finalRole === 'manager';
+
+    if (isMobileRole) {
+      if (Array.isArray(categoryIds)) {
+        // Only modify assignments if categoryIds array was explicitly passed in body
+        await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
+        for (const catId of categoryIds) {
+          await query('INSERT INTO user_categories (user_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, catId]);
+        }
       }
     } else {
-      // If no longer stockist, remove all category links
+      // If user is no longer in a role that supports folder assignments, wipe links
       await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
     }
 
+    // Query actual assigned categories with name joins to return correct structure
+    const assignedRes = await query(
+      `SELECT c.id, c.name 
+       FROM user_categories uc
+       JOIN categories c ON uc.category_id = c.id
+       WHERE uc.user_id = $1`,
+      [userId]
+    );
+
     res.json({
       ...updatedUser,
-      assignedCategories: categoryIds || [],
+      assignedCategories: assignedRes.rows,
     });
   } catch (error) {
     console.error('Update user error:', error);

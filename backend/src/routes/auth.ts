@@ -37,8 +37,9 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check device authorization for mobile users (stockist & sales)
-    if (user.role === 'stockist' || user.role === 'sales') {
+    // Check device authorization for mobile users (stockist, sales, both, and manager with device context)
+    const requiresDeviceCheck = user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || (user.role === 'manager' && deviceUuid);
+    if (requiresDeviceCheck) {
       if (!deviceUuid) {
         res.status(400).json({ error: 'Device UUID is required for mobile login' });
         return;
@@ -89,7 +90,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         userId: user.id,
         username: user.username,
         role: user.role,
-        deviceUuid: (user.role === 'stockist' || user.role === 'sales') ? deviceUuid : undefined,
+        deviceUuid: (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager') ? deviceUuid : undefined,
       },
       JWT_SECRET,
       { expiresIn: '30d' } // Long-lived tokens for convenience, check on each call
