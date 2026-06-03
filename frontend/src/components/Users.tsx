@@ -125,7 +125,7 @@ export default function Users({ token }: UsersProps) {
       status,
       workingHoursStart,
       workingHoursEnd,
-      categoryIds: (role === 'stockist' || role === 'both') ? selectedCatIds : []
+      categoryIds: (role === 'stockist' || role === 'both' || role === 'manager') ? selectedCatIds : []
     };
 
     try {
@@ -367,7 +367,7 @@ export default function Users({ token }: UsersProps) {
             </div>
 
             {/* Folder accessibility checklist for Stockists */}
-            {(role === 'stockist' || role === 'both') && (
+            {(role === 'stockist' || role === 'both' || role === 'manager') && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.01)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.5rem' }}>
                   <FolderOpen size={12} />
@@ -506,7 +506,7 @@ export default function Users({ token }: UsersProps) {
                     </div>
                   </td>
                   <td style={{ maxWidth: '240px', fontSize: '0.85rem' }}>
-                    {(u.role === 'stockist' || u.role === 'both') ? (
+                    {(u.role === 'stockist' || u.role === 'both' || u.role === 'manager') ? (
                       u.assignedCategories.length === 0 ? (
                         <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>No folders assigned</span>
                       ) : (

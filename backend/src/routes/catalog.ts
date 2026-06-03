@@ -17,7 +17,7 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
     if (role === 'stockist') {
       // Stockist only gets folders assigned to them
       result = await query(
-        `SELECT c.id, c.name, COUNT(i.id) as sku_count
+        `SELECT c.id, c.name, CAST(COUNT(i.id) AS INTEGER) as sku_count
          FROM categories c
          JOIN user_categories uc ON uc.category_id = c.id
          LEFT JOIN items i ON i.category_id = c.id
@@ -29,7 +29,7 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
     } else {
       // Superadmin & Sales see all folders
       result = await query(
-        `SELECT c.id, c.name, COUNT(i.id) as sku_count
+        `SELECT c.id, c.name, CAST(COUNT(i.id) AS INTEGER) as sku_count
          FROM categories c
          LEFT JOIN items i ON i.category_id = c.id
          GROUP BY c.id, c.name

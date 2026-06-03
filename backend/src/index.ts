@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: '*', // For internal mobile app & deployment simplicity
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-device-uuid']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-device-uuid', 'x-active-role']
 }));
 
 // Body parsing
