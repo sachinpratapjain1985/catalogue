@@ -55,6 +55,15 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
     const stockStats = await query(
       'SELECT SUM(sets_count) as total_sets, SUM(total_pieces) as total_pieces FROM stock WHERE is_available = true'
     );
+    const activeCount = await query(
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count > 0'
+    );
+    const outofstockCount = await query(
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count = 0'
+    );
+    const inactiveCount = await query(
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = false'
+    );
 
     // Aging Stock count (older than 60 days)
     const agingCount = await query(
@@ -112,6 +121,9 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
       summary: {
         categories: parseInt(categoriesCount.rows[0].count),
         skus: parseInt(itemsCount.rows[0].count),
+        activeSkus: parseInt(activeCount.rows[0].count),
+        outofstockSkus: parseInt(outofstockCount.rows[0].count),
+        inactiveSkus: parseInt(inactiveCount.rows[0].count),
         totalSets: parseInt(stockStats.rows[0].total_sets || '0'),
         totalPieces: parseInt(stockStats.rows[0].total_pieces || '0'),
         agingCount: parseInt(agingCount.rows[0].count),
@@ -574,8 +586,8 @@ router.post('/categories', async (req: Request, res: Response): Promise<void> =>
   }
 });
 
-// PUT /api/admin/categories/:id
-router.put('/categories/:id', async (req: Request, res: Response): Promise<void> => {
+// PUT /api/admin/categories/:id - Rename folder (Superadmin only)
+router.put('/categories/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const categoryId = parseInt(req.params.id);
   const { name } = req.body;
 
@@ -602,8 +614,8 @@ router.put('/categories/:id', async (req: Request, res: Response): Promise<void>
   }
 });
 
-// DELETE /api/admin/categories/:id
-router.delete('/categories/:id', async (req: Request, res: Response): Promise<void> => {
+// DELETE /api/admin/categories/:id - Delete folder (Superadmin only)
+router.delete('/categories/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const categoryId = parseInt(req.params.id);
 
   try {

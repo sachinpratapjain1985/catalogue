@@ -4,13 +4,19 @@ import {
   Layers, 
   TrendingDown, 
   Activity,
-  Boxes
+  Boxes,
+  CheckCircle,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 
 interface DashboardData {
   summary: {
     categories: number;
     skus: number;
+    activeSkus: number;
+    outofstockSkus: number;
+    inactiveSkus: number;
     totalSets: number;
     totalPieces: number;
     addedToday: { sets: number; pieces: number };
@@ -120,6 +126,39 @@ export default function Dashboard({ token }: DashboardProps) {
           </div>
           <div className="stat-icon" style={{ color: 'var(--color-secondary)' }}>
             <Layers size={24} />
+          </div>
+        </div>
+
+        <div className="glass-card stat-card" style={{ borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+          <div>
+            <div className="stat-title" style={{ color: 'var(--color-success)' }}>Available (In Stock)</div>
+            <div className="stat-value" style={{ color: 'var(--color-success)' }}>{data.summary.activeSkus}</div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Available &amp; &gt; 0 sets</p>
+          </div>
+          <div className="stat-icon" style={{ color: 'var(--color-success)' }}>
+            <CheckCircle size={24} />
+          </div>
+        </div>
+
+        <div className="glass-card stat-card" style={{ borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+          <div>
+            <div className="stat-title" style={{ color: 'var(--color-warning)' }}>Available (Out of Stock)</div>
+            <div className="stat-value" style={{ color: 'var(--color-warning)' }}>{data.summary.outofstockSkus}</div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Available but 0 sets</p>
+          </div>
+          <div className="stat-icon" style={{ color: 'var(--color-warning)' }}>
+            <AlertCircle size={24} />
+          </div>
+        </div>
+
+        <div className="glass-card stat-card" style={{ borderColor: 'rgba(244, 63, 94, 0.2)' }}>
+          <div>
+            <div className="stat-title" style={{ color: 'var(--color-danger)' }}>Unavailable Designs</div>
+            <div className="stat-value" style={{ color: 'var(--color-danger)' }}>{data.summary.inactiveSkus}</div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Disabled/No Stock</p>
+          </div>
+          <div className="stat-icon" style={{ color: 'var(--color-danger)' }}>
+            <XCircle size={24} />
           </div>
         </div>
 

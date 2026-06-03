@@ -134,7 +134,7 @@ fun StockistDashboard(
                     val userRole = sessionManager.getUserRole()
                     if (userRole == "both" || userRole == "manager") {
                         IconButton(onClick = onSwitchMode) {
-                            Icon(Icons.Default.ShoppingCart, contentDescription = "Switch to Sales Mode", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.ShoppingCart, contentDescription = "Switch to Sales Mode")
                         }
                     }
                     IconButton(onClick = { 

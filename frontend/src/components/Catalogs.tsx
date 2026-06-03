@@ -7,7 +7,11 @@ import {
   Filter, 
   Image as ImageIcon,
   CheckCircle,
-  XCircle
+  XCircle,
+  Edit2,
+  Check,
+  X,
+  AlertCircle
 } from 'lucide-react';
 
 interface Category {
@@ -32,11 +36,18 @@ interface SKUItem {
   original_created_at: string;
 }
 
-interface CatalogsProps {
-  token: string;
+interface UserProfile {
+  id: number;
+  username: string;
+  role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
 }
 
-export default function Catalogs({ token }: CatalogsProps) {
+interface CatalogsProps {
+  token: string;
+  user: UserProfile | null;
+}
+
+export default function Catalogs({ token, user }: CatalogsProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<SKUItem[]>([]);
   
@@ -60,6 +71,10 @@ export default function Catalogs({ token }: CatalogsProps) {
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editRate, setEditRate] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
+
+  // Folder/Category editing states
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+  const [editingCatName, setEditingCatName] = useState('');
   
   // Filters/Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -154,6 +169,33 @@ export default function Catalogs({ token }: CatalogsProps) {
         showError(data.error || 'Failed to delete category');
       }
     } catch (e) {
+      showError('Network error');
+    }
+  };
+
+  const handleRenameCategory = async (catId: number) => {
+    if (!editingCatName.trim()) return;
+
+    try {
+      const response = await fetch(`/api/admin/categories/${catId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: editingCatName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCategories(categories.map(c => c.id === catId ? data : c).sort((a, b) => a.name.localeCompare(b.name)));
+        setEditingCatId(null);
+        showSuccess('Folder renamed successfully');
+      } else {
+        showError(data.error || 'Failed to rename folder');
+      }
+    } catch (err) {
       showError('Network error');
     }
   };
@@ -300,11 +342,59 @@ export default function Catalogs({ token }: CatalogsProps) {
     return matchesSearch && matchesCategory && matchesAge;
   });
 
+  const totalDesigns = items.length;
+  const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0).length;
+  const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0).length;
+  const inactiveDesigns = items.filter(item => !item.is_available).length;
+
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div>
         <h1>Catalog & SKU Management</h1>
         <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Create folders and upload designs SKU-wise</p>
+      </div>
+
+      {/* Design Counts Summary Ribbon */}
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total SKU Designs</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '0.25rem' }}>{totalDesigns}</div>
+          </div>
+          <div style={{ background: 'var(--bg-tertiary)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-primary)' }}>
+            <ImageIcon size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-success)', textTransform: 'uppercase', fontWeight: 600 }}>Available (In Stock)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)', marginTop: '0.25rem' }}>{activeDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-success)' }}>
+            <CheckCircle size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-warning)', textTransform: 'uppercase', fontWeight: 600 }}>Available (Out of Stock)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-warning)', marginTop: '0.25rem' }}>{outOfStockDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-warning)' }}>
+            <AlertCircle size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244, 63, 94, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', textTransform: 'uppercase', fontWeight: 600 }}>Unavailable Designs</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)', marginTop: '0.25rem' }}>{inactiveDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)' }}>
+            <XCircle size={20} />
+          </div>
+        </div>
       </div>
 
       {/* Success/Error Alerts */}
@@ -348,18 +438,66 @@ export default function Catalogs({ token }: CatalogsProps) {
             {categories.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No folder categories created yet.</p>
             ) : (
-              categories.map(cat => (
-                <div key={cat.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.02)' }}>
-                  <span style={{ fontWeight: 600 }}>{cat.name}</span>
-                  <button 
-                    onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)' }}
-                    title="Delete folder and contents"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
+              categories.map(cat => {
+                const isEditing = editingCatId === cat.id;
+                const isSuperAdmin = user?.role === 'superadmin';
+
+                return (
+                  <div key={cat.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.02)', minHeight: '44px' }}>
+                    {isEditing ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
+                        <input 
+                          type="text" 
+                          value={editingCatName}
+                          onChange={e => setEditingCatName(e.target.value)}
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
+                        />
+                        <button 
+                          onClick={() => handleRenameCategory(cat.id)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
+                          title="Save Name"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={() => setEditingCatId(null)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+                          title="Cancel"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span style={{ fontWeight: 600 }}>{cat.name}</span>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          {isSuperAdmin && (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setEditingCatId(cat.id);
+                                  setEditingCatName(cat.name);
+                                }}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
+                                title="Rename Category Folder"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
+                                title="Delete folder and contents"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

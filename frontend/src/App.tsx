@@ -237,7 +237,7 @@ function App() {
       {/* Main Panel */}
       <main className="main-content">
         {activeTab === 'dashboard' && <Dashboard token={token} />}
-        {activeTab === 'catalogs' && <Catalogs token={token} />}
+        {activeTab === 'catalogs' && <Catalogs token={token} user={user} />}
         {activeTab === 'users' && <Users token={token} />}
         {activeTab === 'reports' && <Reports token={token} />}
       </main>
