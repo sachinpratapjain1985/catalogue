@@ -774,8 +774,8 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
   }
 });
 
-// DELETE /api/admin/items/:id
-router.delete('/items/:id', async (req: Request, res: Response): Promise<void> => {
+// DELETE /api/admin/items/:id (Super Admin only)
+router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
 
   try {

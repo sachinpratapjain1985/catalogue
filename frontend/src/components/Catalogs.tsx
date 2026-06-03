@@ -66,15 +66,24 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   
-  // Inline editing states
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  // Modal Edit states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<SKUItem | null>(null);
+  const [editSkuId, setEditSkuId] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editPiecesPerSet, setEditPiecesPerSet] = useState(4);
+  const [editMaterial, setEditMaterial] = useState('');
+  const [editRate, setEditRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
-  const [editRate, setEditRate] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
+  const [editDescription, setEditDescription] = useState('');
 
   // Folder/Category editing states
   const [editingCatId, setEditingCatId] = useState<number | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Filters/Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -266,26 +275,35 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     }
   };
 
-  const handleUpdateSKU = async (itemId: number) => {
+  const handleUpdateSKU = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
     try {
-      const response = await fetch(`/api/admin/items/${itemId}`, {
+      const response = await fetch(`/api/admin/items/${editingItem.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          setsCount: editSetsCount,
+          skuId: editSkuId,
+          categoryId: editCategoryId,
+          piecesPerSet: editPiecesPerSet,
+          material: editMaterial,
           rate: editRate,
-          isAvailable: editIsAvailable
+          setsCount: editSetsCount,
+          isAvailable: editIsAvailable,
+          description: editDescription
         })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setItems(items.map(item => item.id === itemId ? data : item));
-        setEditingItemId(null);
+        setItems(items.map(item => item.id === editingItem.id ? data : item));
+        setIsEditModalOpen(false);
+        setEditingItem(null);
         showSuccess('SKU updated successfully');
       } else {
         showError(data.error || 'Failed to update SKU');
@@ -341,6 +359,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     
     return matchesSearch && matchesCategory && matchesAge;
   });
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCatId, filterAgeLimit]);
+
+  const itemsPerPage = 15;
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
   const totalDesigns = items.length;
   const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0).length;
@@ -529,9 +557,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   required
                 >
                   <option value="">Select Folder</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {categories.map(c => {
+                    const catItems = items.filter(item => item.category_id === c.id);
+                    const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
+                    const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (A-{activeCount} OS-{osCount})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -698,9 +733,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 style={{ padding: '0.6rem 1rem' }}
               >
                 <option value="">All Folders</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {categories.map(c => {
+                  const catItems = items.filter(item => item.category_id === c.id);
+                  const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
+                  const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (A-{activeCount} OS-{osCount})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -722,56 +764,61 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             No SKU designs match your filters. Upload some designs or adjust filters!
           </div>
         ) : (
-          <div className="catalog-grid">
-            {filteredItems.map(item => {
-              const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
-              const isEditingThis = editingItemId === item.id;
+          <>
+            <div className="catalog-grid">
+              {paginatedItems.map(item => {
+                const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
 
-              return (
-                <div key={item.id} className="catalog-card fade-in" style={{
-                  border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
-                }}>
-                  <div className="catalog-image-wrapper">
-                    <img src={item.image_path} alt={item.sku_id} className="catalog-image" />
-                    <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
-                      {item.is_available ? (
-                        <span className="badge badge-success" title="Available">
-                          <CheckCircle size={12} style={{ marginRight: '4px' }} />
-                          Available
-                        </span>
-                      ) : (
-                        <span className="badge badge-danger" title="Unavailable">
-                          <XCircle size={12} style={{ marginRight: '4px' }} />
-                          No Stock
-                        </span>
-                      )}
-                      
-                      {ageInDays >= 60 && (
-                        <span className="badge badge-danger" style={{ background: '#f43f5e', border: 'none', color: '#fff' }}>
-                          OLD STOCK ({ageInDays}d)
-                        </span>
-                      )}
+                return (
+                  <div key={item.id} className="catalog-card fade-in" style={{
+                    border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
+                  }}>
+                    <div className="catalog-image-wrapper">
+                      <img src={item.image_path} alt={item.sku_id} className="catalog-image" />
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                        {item.is_available ? (
+                          <span className="badge badge-success" title="Available">
+                            <CheckCircle size={12} style={{ marginRight: '4px' }} />
+                            Available
+                          </span>
+                        ) : (
+                          <span className="badge badge-danger" title="Unavailable">
+                            <XCircle size={12} style={{ marginRight: '4px' }} />
+                            No Stock
+                          </span>
+                        )}
+                        
+                        {ageInDays >= 60 && (
+                          <span className="badge badge-danger" style={{ background: '#f43f5e', border: 'none', color: '#fff' }}>
+                            OLD STOCK ({ageInDays}d)
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="catalog-details">
-                    <div className="flex-between">
-                      <span className="sku-tag">{item.sku_id}</span>
-                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                        {!isEditingThis ? (
-                          <>
-                            <button 
-                              onClick={() => {
-                                setEditingItemId(item.id);
-                                setEditSetsCount(item.sets_count);
-                                setEditRate(item.rate);
-                                setEditIsAvailable(item.is_available);
-                              }}
-                              style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                              title="Edit Stock/Price"
-                            >
-                              Edit
-                            </button>
+                    <div className="catalog-details">
+                      <div className="flex-between">
+                        <span className="sku-tag">{item.sku_id}</span>
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <button 
+                            onClick={() => {
+                              setEditingItem(item);
+                              setEditSkuId(item.sku_id);
+                              setEditCategoryId(item.category_id.toString());
+                              setEditPiecesPerSet(item.pieces_per_set);
+                              setEditMaterial(item.material || '');
+                              setEditRate(item.rate.toString());
+                              setEditSetsCount(item.sets_count);
+                              setEditIsAvailable(item.is_available);
+                              setEditDescription(item.description || '');
+                              setIsEditModalOpen(true);
+                            }}
+                            style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                            title="Edit SKU Details"
+                          >
+                            Edit
+                          </button>
+                          {user?.role === 'superadmin' && (
                             <button 
                               onClick={() => handleDeleteSKU(item.id, item.sku_id)}
                               style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '2px' }}
@@ -779,77 +826,28 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                             >
                               <Trash2 size={14} />
                             </button>
-                          </>
-                        ) : (
-                          <>
-                            <button 
-                              onClick={() => handleUpdateSKU(item.id)}
-                              style={{ border: 'none', background: 'none', color: 'var(--color-success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}
-                            >
-                              Save
-                            </button>
-                            <button 
-                              onClick={() => setEditingItemId(null)}
-                              style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                      <span className="folder-tag">{item.category_name}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        Age: <strong>{ageInDays} days</strong>
-                      </span>
-                    </div>
-
-                    {item.material && (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
-                        Material: {item.material}
-                      </span>
-                    )}
-                    {item.description && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
-                        {item.description}
-                      </p>
-                    )}
-
-                    {/* Inline Editing Controls */}
-                    {isEditingThis ? (
-                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: '0.65rem', marginBottom: '2px' }}>Sets Count</label>
-                            <input 
-                              type="number" 
-                              value={editSetsCount}
-                              onChange={e => setEditSetsCount(parseInt(e.target.value) || 0)}
-                              style={{ padding: '0.3rem', fontSize: '0.8rem', width: '100%' }}
-                            />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: '0.65rem', marginBottom: '2px' }}>Rate (₹)</label>
-                            <input 
-                              type="number" 
-                              value={editRate}
-                              onChange={e => setEditRate(parseInt(e.target.value) || 0)}
-                              style={{ padding: '0.3rem', fontSize: '0.8rem', width: '100%' }}
-                            />
-                          </div>
+                          )}
                         </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', margin: 0, textTransform: 'none', fontWeight: 600 }}>
-                          <input 
-                            type="checkbox"
-                            checked={editIsAvailable}
-                            onChange={e => setEditIsAvailable(e.target.checked)}
-                          />
-                          Available in Stock
-                        </label>
                       </div>
-                    ) : (
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                        <span className="folder-tag">{item.category_name}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Age: <strong>{ageInDays} days</strong>
+                        </span>
+                      </div>
+
+                      {item.material && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
+                          Material: {item.material}
+                        </span>
+                      )}
+                      {item.description && (
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
+                          {item.description}
+                        </p>
+                      )}
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem' }}>
                         <div>
                           <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
@@ -859,14 +857,198 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                           ₹{item.rate || 0}
                         </span>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.5rem 1rem', opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`btn ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.5rem 1rem', minWidth: '40px' }}
+                  >
+                    {page}
+                  </button>
+                ))}
+                
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.5rem 1rem', opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Edit SKU Modal Dialog */}
+      {isEditModalOpen && editingItem && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 8, 16, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1.5rem'
+        }}>
+          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="flex-between">
+              <h3>Edit SKU Design Details</h3>
+              <button 
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingItem(null);
+                }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="form-group">
+                <label>SKU ID (SKU Number)</label>
+                <input 
+                  type="text" 
+                  value={editSkuId}
+                  onChange={e => setEditSkuId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Folder / Category</label>
+                  <select 
+                    value={editCategoryId} 
+                    onChange={e => setEditCategoryId(e.target.value)}
+                    required
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Pieces per Set</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={editPiecesPerSet}
+                    onChange={e => setEditPiecesPerSet(parseInt(e.target.value) || 4)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Material Details</label>
+                  <input 
+                    type="text" 
+                    value={editMaterial}
+                    onChange={e => setEditMaterial(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Rate / Price of Article (₹)</label>
+                  <input 
+                    type="number" 
+                    value={editRate}
+                    onChange={e => setEditRate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Sets Count</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={editSetsCount}
+                    onChange={e => setEditSetsCount(parseInt(e.target.value) || 0)}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1, justifyContent: 'center', marginBottom: 0 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '1.5rem', textTransform: 'none', fontWeight: 600 }}>
+                    <input 
+                      type="checkbox"
+                      checked={editIsAvailable}
+                      onChange={e => setEditIsAvailable(e.target.checked)}
+                    />
+                    Available in Stock
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Product Description / Notes</label>
+                <textarea 
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  rows={3}
+                  style={{ 
+                    resize: 'vertical', 
+                    background: 'var(--bg-primary)', 
+                    border: '1px solid var(--glass-border)', 
+                    borderRadius: 'var(--radius-md)', 
+                    padding: '0.75rem 1rem', 
+                    color: 'var(--text-primary)', 
+                    fontFamily: 'inherit',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingItem(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
