@@ -67,8 +67,12 @@ export const authenticateToken = async (
       }
     }
 
-    // 4. Device verification for mobile roles (stockist, sales, both, manager)
-    if (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager') {
+    // 4. Device verification for mobile roles (stockist, sales, both)
+    // Managers only undergo device verification if they are on mobile (x-device-uuid header is present)
+    const isMobileOnlyRole = user.role === 'stockist' || user.role === 'sales' || user.role === 'both';
+    const hasDeviceContext = !!req.headers['x-device-uuid'] || !!decoded.deviceUuid;
+
+    if (isMobileOnlyRole || (user.role === 'manager' && hasDeviceContext)) {
       const deviceUuid = req.headers['x-device-uuid'] as string || decoded.deviceUuid;
 
       if (!deviceUuid) {
