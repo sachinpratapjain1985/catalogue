@@ -229,8 +229,11 @@ function App() {
           </div>
           <button onClick={handleLogout} className="btn btn-secondary" style={{ width: '100%' }}>
             <LogOut size={16} />
-            Logout
+            Sign Out
           </button>
+          <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.7rem', color: 'var(--text-secondary)', opacity: 0.6 }}>
+            Powered & Designed by VS FASHION
+          </div>
         </div>
       </aside>
 

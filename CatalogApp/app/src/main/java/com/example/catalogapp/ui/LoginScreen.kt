@@ -139,9 +139,10 @@ fun LoginScreen(
                                 // Save session
                                 sessionManager.saveToken(response.token)
                                 sessionManager.saveUser(
-                                    response.user.id,
-                                    response.user.username,
-                                    response.user.role
+                                    id = response.user.id,
+                                    username = response.user.username,
+                                    role = response.user.role,
+                                    canEditRates = response.user.can_edit_rates
                                 )
                                 
                                 onLoginSuccess()
@@ -207,6 +208,14 @@ fun LoginScreen(
                     .padding(top = 8.dp)
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Powered & Designed by VS FASHION",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center
+        )
     }
 }
 

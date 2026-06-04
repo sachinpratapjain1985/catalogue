@@ -45,6 +45,10 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] Items table columns verified.');
 
+    // 2b. Add can_edit_rates to users
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_rates BOOLEAN NOT NULL DEFAULT FALSE');
+    console.log('[Migration] Users can_edit_rates column verified.');
+
     // 3. Create rate_logs table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rate_logs (

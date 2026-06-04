@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -98,6 +100,8 @@ fun SalesDashboard(
         loadCategories()
     }
 
+    var searchQuery by remember { mutableStateOf("") }
+
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
             isLoading = true
@@ -108,7 +112,12 @@ fun SalesDashboard(
         }
         coroutineScope.launch {
             try {
-                val fetched = apiService.getCategoryItems(category.id, page = page, limit = 30)
+                val fetched = apiService.getCategoryItems(
+                    categoryId = category.id,
+                    page = page,
+                    limit = 30,
+                    search = searchQuery.ifEmpty { null }
+                )
                 if (fetched.size < 30) {
                     hasMoreItems = false
                 }
@@ -142,6 +151,7 @@ fun SalesDashboard(
                             selectedCategory = null 
                             items = emptyList()
                             selectedItems.clear()
+                            searchQuery = ""
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -282,7 +292,7 @@ fun SalesDashboard(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Browse available designs",
+                                            text = "${category.active_count} active designs",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -296,57 +306,124 @@ fun SalesDashboard(
                                 }
                             }
                         }
+
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Powered by VS FASHION",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "Designed by VS FASHION",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
                 }
             } else {
                 // SKU Showcase Grid Selection
-                if (items.isEmpty()) {
-                    Text(
-                        text = "No available items found in this section.",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(items, key = { it.id }) { item ->
-                            val isSelected = selectedItems.any { it.id == item.id }
-                            SalesItemCard(
-                                item = item,
-                                isSelected = isSelected,
-                                sessionManager = sessionManager,
-                                onSelectToggle = {
-                                    if (isSelected) {
-                                        selectedItems.removeAll { it.id == item.id }
-                                    } else {
-                                        selectedItems.add(item)
-                                    }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { 
+                            searchQuery = it 
+                            loadItems(selectedCategory!!, 1)
+                        },
+                        placeholder = { Text("Search SKU ID...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    searchQuery = "" 
+                                    loadItems(selectedCategory!!, 1)
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
                                 }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    // Folder active count header
+                    Text(
+                        text = "Total Active: ${selectedCategory?.active_count ?: 0} articles",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+
+                    if (items.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No available items found in this section.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center
                             )
                         }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items, key = { it.id }) { item ->
+                                val isSelected = selectedItems.any { it.id == item.id }
+                                SalesItemCard(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    sessionManager = sessionManager,
+                                    onSelectToggle = {
+                                        if (isSelected) {
+                                            selectedItems.removeAll { it.id == item.id }
+                                        } else {
+                                            selectedItems.add(item)
+                                        }
+                                    }
+                                )
+                            }
 
-                        if (hasMoreItems && items.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Button(
-                                        onClick = { loadItems(selectedCategory!!, currentPage + 1) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(12.dp)
+                            if (hasMoreItems && items.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                        Button(
+                                            onClick = { loadItems(selectedCategory!!, currentPage + 1) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }

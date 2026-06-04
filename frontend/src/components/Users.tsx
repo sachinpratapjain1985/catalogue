@@ -23,6 +23,7 @@ interface User {
   status: 'active' | 'disabled';
   working_hours_start: string;
   working_hours_end: string;
+  can_edit_rates?: boolean;
   created_at: string;
   assignedCategories: Array<{ id: number; name: string }>;
 }
@@ -58,6 +59,7 @@ export default function Users({ token }: UsersProps) {
   const [workingHoursStart, setWorkingHoursStart] = useState('08:00:00');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('20:00:00');
   const [selectedCatIds, setSelectedCatIds] = useState<number[]>([]);
+  const [canEditRates, setCanEditRates] = useState(false);
 
   // UI Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -125,6 +127,7 @@ export default function Users({ token }: UsersProps) {
       status,
       workingHoursStart,
       workingHoursEnd,
+      canEditRates,
       categoryIds: (role === 'stockist' || role === 'both' || role === 'manager') ? selectedCatIds : []
     };
 
@@ -165,6 +168,7 @@ export default function Users({ token }: UsersProps) {
     setWorkingHoursStart(user.working_hours_start || '08:00:00');
     setWorkingHoursEnd(user.working_hours_end || '20:00:00');
     setSelectedCatIds(user.assignedCategories.map(c => c.id));
+    setCanEditRates(!!user.can_edit_rates);
   };
 
   const handleDeleteUser = async (userId: number, userName: string) => {
@@ -247,6 +251,7 @@ export default function Users({ token }: UsersProps) {
     setWorkingHoursStart('08:00:00');
     setWorkingHoursEnd('20:00:00');
     setSelectedCatIds([]);
+    setCanEditRates(false);
   };
 
   const handleCatCheckboxChange = (catId: number) => {
@@ -334,11 +339,27 @@ export default function Users({ token }: UsersProps) {
               <div className="form-group" style={{ flex: 1 }}>
                 <label>Account Status</label>
                 <select value={status} onChange={e => setStatus(e.target.value as any)}>
-                  <option value="active">Active (Access Allowed)</option>
-                  <option value="disabled">Disabled (Immediate Revoke)</option>
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
                 </select>
               </div>
             </div>
+
+            {/* Rate Modification permission checkbox */}
+            {(role === 'stockist' || role === 'both' || role === 'manager') && (
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.5rem 0 1rem 0' }}>
+                <input 
+                  type="checkbox" 
+                  id="canEditRates" 
+                  checked={canEditRates} 
+                  onChange={e => setCanEditRates(e.target.checked)}
+                  style={{ width: 'auto', margin: 0 }}
+                />
+                <label htmlFor="canEditRates" style={{ margin: 0, fontWeight: 500, fontSize: '0.85rem', cursor: 'pointer' }}>
+                  Allow user to update catalog pricing rates on mobile
+                </label>
+              </div>
+            )}
 
             {/* Working hours restriction fields */}
             <div style={{ display: 'flex', gap: '1rem' }}>

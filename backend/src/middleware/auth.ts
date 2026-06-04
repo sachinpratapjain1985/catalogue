@@ -10,6 +10,7 @@ export interface AuthenticatedRequest extends Request {
     username: string;
     role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
     deviceUuid?: string;
+    can_edit_rates?: boolean;
   };
 }
 
@@ -36,7 +37,7 @@ export const authenticateToken = async (
 
     // 1. Fetch user status and working hours from database to ensure fresh state
     const userRes = await query(
-      'SELECT id, username, role, status, working_hours_start, working_hours_end FROM users WHERE id = $1',
+      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates FROM users WHERE id = $1',
       [decoded.userId]
     );
 
@@ -117,6 +118,7 @@ export const authenticateToken = async (
       username: user.username,
       role: activeRole as any,
       deviceUuid: decoded.deviceUuid,
+      can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates
     };
 
     next();

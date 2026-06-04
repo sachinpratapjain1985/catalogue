@@ -22,13 +22,16 @@ data class LoginResponse(
 data class UserDto(
     val id: Int,
     val username: String,
-    val role: String
+    val role: String,
+    val can_edit_rates: Boolean = false
 )
 
 data class CategoryDto(
     val id: Int,
     val name: String,
-    val sku_count: Int
+    val sku_count: Int,
+    val active_count: Int = 0,
+    val os_count: Int = 0
 )
 
 data class SKUItemDto(
@@ -96,7 +99,8 @@ interface CatalogApiService {
     suspend fun getCategoryItems(
         @Path("id") categoryId: Int,
         @Query("page") page: Int? = null,
-        @Query("limit") limit: Int? = null
+        @Query("limit") limit: Int? = null,
+        @Query("search") search: String? = null
     ): List<SKUItemDto>
 
     @POST("api/catalog/items/{id}/stock")

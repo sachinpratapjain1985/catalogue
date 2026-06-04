@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +34,8 @@ import com.example.catalogapp.data.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +87,8 @@ fun StockistDashboard(
         loadCategories()
     }
 
+    var searchQuery by remember { mutableStateOf("") }
+
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
             isLoading = true
@@ -92,7 +98,12 @@ fun StockistDashboard(
         }
         coroutineScope.launch {
             try {
-                val fetched = apiService.getCategoryItems(category.id, page = page, limit = 30)
+                val fetched = apiService.getCategoryItems(
+                    categoryId = category.id,
+                    page = page,
+                    limit = 30,
+                    search = searchQuery.ifEmpty { null }
+                )
                 if (fetched.size < 30) {
                     hasMoreItems = false
                 }
@@ -125,6 +136,7 @@ fun StockistDashboard(
                         IconButton(onClick = { 
                             selectedCategory = null 
                             items = emptyList()
+                            searchQuery = ""
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -211,7 +223,7 @@ fun StockistDashboard(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "${category.sku_count} articles tracked",
+                                            text = "A-${category.active_count}  OS-${category.os_count}  (Total: ${category.sku_count})",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -225,48 +237,115 @@ fun StockistDashboard(
                                 }
                             }
                         }
+
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Powered by VS FASHION",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "Designed by VS FASHION",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
                 }
             } else {
                 // SKU Stock Management Screen
-                if (items.isEmpty()) {
-                    Text(
-                        text = "No SKU items found in this folder.",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { 
+                            searchQuery = it 
+                            loadItems(selectedCategory!!, 1)
+                        },
+                        placeholder = { Text("Search SKU ID...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    searchQuery = "" 
+                                    loadItems(selectedCategory!!, 1)
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
                     )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(1),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(items, key = { it.id }) { item ->
-                            StockItemCard(
-                                item = item,
-                                sessionManager = sessionManager,
-                                apiService = apiService
+
+                    // Folder active and os counts header
+                    Text(
+                        text = "A-${selectedCategory?.active_count ?: 0}  OS-${selectedCategory?.os_count ?: 0}  (Total: ${selectedCategory?.sku_count ?: 0} articles)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+
+                    if (items.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No SKU items found in this folder.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center
                             )
                         }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(1),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items, key = { it.id }) { item ->
+                                StockItemCard(
+                                    item = item,
+                                    sessionManager = sessionManager,
+                                    apiService = apiService
+                                )
+                            }
 
-                        if (hasMoreItems && items.isNotEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Button(
-                                        onClick = { loadItems(selectedCategory!!, currentPage + 1) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(12.dp)
+                            if (hasMoreItems && items.isNotEmpty()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                        Button(
+                                            onClick = { loadItems(selectedCategory!!, currentPage + 1) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
@@ -414,6 +493,7 @@ fun StockItemCard(
                         }
                     },
                     label = { Text("Rate (₹)", fontSize = 9.sp) },
+                    enabled = sessionManager.canEditRates(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),

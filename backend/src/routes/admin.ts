@@ -301,7 +301,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
   try {
     // Get all users
     const usersRes = await query(
-      `SELECT id, username, role, status, working_hours_start, working_hours_end, created_at 
+      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, created_at 
        FROM users 
        ORDER BY role ASC, username ASC`
     );
@@ -341,7 +341,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
 
 // POST /api/admin/users
 router.post('/users', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
-  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds } = req.body;
+  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates } = req.body;
 
   if (!username || !password || !role) {
     res.status(400).json({ error: 'Username, password, and role are required' });
@@ -360,9 +360,9 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     // Insert user
     const insertRes = await query(
-      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, username, role, status, working_hours_start, working_hours_end`,
+      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates`,
       [
         username,
         hash,
@@ -370,6 +370,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
         status || 'active',
         workingHoursStart || '00:00:00',
         workingHoursEnd || '23:59:59',
+        canEditRates === undefined ? false : !!canEditRates,
       ]
     );
 
@@ -398,7 +399,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 // PUT /api/admin/users/:id
 router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
-  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds } = req.body;
+  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates } = req.body;
 
   try {
     const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -411,15 +412,16 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
 
     let updateQuery = `
       UPDATE users 
-      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, updated_at = CURRENT_TIMESTAMP
+      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, updated_at = CURRENT_TIMESTAMP
     `;
     const params: any[] = [
       role || user.role,
       status || user.status,
       workingHoursStart || user.working_hours_start,
       workingHoursEnd || user.working_hours_end,
+      canEditRates !== undefined ? !!canEditRates : user.can_edit_rates,
     ];
-    let paramIndex = 5;
+    let paramIndex = 6;
 
     if (password && password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
@@ -429,7 +431,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       paramIndex++;
     }
 
-    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end`;
+    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates`;
     params.push(userId);
 
     const updatedUserRes = await query(updateQuery, params);

@@ -17,10 +17,14 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
     if (role === 'stockist') {
       // Stockist only gets folders assigned to them
       result = await query(
-        `SELECT c.id, c.name, CAST(COUNT(i.id) AS INTEGER) as sku_count
+        `SELECT c.id, c.name, 
+                CAST(COUNT(i.id) AS INTEGER) as sku_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count
          FROM categories c
          JOIN user_categories uc ON uc.category_id = c.id
          LEFT JOIN items i ON i.category_id = c.id
+         LEFT JOIN stock s ON s.item_id = i.id
          WHERE uc.user_id = $1
          GROUP BY c.id, c.name
          ORDER BY c.name ASC`,
@@ -29,9 +33,13 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
     } else {
       // Superadmin & Sales see all folders
       result = await query(
-        `SELECT c.id, c.name, CAST(COUNT(i.id) AS INTEGER) as sku_count
+        `SELECT c.id, c.name, 
+                CAST(COUNT(i.id) AS INTEGER) as sku_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count
          FROM categories c
          LEFT JOIN items i ON i.category_id = c.id
+         LEFT JOIN stock s ON s.item_id = i.id
          GROUP BY c.id, c.name
          ORDER BY c.name ASC`
       );
@@ -52,6 +60,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   const page = req.query.page ? parseInt(req.query.page as string) : null;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : null;
   const offset = page && limit ? (page - 1) * limit : null;
+  const search = req.query.search ? (req.query.search as string).trim() : null;
 
   try {
     // If stockist, verify folder assignment permission
@@ -67,6 +76,9 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     }
 
     let itemsRes;
+    const params: any[] = [categoryId];
+    let paramCount = 1;
+
     if (role === 'sales') {
       // Sales user only sees available stock items
       let queryStr = `
@@ -76,11 +88,19 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
          FROM items i
          JOIN stock s ON s.item_id = i.id
          WHERE i.category_id = $1 AND s.is_available = TRUE
-         ORDER BY i.sku_id ASC
       `;
-      const params: any[] = [categoryId];
+      if (search) {
+        paramCount++;
+        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+      }
+      queryStr += ` ORDER BY i.sku_id ASC`;
       if (limit !== null && offset !== null) {
-        queryStr += ` LIMIT $2 OFFSET $3`;
+        paramCount++;
+        const limitParam = `$${paramCount}`;
+        paramCount++;
+        const offsetParam = `$${paramCount}`;
+        queryStr += ` LIMIT ${limitParam} OFFSET ${offsetParam}`;
         params.push(limit, offset);
       }
       itemsRes = await query(queryStr, params);
@@ -93,11 +113,19 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
          FROM items i
          JOIN stock s ON s.item_id = i.id
          WHERE i.category_id = $1
-         ORDER BY i.sku_id ASC
       `;
-      const params: any[] = [categoryId];
+      if (search) {
+        paramCount++;
+        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+      }
+      queryStr += ` ORDER BY i.sku_id ASC`;
       if (limit !== null && offset !== null) {
-        queryStr += ` LIMIT $2 OFFSET $3`;
+        paramCount++;
+        const limitParam = `$${paramCount}`;
+        paramCount++;
+        const offsetParam = `$${paramCount}`;
+        queryStr += ` LIMIT ${limitParam} OFFSET ${offsetParam}`;
         params.push(limit, offset);
       }
       itemsRes = await query(queryStr, params);
@@ -156,6 +184,16 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
     if (rate !== undefined) {
       const rateVal = parseInt(rate);
       if (rateVal !== item.rate) {
+        // Check if user is allowed to edit rates
+        const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
+        const userRecord = userCheck.rows[0];
+        const canUserEditRates = userRecord && (userRecord.role === 'superadmin' || userRecord.role === 'manager' || !!userRecord.can_edit_rates);
+        
+        if (!canUserEditRates) {
+          res.status(403).json({ error: 'You are not authorized to update pricing rates.' });
+          return;
+        }
+
         await query(
           'UPDATE items SET rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [rateVal, itemId]

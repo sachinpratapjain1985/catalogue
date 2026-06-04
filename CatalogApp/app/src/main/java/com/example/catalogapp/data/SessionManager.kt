@@ -16,6 +16,7 @@ class SessionManager(context: Context) {
         private const val KEY_ACTIVE_ROLE = "active_role"
         private const val KEY_DEVICE_UUID = "device_uuid"
         private const val KEY_SERVER_URL = "server_url"
+        private const val KEY_CAN_EDIT_RATES = "can_edit_rates"
     }
 
     init {
@@ -67,12 +68,17 @@ class SessionManager(context: Context) {
     }
 
     // User details
-    fun saveUser(id: Int, username: String, role: String) {
+    fun saveUser(id: Int, username: String, role: String, canEditRates: Boolean) {
         prefs.edit().apply {
             putInt(KEY_USER_ID, id)
             putString(KEY_USERNAME, username)
             putString(KEY_ROLE, role)
+            putBoolean(KEY_CAN_EDIT_RATES, canEditRates)
         }.apply()
+    }
+
+    fun canEditRates(): Boolean {
+        return prefs.getBoolean(KEY_CAN_EDIT_RATES, false)
     }
 
     fun getUserRole(): String? {
@@ -99,6 +105,7 @@ class SessionManager(context: Context) {
             remove(KEY_USERNAME)
             remove(KEY_ROLE)
             remove(KEY_ACTIVE_ROLE)
+            remove(KEY_CAN_EDIT_RATES)
         }.apply()
     }
 }
