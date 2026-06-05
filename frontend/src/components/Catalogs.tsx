@@ -97,11 +97,28 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [loading, setLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasSetInitialFolder = useRef(false);
 
   useEffect(() => {
     fetchCategories();
     fetchSKUs();
   }, []);
+
+  useEffect(() => {
+    if (categories.length > 0) {
+      if (!hasSetInitialFolder.current) {
+        setFilterCatId(categories[0].id.toString());
+        hasSetInitialFolder.current = true;
+      } else {
+        // If selected folder is deleted, fallback to the first folder
+        setFilterCatId(prev => {
+          if (prev === '') return prev; // Keep "All Folders" if explicitly selected
+          const exists = categories.some(c => c.id.toString() === prev);
+          return exists ? prev : categories[0].id.toString();
+        });
+      }
+    }
+  }, [categories]);
 
   const fetchCategories = async () => {
     try {
