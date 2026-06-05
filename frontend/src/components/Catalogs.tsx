@@ -406,8 +406,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         return aOS ? -1 : 1;
       }
       
-      // Secondary sort: newer items first
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      // Secondary sort: serial wise (natural sort)
+      return a.sku_id.localeCompare(b.sku_id, undefined, { numeric: true, sensitivity: 'base' });
     });
 
   // Reset page when search or filters change

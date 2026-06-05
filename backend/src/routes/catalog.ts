@@ -98,7 +98,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
-      queryStr += ` ORDER BY (s.sets_count > 0) DESC, i.sku_id ASC`;
+      queryStr += ` ORDER BY (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;
@@ -132,7 +132,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
           queryStr += ` AND s.is_available = FALSE`;
         }
       }
-      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, i.sku_id ASC`;
+      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;
