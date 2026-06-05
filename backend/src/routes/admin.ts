@@ -719,12 +719,12 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
   const thumbPath = path.join(uploadDir, thumbFilename);
 
   try {
-    // Check unique SKU ID
-    const skuExists = await query('SELECT id FROM items WHERE sku_id = $1', [skuId]);
+    // Check unique SKU ID (case-insensitively)
+    const skuExists = await query('SELECT id FROM items WHERE UPPER(sku_id) = UPPER($1)', [skuId.trim()]);
     if (skuExists.rows.length > 0) {
       // Remove uploaded file if SKU already exists
       fs.unlinkSync(req.file.path);
-      res.status(400).json({ error: `SKU ID '${skuId}' already exists. Please choose a unique SKU.` });
+      res.status(400).json({ error: `SKU ID '${skuId.trim()}' already exists. Please choose a unique SKU.` });
       return;
     }
 
@@ -859,6 +859,18 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     }
 
     const item = currentRes.rows[0];
+
+    // Check if new SKU ID already exists (case-insensitively)
+    if (skuId !== undefined && skuId.trim().toUpperCase() !== item.sku_id.toUpperCase()) {
+      const skuExists = await query(
+        'SELECT id FROM items WHERE UPPER(sku_id) = UPPER($1) AND id <> $2',
+        [skuId.trim(), itemId]
+      );
+      if (skuExists.rows.length > 0) {
+        res.status(400).json({ error: `SKU ID '${skuId.trim()}' already exists. Please choose a unique SKU.` });
+        return;
+      }
+    }
 
     // 2. Update items metadata if provided
     let updateFields: string[] = [];
