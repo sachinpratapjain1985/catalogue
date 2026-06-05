@@ -31,7 +31,8 @@ data class CategoryDto(
     val name: String,
     val sku_count: Int,
     val active_count: Int = 0,
-    val os_count: Int = 0
+    val os_count: Int = 0,
+    val na_count: Int = 0
 )
 
 data class SKUItemDto(
@@ -100,7 +101,8 @@ interface CatalogApiService {
         @Path("id") categoryId: Int,
         @Query("page") page: Int? = null,
         @Query("limit") limit: Int? = null,
-        @Query("search") search: String? = null
+        @Query("search") search: String? = null,
+        @Query("status") status: String? = null
     ): List<SKUItemDto>
 
     @POST("api/catalog/items/{id}/stock")

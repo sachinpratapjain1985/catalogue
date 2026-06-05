@@ -20,7 +20,8 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
                 CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count,
+                CAST(SUM(CASE WHEN s.is_available = FALSE THEN 1 ELSE 0 END) AS INTEGER) as na_count
          FROM categories c
          JOIN user_categories uc ON uc.category_id = c.id
          LEFT JOIN items i ON i.category_id = c.id
@@ -36,7 +37,8 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
                 CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count,
+                CAST(SUM(CASE WHEN s.is_available = FALSE THEN 1 ELSE 0 END) AS INTEGER) as na_count
          FROM categories c
          LEFT JOIN items i ON i.category_id = c.id
          LEFT JOIN stock s ON s.item_id = i.id
@@ -61,6 +63,8 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   const limit = req.query.limit ? parseInt(req.query.limit as string) : null;
   const offset = page && limit ? (page - 1) * limit : null;
   const search = req.query.search ? (req.query.search as string).trim() : null;
+  const status = req.query.status ? (req.query.status as string).trim() : null;
+
 
   try {
     // If stockist, verify folder assignment permission
@@ -94,7 +98,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
-      queryStr += ` ORDER BY i.sku_id ASC`;
+      queryStr += ` ORDER BY (s.sets_count > 0) DESC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;
@@ -119,7 +123,16 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
-      queryStr += ` ORDER BY i.sku_id ASC`;
+      if (status) {
+        if (status === 'A') {
+          queryStr += ` AND s.is_available = TRUE AND s.sets_count > 0`;
+        } else if (status === 'OS') {
+          queryStr += ` AND s.is_available = TRUE AND s.sets_count = 0`;
+        } else if (status === 'NA') {
+          queryStr += ` AND s.is_available = FALSE`;
+        }
+      }
+      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;

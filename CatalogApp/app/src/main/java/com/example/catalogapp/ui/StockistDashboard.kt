@@ -88,6 +88,7 @@ fun StockistDashboard(
     }
 
     var searchQuery by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf("") }
 
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
@@ -102,7 +103,8 @@ fun StockistDashboard(
                     categoryId = category.id,
                     page = page,
                     limit = 30,
-                    search = searchQuery.ifEmpty { null }
+                    search = searchQuery.ifEmpty { null },
+                    status = statusFilter.ifEmpty { null }
                 )
                 if (fetched.size < 30) {
                     hasMoreItems = false
@@ -137,6 +139,7 @@ fun StockistDashboard(
                             selectedCategory = null 
                             items = emptyList()
                             searchQuery = ""
+                            statusFilter = ""
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -223,7 +226,7 @@ fun StockistDashboard(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "A-${category.active_count}  OS-${category.os_count}  (Total: ${category.sku_count})",
+                                            text = "A-${category.active_count}  OS-${category.os_count}  NA-${category.na_count}  (Total: ${category.sku_count})",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -288,9 +291,53 @@ fun StockistDashboard(
                         shape = RoundedCornerShape(12.dp)
                     )
 
-                    // Folder active and os counts header
+                    // Status Filter Chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val statuses = listOf(
+                            "" to "All",
+                            "A" to "Available (A)",
+                            "OS" to "Out of Stock (OS)",
+                            "NA" to "Inactive (NA)"
+                        )
+                        statuses.forEach { (code, label) ->
+                            val isSelected = statusFilter == code
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        statusFilter = code
+                                        loadItems(selectedCategory!!, 1)
+                                    },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    width = 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = label.substringBefore(" ("),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Folder active, os, and na counts header
                     Text(
-                        text = "A-${selectedCategory?.active_count ?: 0}  OS-${selectedCategory?.os_count ?: 0}  (Total: ${selectedCategory?.sku_count ?: 0} articles)",
+                        text = "A-${selectedCategory?.active_count ?: 0}  OS-${selectedCategory?.os_count ?: 0}  NA-${selectedCategory?.na_count ?: 0}  (Total: ${selectedCategory?.sku_count ?: 0} articles)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -507,11 +554,21 @@ fun StockItemCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    val statusLabel = when {
+                        !isAvailable -> "Inactive (NA)"
+                        sets > 0 -> "Active (A)"
+                        else -> "Active (OS)"
+                    }
+                    val statusColor = when {
+                        !isAvailable -> MaterialTheme.colorScheme.error
+                        sets > 0 -> MaterialTheme.colorScheme.primary
+                        else -> Color(0xFFF97316)
+                    }
                     Text(
-                        text = if (isAvailable) "Active" else "Out",
-                        fontSize = 10.sp,
+                        text = statusLabel,
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        color = statusColor
                     )
                     Switch(
                         checked = isAvailable,

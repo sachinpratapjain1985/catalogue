@@ -89,6 +89,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCatId, setFilterCatId] = useState('');
   const [filterAgeLimit, setFilterAgeLimit] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
 
   // Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -346,24 +347,56 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
-  // Filter items including age limitation (>60 days)
-  const filteredItems = items.filter(item => {
-    const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCatId === '' || item.category_id === parseInt(filterCatId);
-    
-    let matchesAge = true;
-    if (filterAgeLimit) {
-      const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
-      matchesAge = ageInDays >= 60;
+  const getThumbnailUrl = (imagePath: string) => {
+    if (!imagePath) return '';
+    const lastDotIndex = imagePath.lastIndexOf('.');
+    if (lastDotIndex !== -1 && !imagePath.includes('-thumb.')) {
+      return imagePath.substring(0, lastDotIndex) + '-thumb' + imagePath.substring(lastDotIndex);
     }
-    
-    return matchesSearch && matchesCategory && matchesAge;
-  });
+    return imagePath;
+  };
+
+  // Filter items including age limitation (>60 days), status, and sort them
+  const filteredItems = items
+    .filter(item => {
+      const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = filterCatId === '' || item.category_id === parseInt(filterCatId);
+      
+      let matchesAge = true;
+      if (filterAgeLimit) {
+        const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+        matchesAge = ageInDays >= 60;
+      }
+
+      const matchesStatus = filterStatus === '' || 
+        (filterStatus === 'A' && item.is_available && item.sets_count > 0) ||
+        (filterStatus === 'OS' && item.is_available && item.sets_count === 0) ||
+        (filterStatus === 'NA' && !item.is_available);
+      
+      return matchesSearch && matchesCategory && matchesAge && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
+      const aAvailable = a.is_available && a.sets_count > 0;
+      const bAvailable = b.is_available && b.sets_count > 0;
+      if (aAvailable !== bAvailable) {
+        return aAvailable ? -1 : 1;
+      }
+      
+      const aOS = a.is_available && a.sets_count === 0;
+      const bOS = b.is_available && b.sets_count === 0;
+      if (aOS !== bOS) {
+        return aOS ? -1 : 1;
+      }
+      
+      // Secondary sort: newer items first
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
 
   // Reset page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCatId, filterAgeLimit]);
+  }, [searchTerm, filterCatId, filterAgeLimit, filterStatus]);
 
   const itemsPerPage = 15;
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
@@ -561,9 +594,10 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     const catItems = items.filter(item => item.category_id === c.id);
                     const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
                     const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
+                    const naCount = catItems.filter(item => !item.is_available).length;
                     return (
                       <option key={c.id} value={c.id}>
-                        {c.name} (A-{activeCount} OS-{osCount})
+                        {c.name} (A-{activeCount} OS-{osCount} NA-{naCount})
                       </option>
                     );
                   })}
@@ -737,12 +771,28 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   const catItems = items.filter(item => item.category_id === c.id);
                   const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
                   const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
+                  const naCount = catItems.filter(item => !item.is_available).length;
                   return (
                     <option key={c.id} value={c.id}>
-                      {c.name} (A-{activeCount} OS-{osCount})
+                      {c.name} (A-{activeCount} OS-{osCount} NA-{naCount})
                     </option>
                   );
                 })}
+              </select>
+            </div>
+
+            {/* Filter Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={16} color="var(--text-muted)" />
+              <select 
+                value={filterStatus} 
+                onChange={e => setFilterStatus(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Statuses</option>
+                <option value="A">Available (A)</option>
+                <option value="OS">Out of Stock (OS)</option>
+                <option value="NA">Inactive (NA)</option>
               </select>
             </div>
 
@@ -774,17 +824,32 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
                   }}>
                     <div className="catalog-image-wrapper">
-                      <img src={item.image_path} alt={item.sku_id} className="catalog-image" />
+                      <img 
+                        src={getThumbnailUrl(item.image_path)} 
+                        alt={item.sku_id} 
+                        className="catalog-image" 
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== item.image_path) {
+                            target.src = item.image_path;
+                          }
+                        }}
+                      />
                       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
-                        {item.is_available ? (
-                          <span className="badge badge-success" title="Available">
+                        {!item.is_available ? (
+                          <span className="badge badge-danger" title="Inactive (Not Available)">
+                            <XCircle size={12} style={{ marginRight: '4px' }} />
+                            Inactive (NA)
+                          </span>
+                        ) : item.sets_count > 0 ? (
+                          <span className="badge badge-success" title="Active & Available">
                             <CheckCircle size={12} style={{ marginRight: '4px' }} />
-                            Available
+                            Available (A)
                           </span>
                         ) : (
-                          <span className="badge badge-danger" title="Unavailable">
+                          <span className="badge badge-warning" title="Active but Out of Stock">
                             <XCircle size={12} style={{ marginRight: '4px' }} />
-                            No Stock
+                            Out of Stock (OS)
                           </span>
                         )}
                         
