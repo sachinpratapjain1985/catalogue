@@ -32,6 +32,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|webp/;
     const mimetype = filetypes.test(file.mimetype);
@@ -148,7 +149,7 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
     });
   } catch (error) {
     console.error('Admin dashboard error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -195,7 +196,7 @@ router.get('/reports/additions', async (req: AuthenticatedRequest, res: Response
     res.json(result.rows);
   } catch (error) {
     console.error('Fetch additions report error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -243,7 +244,7 @@ router.get('/reports/reductions', async (req: AuthenticatedRequest, res: Respons
     res.json(result.rows);
   } catch (error) {
     console.error('Fetch reductions report error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -288,7 +289,7 @@ router.get('/reports/aging', async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Fetch aging report error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -335,7 +336,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
     res.json(result);
   } catch (error) {
     console.error('Get users error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -392,7 +393,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
     });
   } catch (error) {
     console.error('Create user error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -469,7 +470,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
     });
   } catch (error) {
     console.error('Update user error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -486,7 +487,7 @@ router.delete('/users/:id', requireRole(['superadmin']), async (req: Request, re
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -507,7 +508,7 @@ router.get('/devices', requireRole(['superadmin']), async (req: Request, res: Re
     res.json(result.rows);
   } catch (error) {
     console.error('Get devices error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -538,7 +539,7 @@ router.put('/devices/:id', requireRole(['superadmin']), async (req: Request, res
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update device error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -555,7 +556,7 @@ router.delete('/devices/:id', requireRole(['superadmin']), async (req: Request, 
     res.json({ message: 'Device registration removed' });
   } catch (error) {
     console.error('Delete device error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -570,7 +571,7 @@ router.get('/categories', async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get categories error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -597,7 +598,7 @@ router.post('/categories', async (req: Request, res: Response): Promise<void> =>
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create category error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -625,7 +626,7 @@ router.put('/categories/:id', requireRole(['superadmin']), async (req: Request, 
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update category error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -667,7 +668,7 @@ router.delete('/categories/:id', requireRole(['superadmin']), async (req: Reques
     res.json({ message: 'Category and all associated SKU designs deleted successfully' });
   } catch (error) {
     console.error('Delete category error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -692,7 +693,7 @@ router.get('/items', async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get items error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -792,7 +793,7 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
         fs.unlinkSync(thumbPath);
       } catch (e) {}
     }
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -833,7 +834,7 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
     res.json({ message: 'SKU and its image design deleted successfully' });
   } catch (error) {
     console.error('Delete item error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -985,7 +986,7 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     res.json(updatedRes.rows[0]);
   } catch (error) {
     console.error('Update item details error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 

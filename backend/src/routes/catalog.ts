@@ -50,7 +50,7 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
     res.json(result.rows);
   } catch (error) {
     console.error('Get catalog categories error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -147,7 +147,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     res.json(itemsRes.rows);
   } catch (error) {
     console.error('Get catalog items error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 
@@ -273,7 +273,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
     });
   } catch (error) {
     console.error('Update SKU stock error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
 

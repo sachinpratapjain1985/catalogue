@@ -65,6 +65,12 @@ if (fs.existsSync(publicPath)) {
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled Server Error:', err);
+  if (err.name === 'MulterError' || err.code === 'LIMIT_FILE_SIZE') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size limit exceeded. Max size allowed is 10MB.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
