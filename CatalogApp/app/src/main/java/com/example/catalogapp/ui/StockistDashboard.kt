@@ -351,12 +351,26 @@ fun StockistDashboard(
                                 .weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No SKU items found in this folder.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp),
-                                textAlign = TextAlign.Center
-                            )
+                            if (isLoading) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "Loading SKU items, please wait...",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No SKU items found in this folder.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     } else {
                         LazyVerticalGrid(

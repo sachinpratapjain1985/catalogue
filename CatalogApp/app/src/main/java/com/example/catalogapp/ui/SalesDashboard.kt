@@ -373,12 +373,26 @@ fun SalesDashboard(
                                 .weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No available items found in this section.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp),
-                                textAlign = TextAlign.Center
-                            )
+                            if (isLoading) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "Loading articles, please wait...",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No available items found in this section.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     } else {
                         LazyVerticalGrid(

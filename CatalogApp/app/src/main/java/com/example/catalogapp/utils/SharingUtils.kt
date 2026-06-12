@@ -97,15 +97,14 @@ object SharingUtils {
                     val item = selectedItems[0]
                     val detailsText = buildString {
                         append("Design SKU: ${item.sku_id}\n")
-                        append("Rate: ₹${item.rate}\n")
                         if (!item.material.isNullOrBlank()) {
-                            append("Material: ${item.material}\n")
+                            append("Work/Material: ${item.material}\n")
                         }
                         val desc = sanitizeDescription(item.description)
-                        append("Description: $desc\n")
-                        append("Pack Details: ${item.pieces_per_set} pieces per set\n")
-                        append("Available: Yes\n\n")
-                        append("Shared via Desuka Catalog")
+                        if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                            append("Description: $desc\n")
+                        }
+                        append("\nShared via Desuka Catalog")
                     }
 
                     Intent(Intent.ACTION_SEND).apply {
@@ -119,13 +118,14 @@ object SharingUtils {
                         append("Designs from Desuka Catalogue:\n\n")
                         selectedItems.forEach { item ->
                             append("• SKU: ${item.sku_id}\n")
-                            append("  Rate: ₹${item.rate}\n")
                             if (!item.material.isNullOrBlank()) {
-                                append("  Material: ${item.material}\n")
+                                append("  Work/Material: ${item.material}\n")
                             }
                             val desc = sanitizeDescription(item.description)
-                            append("  Description: $desc\n")
-                            append("  Pack details: ${item.pieces_per_set} pc/set\n\n")
+                            if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                                append("  Description: $desc\n")
+                            }
+                            append("\n")
                         }
                         append("Shared via Desuka Catalog")
                     }

@@ -729,6 +729,31 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       return;
     }
 
+    // Optimize the uploaded original image (resize to max 1600px width/height, compress format-specifically)
+    const tempPath = req.file.path + '.tmp';
+    try {
+      let sharpObj = sharp(req.file.path)
+        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true });
+
+      const extension = ext.toLowerCase();
+      if (extension === '.png') {
+        sharpObj = sharpObj.png({ quality: 85, compressionLevel: 8 });
+      } else if (extension === '.webp') {
+        sharpObj = sharpObj.webp({ quality: 85 });
+      } else {
+        sharpObj = sharpObj.jpeg({ quality: 85, progressive: true });
+      }
+
+      await sharpObj.toFile(tempPath);
+      fs.renameSync(tempPath, req.file.path);
+      console.log(`[Optimizer] Compressed original image to max 1600px: ${req.file.path}`);
+    } catch (optErr) {
+      console.error('[Optimizer] Failed to optimize original image:', optErr);
+      if (fs.existsSync(tempPath)) {
+        try { fs.unlinkSync(tempPath); } catch (e) {}
+      }
+    }
+
     // Generate thumbnail using sharp
     try {
       await sharp(req.file.path)
