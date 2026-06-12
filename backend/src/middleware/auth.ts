@@ -54,10 +54,24 @@ export const authenticateToken = async (
       return;
     }
 
-    // 3. Working hours check
+    // 3. Working hours check (forcing Indian Standard Time - Asia/Kolkata)
     const now = new Date();
-    // Format current local time as "HH:MM:SS"
-    const currentTimeStr = now.toTimeString().split(' ')[0];
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const hours = parts.find(p => p.type === 'hour')?.value || '00';
+    const minutes = parts.find(p => p.type === 'minute')?.value || '00';
+    const seconds = parts.find(p => p.type === 'second')?.value || '00';
+    
+    // In case hour12: false returns "24" instead of "00"
+    const normalizedHour = hours === '24' ? '00' : hours;
+    const currentTimeStr = `${normalizedHour}:${minutes}:${seconds}`;
+
     const start = user.working_hours_start;
     const end = user.working_hours_end;
 
