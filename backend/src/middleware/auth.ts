@@ -9,6 +9,7 @@ export interface AuthenticatedRequest extends Request {
     id: number;
     username: string;
     role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
+    baseRole: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
     deviceUuid?: string;
     can_edit_rates?: boolean;
   };
@@ -131,6 +132,7 @@ export const authenticateToken = async (
       id: user.id,
       username: user.username,
       role: activeRole as any,
+      baseRole: user.role,
       deviceUuid: decoded.deviceUuid,
       can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates
     };

@@ -11,11 +11,13 @@ router.use(authenticateToken);
 router.get('/categories', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const role = req.user?.role;
+  const baseRole = req.user?.baseRole;
 
   try {
     let result;
-    if (role === 'stockist') {
-      // Stockist only gets folders assigned to them
+    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    if (restrictFolders) {
+      // Stockist / Both / Manager only gets folders assigned to them
       result = await query(
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
@@ -59,6 +61,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   const categoryId = parseInt(req.params.id);
   const userId = req.user?.id;
   const role = req.user?.role;
+  const baseRole = req.user?.baseRole;
   const page = req.query.page ? parseInt(req.query.page as string) : null;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : null;
   const offset = page && limit ? (page - 1) * limit : null;
@@ -67,8 +70,9 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
 
 
   try {
-    // If stockist, verify folder assignment permission
-    if (role === 'stockist') {
+    // If restricted user (stockist, both, manager), verify folder assignment permission
+    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',
         [userId, categoryId]
@@ -156,6 +160,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 0;
   const role = req.user?.role;
+  const baseRole = req.user?.baseRole;
   const { setsCount, isAvailable, rate } = req.body;
 
   if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager') {
@@ -180,8 +185,9 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
 
     const item = currentRes.rows[0];
 
-    // If stockist, verify permission for this category
-    if (role === 'stockist') {
+    // If restricted user (stockist, both, manager), verify permission for this category
+    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',
         [userId, item.category_id]
