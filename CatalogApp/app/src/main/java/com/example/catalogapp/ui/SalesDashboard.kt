@@ -208,7 +208,7 @@ fun SalesDashboard(
                             ) {
                                 Checkbox(
                                     checked = shareDescription,
-                                    onCheckedChange = { shareDescription = it },
+                                    onCheckedChange = null,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
