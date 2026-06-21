@@ -707,7 +707,7 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
   }
 
   const clientUserId = req.user?.id || 1; // Fallback to admin
-  const finalDescription = description && description.trim() !== '' ? description.trim() : 'DESUKA by VS FASHION Gandhi Nagar Delhi.';
+  const finalDescription = description && description.trim() !== '' ? description.trim() : '';
   const finalRate = parseInt(rate || '0');
   let originalDate = new Date();
   if (originalCreatedAt) {

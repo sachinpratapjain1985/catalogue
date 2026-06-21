@@ -605,8 +605,7 @@ fun SalesItemCard(
                 )
                 val detailText = when {
                     !item.material.isNullOrBlank() -> item.material
-                    !item.description.isNullOrBlank() -> item.description
-                    else -> ""
+                    else -> SharingUtils.sanitizeDescription(item.description)
                 }
                 if (detailText.isNotEmpty()) {
                     Text(

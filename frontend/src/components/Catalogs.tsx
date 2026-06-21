@@ -58,7 +58,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [skuId, setSkuId] = useState('');
   const [selectedCatId, setSelectedCatId] = useState('');
   const [piecesPerSet, setPiecesPerSet] = useState(4);
-  const [description, setDescription] = useState('DESUKA by VS FASHION Gandhi Nagar Delhi.');
+  const [description, setDescription] = useState('');
   const [material, setMaterial] = useState('');
   const [rate, setRate] = useState('');
   const [stockType, setStockType] = useState<'new' | 'old'>('new');
@@ -273,7 +273,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         // Reset form
         setSkuId('');
         setPiecesPerSet(4);
-        setDescription('DESUKA by VS FASHION Gandhi Nagar Delhi.');
+        setDescription('');
         setMaterial('');
         setRate('');
         setStockType('new');

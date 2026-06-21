@@ -67,6 +67,10 @@ export const runMigrations = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
     console.log('[Migration] Performance indexes verified.');
 
+    // 5. Update items to clear default descriptions
+    await pool.query("UPDATE items SET description = '' WHERE description = 'DESUKA by VS FASHION Gandhi Nagar Delhi.'");
+    console.log('[Migration] Cleared default descriptions from existing items.');
+
     console.log('[Migration] Database migrations completed successfully!');
   } catch (err) {
     console.error('[Migration] Error running database migrations:', err);

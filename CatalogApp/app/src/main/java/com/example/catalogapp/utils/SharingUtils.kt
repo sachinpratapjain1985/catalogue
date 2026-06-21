@@ -16,17 +16,20 @@ import java.io.InputStream
 
 object SharingUtils {
 
-    private fun sanitizeDescription(desc: String?): String {
+    fun sanitizeDescription(desc: String?): String {
         if (desc.isNullOrBlank()) {
-            return "DESUKA by VS FASHION Gandhi Nagar Delhi."
+            return ""
         }
-        return desc
+        val trimmed = desc.trim()
+        if (trimmed.equals("DESUKA by VS FASHION Gandhi Nagar Delhi.", ignoreCase = true)) {
+            return ""
+        }
+        return trimmed
             .replace("old stock", "", ignoreCase = true)
             .replace("new stock", "", ignoreCase = true)
             .replace("old", "", ignoreCase = true)
             .replace("new", "", ignoreCase = true)
             .trim()
-            .ifBlank { "DESUKA by VS FASHION Gandhi Nagar Delhi." }
     }
 
     /**
@@ -103,7 +106,7 @@ object SharingUtils {
                         }
                         if (shareDescription) {
                             val desc = sanitizeDescription(item.description)
-                            if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                            if (desc.isNotEmpty()) {
                                 append("Description: $desc\n")
                             }
                         }
@@ -126,7 +129,7 @@ object SharingUtils {
                             }
                             if (shareDescription) {
                                 val desc = sanitizeDescription(item.description)
-                                if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                                if (desc.isNotEmpty()) {
                                     append("  Description: $desc\n")
                                 }
                             }
