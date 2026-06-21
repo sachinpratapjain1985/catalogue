@@ -36,6 +36,7 @@ object SharingUtils {
         context: Context,
         selectedItems: List<SKUItemDto>,
         sessionManager: SessionManager,
+        shareDescription: Boolean = false,
         onProgress: (String) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -100,9 +101,11 @@ object SharingUtils {
                         if (!item.material.isNullOrBlank()) {
                             append("Work/Material: ${item.material}\n")
                         }
-                        val desc = sanitizeDescription(item.description)
-                        if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
-                            append("Description: $desc\n")
+                        if (shareDescription) {
+                            val desc = sanitizeDescription(item.description)
+                            if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                                append("Description: $desc\n")
+                            }
                         }
                         append("\nShared via Desuka Catalog")
                     }
@@ -121,9 +124,11 @@ object SharingUtils {
                             if (!item.material.isNullOrBlank()) {
                                 append("  Work/Material: ${item.material}\n")
                             }
-                            val desc = sanitizeDescription(item.description)
-                            if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
-                                append("  Description: $desc\n")
+                            if (shareDescription) {
+                                val desc = sanitizeDescription(item.description)
+                                if (desc != "DESUKA by VS FASHION Gandhi Nagar Delhi.") {
+                                    append("  Description: $desc\n")
+                                }
                             }
                             append("\n")
                         }

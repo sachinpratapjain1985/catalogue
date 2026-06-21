@@ -68,6 +68,7 @@ fun SalesDashboard(
     // Sharing dialogue progress state
     var isSharing by remember { mutableStateOf(false) }
     var shareProgressMsg by remember { mutableStateOf("") }
+    var shareDescription by remember { mutableStateOf(false) }
 
     val apiService = NetworkClient.getApiService(sessionManager)
 
@@ -199,11 +200,24 @@ fun SalesDashboard(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
-                            Text(
-                                text = "Ready to share actual photos",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { shareDescription = !shareDescription }
+                                    .padding(top = 2.dp)
+                            ) {
+                                Checkbox(
+                                    checked = shareDescription,
+                                    onCheckedChange = { shareDescription = it },
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Send Description",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         Button(
@@ -214,6 +228,7 @@ fun SalesDashboard(
                                         context = context,
                                         selectedItems = selectedItems.toList(),
                                         sessionManager = sessionManager,
+                                        shareDescription = shareDescription,
                                         onProgress = { shareProgressMsg = it },
                                         onError = {
                                             isSharing = false
