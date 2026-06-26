@@ -11,7 +11,10 @@ import {
   Edit2,
   Check,
   X,
-  AlertCircle
+  AlertCircle,
+  Share2,
+  Copy,
+  Download
 } from 'lucide-react';
 
 interface Category {
@@ -81,6 +84,12 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   // Folder/Category editing states
   const [editingCatId, setEditingCatId] = useState<number | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
+
+  // WhatsApp Web multi-share states
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [sharePhone, setSharePhone] = useState('');
+  const [webSendDescription, setWebSendDescription] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -373,6 +382,89 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     return imagePath;
   };
 
+  const handleToggleSelect = (itemId: number) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    const allVisibleIds = filteredItems.map(item => item.id);
+    const allSelected = allVisibleIds.every(id => selectedItems.includes(id));
+    
+    if (allSelected) {
+      setSelectedItems(prev => prev.filter(id => !allVisibleIds.includes(id)));
+    } else {
+      setSelectedItems(prev => {
+        const unique = new Set([...prev, ...allVisibleIds]);
+        return Array.from(unique);
+      });
+    }
+  };
+
+  const generateShareText = () => {
+    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
+    let text = '';
+    if (selectedItemsData.length === 1) {
+      const item = selectedItemsData[0];
+      text += `Design SKU: ${item.sku_id}\n`;
+      if (item.material) {
+        text += `Work/Material: ${item.material}\n`;
+      }
+      text += `Link: ${window.location.origin}${item.image_path}\n`;
+      if (webSendDescription && item.description) {
+        text += `Description: ${item.description}\n`;
+      }
+      text += `\nShared via Desuka Catalog`;
+    } else {
+      text += `Designs from Desuka Catalogue:\n\n`;
+      selectedItemsData.forEach(item => {
+        text += `• SKU: ${item.sku_id}\n`;
+        if (item.material) {
+          text += `  Work/Material: ${item.material}\n`;
+        }
+        text += `  Link: ${window.location.origin}${item.image_path}\n`;
+        if (webSendDescription && item.description) {
+          text += `  Description: ${item.description}\n`;
+        }
+        text += `\n`;
+      });
+      text += `Shared via Desuka Catalog`;
+    }
+    return text;
+  };
+
+  const handleCopyDetails = () => {
+    const text = generateShareText();
+    navigator.clipboard.writeText(text);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  };
+
+  const handleDownloadSelectedImages = () => {
+    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
+    selectedItemsData.forEach((item, index) => {
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = item.image_path;
+        const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+        link.download = `${item.sku_id}${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, index * 250);
+    });
+  };
+
+  const handleShareWhatsAppWeb = () => {
+    const text = generateShareText();
+    const cleanNum = sharePhone.trim().replace(/\D/g, '');
+    const url = cleanNum 
+      ? `https://web.whatsapp.com/send?phone=${cleanNum}&text=${encodeURIComponent(text)}`
+      : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
   // Filter items including age limitation (>60 days), status, and sort them
   const filteredItems = items
     .filter(item => {
@@ -487,7 +579,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         </div>
       )}
 
-      <div className="grid-2">
+      {user?.role !== 'sales' && (
+        <div className="grid-2">
         {/* Create Folder / Category */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -756,6 +849,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           </form>
         </div>
       </div>
+      )}
 
       {/* SKUs Grid section with Search & Filters */}
       <div className="glass-card">
@@ -822,6 +916,17 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             >
               Older than 60 Days Only
             </button>
+
+            <button 
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleToggleSelectAll}
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              {filteredItems.every(item => selectedItems.includes(item.id)) && filteredItems.length > 0 
+                ? 'Deselect All' 
+                : 'Select All Visible'}
+            </button>
           </div>
         </div>
 
@@ -841,6 +946,23 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
                   }}>
                     <div className="catalog-image-wrapper">
+                      {/* Selection Checkbox */}
+                      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
+                        <input 
+                          type="checkbox"
+                          checked={selectedItems.includes(item.id)}
+                          onChange={() => handleToggleSelect(item.id)}
+                          style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            cursor: 'pointer',
+                            accentColor: 'var(--color-primary)',
+                            borderRadius: '4px',
+                            border: '2px solid white',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                          }}
+                        />
+                      </div>
                       <img 
                         src={getThumbnailUrl(item.image_path)} 
                         alt={item.sku_id} 
@@ -882,24 +1004,26 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                       <div className="flex-between">
                         <span className="sku-tag">{item.sku_id}</span>
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                          <button 
-                            onClick={() => {
-                              setEditingItem(item);
-                              setEditSkuId(item.sku_id);
-                              setEditCategoryId(item.category_id.toString());
-                              setEditPiecesPerSet(item.pieces_per_set);
-                              setEditMaterial(item.material || '');
-                              setEditRate(item.rate.toString());
-                              setEditSetsCount(item.sets_count);
-                              setEditIsAvailable(item.is_available);
-                              setEditDescription(item.description || '');
-                              setIsEditModalOpen(true);
-                            }}
-                            style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                            title="Edit SKU Details"
-                          >
-                            Edit
-                          </button>
+                          {user?.role !== 'sales' && (
+                            <button 
+                              onClick={() => {
+                                setEditingItem(item);
+                                setEditSkuId(item.sku_id);
+                                setEditCategoryId(item.category_id.toString());
+                                setEditPiecesPerSet(item.pieces_per_set);
+                                setEditMaterial(item.material || '');
+                                setEditRate(item.rate.toString());
+                                setEditSetsCount(item.sets_count);
+                                setEditIsAvailable(item.is_available);
+                                setEditDescription(item.description || '');
+                                setIsEditModalOpen(true);
+                              }}
+                              style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                              title="Edit SKU Details"
+                            >
+                              Edit
+                            </button>
+                          )}
                           {user?.role === 'superadmin' && (
                             <button 
                               onClick={() => handleDeleteSKU(item.id, item.sku_id)}
@@ -1128,6 +1252,178 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating WhatsApp Share Bar */}
+      {selectedItems.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '55%',
+          transform: 'translateX(-50%)',
+          width: '80%',
+          maxWidth: '850px',
+          background: 'rgba(18, 20, 24, 0.9)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '16px',
+          padding: '1rem 1.5rem',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          color: 'white',
+          animation: 'slideUp 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ 
+                background: 'var(--color-primary)', 
+                color: 'white', 
+                padding: '0.25rem 0.6rem', 
+                borderRadius: '50px', 
+                fontSize: '0.85rem',
+                fontWeight: 'bold'
+              }}>
+                {selectedItems.length}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Designs Selected</span>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                type="button" 
+                onClick={() => setSelectedItems([])}
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.1)', 
+                  border: 'none', 
+                  color: 'white', 
+                  padding: '0.5rem 1rem', 
+                  borderRadius: '8px', 
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Phone Number Input */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 200px' }}>
+              <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                Customer WhatsApp No. (e.g. 919876543210)
+              </label>
+              <input 
+                type="text" 
+                placeholder="Enter country code + number" 
+                value={sharePhone}
+                onChange={e => setSharePhone(e.target.value)}
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.05)', 
+                  border: '1px solid rgba(255, 255, 255, 0.1)', 
+                  borderRadius: '8px', 
+                  padding: '0.5rem 0.75rem',
+                  color: 'white',
+                  fontSize: '0.9rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
+            
+            {/* Send Description Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
+              <input 
+                type="checkbox" 
+                id="web-send-desc"
+                checked={webSendDescription}
+                onChange={e => setWebSendDescription(e.target.checked)}
+                style={{ 
+                  width: '18px', 
+                  height: '18px', 
+                  cursor: 'pointer',
+                  accentColor: 'var(--color-primary)'
+                }}
+              />
+              <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
+                Send Description
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto', flexWrap: 'wrap', marginTop: '1.2rem' }}>
+              <button 
+                type="button" 
+                onClick={handleCopyDetails}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {copiedText ? <Check size={16} color="var(--color-success)" /> : <Copy size={16} />}
+                {copiedText ? 'Copied!' : 'Copy Text'}
+              </button>
+              
+              <button 
+                type="button" 
+                onClick={handleDownloadSelectedImages}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Download size={16} />
+                Download Images
+              </button>
+              
+              <button 
+                type="button" 
+                onClick={handleShareWhatsAppWeb}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1.2rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid #25D366',
+                  borderRadius: '8px',
+                  background: '#25D366', // WhatsApp Green
+                  color: 'white',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Share2 size={16} />
+                Share via WhatsApp
+              </button>
+            </div>
           </div>
         </div>
       )}

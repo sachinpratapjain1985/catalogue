@@ -11,7 +11,12 @@ const router = Router();
 
 // Apply admin guard to all routes in this file
 router.use(authenticateToken);
-router.use(requireRole(['superadmin', 'manager']));
+router.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+    return requireRole(['superadmin', 'manager'])(req, res, next);
+  }
+  return requireRole(['superadmin', 'manager', 'sales'])(req, res, next);
+});
 
 // Setup Multer for image uploads
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');

@@ -491,3 +491,8 @@ tr:hover td {
 .chart-bar {
   transition: height var(--transition-slow) cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+
+@keyframes slideUp {
+  from { transform: translate(-50%, 50px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}

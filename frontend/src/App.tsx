@@ -37,6 +37,12 @@ function App() {
     }
   }, [token]);
 
+  useEffect(() => {
+    if (user && user.role === 'sales') {
+      setActiveTab('catalogs');
+    }
+  }, [user]);
+
   const fetchUser = async () => {
     try {
       const response = await fetch('/api/auth/me', {
@@ -46,9 +52,9 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        // Check if user is admin or manager
-        if (data.user.role !== 'superadmin' && data.user.role !== 'manager') {
-          setLoginError('Access denied. Admin portal only.');
+        // Check if user is admin, manager or sales
+        if (data.user.role !== 'superadmin' && data.user.role !== 'manager' && data.user.role !== 'sales') {
+          setLoginError('Access denied. Authorized users only.');
           handleLogout();
         } else {
           setUser(data.user);
@@ -82,8 +88,8 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        if (data.user.role !== 'superadmin' && data.user.role !== 'manager') {
-          setLoginError('Access denied. Admin portal only.');
+        if (data.user.role !== 'superadmin' && data.user.role !== 'manager' && data.user.role !== 'sales') {
+          setLoginError('Access denied. Authorized users only.');
         } else {
           localStorage.setItem('admin_token', data.token);
           setToken(data.token);
@@ -176,16 +182,18 @@ function App() {
         </div>
 
         <ul className="nav-links">
-          <li>
-            <button 
-              className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-              style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
-            >
-              <LayoutDashboard size={20} />
-              Dashboard
-            </button>
-          </li>
+          {user.role !== 'sales' && (
+            <li>
+              <button 
+                className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
+              >
+                <LayoutDashboard size={20} />
+                Dashboard
+              </button>
+            </li>
+          )}
           <li>
             <button 
               className={`nav-link ${activeTab === 'catalogs' ? 'active' : ''}`}
@@ -208,16 +216,18 @@ function App() {
               </button>
             </li>
           )}
-          <li>
-            <button 
-              className={`nav-link ${activeTab === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reports')}
-              style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
-            >
-              <FileSpreadsheet size={20} />
-              Stock Reports
-            </button>
-          </li>
+          {user.role !== 'sales' && (
+            <li>
+              <button 
+                className={`nav-link ${activeTab === 'reports' ? 'active' : ''}`}
+                onClick={() => setActiveTab('reports')}
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
+              >
+                <FileSpreadsheet size={20} />
+                Stock Reports
+              </button>
+            </li>
+          )}
         </ul>
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
