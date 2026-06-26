@@ -90,6 +90,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [sharePhone, setSharePhone] = useState('');
   const [webSendDescription, setWebSendDescription] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
+  const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -411,7 +412,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       if (item.material) {
         text += `Work/Material: ${item.material}\n`;
       }
-      text += `Link: ${window.location.origin}${item.image_path}\n`;
       if (webSendDescription && item.description) {
         text += `Description: ${item.description}\n`;
       }
@@ -423,7 +423,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         if (item.material) {
           text += `  Work/Material: ${item.material}\n`;
         }
-        text += `  Link: ${window.location.origin}${item.image_path}\n`;
         if (webSendDescription && item.description) {
           text += `  Description: ${item.description}\n`;
         }
@@ -464,6 +463,55 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
+
+  const handleCopyImageToClipboard = async (imagePath: string, itemId: number) => {
+    try {
+      setCopyingImgId(itemId);
+      
+      const imagePromise = new Promise<Blob>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imagePath;
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to convert image format'));
+            }
+          }, 'image/png');
+        };
+        
+        img.onerror = () => {
+          reject(new Error('Failed to load image'));
+        };
+      });
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': imagePromise
+        })
+      ]);
+
+      showSuccess('Photo copied to clipboard! Paste it into WhatsApp.');
+      setTimeout(() => setCopyingImgId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy image to clipboard:', err);
+      showError('Browser blocked copying. Right-click the thumbnail and select "Copy Image".');
+      setCopyingImgId(null);
+    }
+  };
+
 
   // Filter items including age limitation (>60 days), status, and sort them
   const filteredItems = items
@@ -1312,8 +1360,115 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </button>
             </div>
           </div>
-          
+
+          {/* Selected items photo quick-copy drawer */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: '12px',
+            padding: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#25D366', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                📸 Quick Copy Photos for WhatsApp (No Downloads)
+              </span>
+              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                Click "Copy Photo" or right-click the thumbnail to copy. Then open WhatsApp and press <strong>Ctrl+V</strong> to paste and send!
+              </span>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              overflowX: 'auto',
+              paddingBottom: '0.5rem',
+              maxHeight: '120px',
+              scrollbarWidth: 'thin'
+            }}>
+              {items.filter(item => selectedItems.includes(item.id)).map(item => (
+                <div 
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    padding: '0.4rem',
+                    gap: '0.5rem',
+                    minWidth: '200px',
+                    flexShrink: 0,
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={getThumbnailUrl(item.image_path)}
+                    alt={item.sku_id}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (target.src !== item.image_path) {
+                        target.src = item.image_path;
+                      }
+                    }}
+                    style={{
+                      width: '45px',
+                      height: '45px',
+                      objectFit: 'cover',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}
+                    title="Right-click -> Copy Image (as backup)"
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {item.sku_id}
+                    </span>
+                    {item.material && (
+                      <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {item.material}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyImageToClipboard(item.image_path, item.id)}
+                    style={{
+                      background: copyingImgId === item.id ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                      border: copyingImgId === item.id ? '1px solid #25D366' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.6rem',
+                      color: copyingImgId === item.id ? '#25D366' : 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {copyingImgId === item.id ? (
+                      <>
+                        <Check size={12} />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        Copy Photo
+                      </>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+
             {/* Phone Number Input */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 200px' }}>
               <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
