@@ -1,5 +1,8 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -64,6 +67,7 @@ export const runMigrations = async () => {
 
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
     console.log('[Migration] Performance indexes verified.');
 
@@ -72,9 +76,61 @@ export const runMigrations = async () => {
     console.log('[Migration] Cleared default descriptions from existing items.');
 
     console.log('[Migration] Database migrations completed successfully!');
+
+    // Run background generation of missing thumbnails for 800+ products
+    generateMissingThumbnails().catch(err => {
+      console.error('[Thumbnail Migration] Background thumbnail generation failed:', err);
+    });
   } catch (err) {
     console.error('[Migration] Error running database migrations:', err);
     throw err;
+  }
+};
+
+export const generateMissingThumbnails = async () => {
+  const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+  console.log('[Thumbnail Migration] Checking for missing thumbnails in:', uploadDir);
+  try {
+    const res = await pool.query('SELECT id, sku_id, image_path FROM items');
+    let generatedCount = 0;
+    let missingOriginals = 0;
+    let alreadyExists = 0;
+
+    for (const row of res.rows) {
+      const imagePath = row.image_path; // e.g. "/uploads/filename.jpg"
+      if (!imagePath) continue;
+
+      const filename = path.basename(imagePath);
+      const ext = path.extname(filename);
+      const baseName = path.basename(filename, ext);
+      const thumbFilename = `${baseName}-thumb${ext}`;
+
+      const originalFullPath = path.join(uploadDir, filename);
+      const thumbFullPath = path.join(uploadDir, thumbFilename);
+
+      if (fs.existsSync(thumbFullPath)) {
+        alreadyExists++;
+        continue;
+      }
+
+      if (fs.existsSync(originalFullPath)) {
+        try {
+          await sharp(originalFullPath)
+            .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+            .toFile(thumbFullPath);
+          generatedCount++;
+          console.log(`[Thumbnail Migration] Generated thumbnail for ${row.sku_id} (${filename})`);
+        } catch (err) {
+          console.error(`[Thumbnail Migration] Failed to generate thumbnail for ${row.sku_id}:`, err);
+        }
+      } else {
+        missingOriginals++;
+        console.warn(`[Thumbnail Migration] Original image not found for ${row.sku_id} at ${originalFullPath}`);
+      }
+    }
+    console.log(`[Thumbnail Migration] Scan complete. Generated: ${generatedCount}, Already existed: ${alreadyExists}, Missing originals: ${missingOriginals}`);
+  } catch (err) {
+    console.error('[Thumbnail Migration] Error during thumbnail generation:', err);
   }
 };
 

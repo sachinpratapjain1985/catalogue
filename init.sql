@@ -95,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_stock_logs_user ON stock_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category_id);
 CREATE INDEX IF NOT EXISTS idx_devices_uuid ON devices(device_uuid);
 CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at);
+CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id);
 
 -- Insert default admin user (username: admin, password: adminpassword)
