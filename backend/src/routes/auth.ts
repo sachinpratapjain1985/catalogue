@@ -37,13 +37,19 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check device authorization for mobile users (stockist, sales, both, and manager with device context)
-    const requiresDeviceCheck = user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || (user.role === 'manager' && deviceUuid);
+    // Check device authorization for mobile logins (meaning deviceUuid is provided)
+    // For sales and managers, we allow web logins without deviceUuid.
+    // For stockist and both roles, they are strictly mobile-only, so they always require deviceUuid.
+    const isMobileLogin = !!deviceUuid;
+    const isMobileOnlyRole = user.role === 'stockist' || user.role === 'both';
+    
+    if (isMobileOnlyRole && !isMobileLogin) {
+      res.status(400).json({ error: 'This account is restricted to mobile app access only.' });
+      return;
+    }
+
+    const requiresDeviceCheck = isMobileLogin && (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager');
     if (requiresDeviceCheck) {
-      if (!deviceUuid) {
-        res.status(400).json({ error: 'Device UUID is required for mobile login' });
-        return;
-      }
 
       // Check if device already registered
       const deviceRes = await query(
