@@ -7,6 +7,9 @@ import { query } from '../db';
 import sharp from 'sharp';
 import { authenticateToken, requireRole, AuthenticatedRequest } from '../middleware/auth';
 
+// Limit sharp image processing to 1 concurrent thread to prevent CPU starvation
+sharp.concurrency(1);
+
 const router = Router();
 
 // Apply admin guard to all routes in this file
@@ -734,40 +737,34 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       return;
     }
 
-    // Optimize the uploaded original image (resize to max 1600px width/height, compress format-specifically)
-    const tempPath = req.file.path + '.tmp';
+    // Generate optimized thumbnail using sharp (we leave the original uploaded file in req.file.path completely untouched to preserve 100% original quality)
     try {
       let sharpObj = sharp(req.file.path)
-        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true });
+        .resize(320, 320, { fit: 'inside', withoutEnlargement: true });
 
       const extension = ext.toLowerCase();
       if (extension === '.png') {
-        sharpObj = sharpObj.png({ quality: 85, compressionLevel: 8 });
+        sharpObj = sharpObj.png({ quality: 70, compressionLevel: 6 });
       } else if (extension === '.webp') {
-        sharpObj = sharpObj.webp({ quality: 85 });
+        sharpObj = sharpObj.webp({ quality: 70 });
       } else {
-        sharpObj = sharpObj.jpeg({ quality: 85, progressive: true });
+        sharpObj = sharpObj.jpeg({ quality: 70, progressive: true });
       }
 
-      await sharpObj.toFile(tempPath);
-      fs.renameSync(tempPath, req.file.path);
-      console.log(`[Optimizer] Compressed original image to max 1600px: ${req.file.path}`);
-    } catch (optErr) {
-      console.error('[Optimizer] Failed to optimize original image:', optErr);
-      if (fs.existsSync(tempPath)) {
-        try { fs.unlinkSync(tempPath); } catch (e) {}
-      }
-    }
-
-    // Generate thumbnail using sharp
-    try {
-      await sharp(req.file.path)
-        .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
-        .toFile(thumbPath);
-      console.log(`[Thumbnail] Generated thumbnail at ${thumbPath}`);
+      await sharpObj.toFile(thumbPath);
+      console.log(`[Thumbnail] Generated optimized thumbnail at ${thumbPath}`);
     } catch (thumbErr) {
-      console.error('[Thumbnail] Failed to generate thumbnail:', thumbErr);
+      console.error('[Thumbnail] Failed to generate optimized thumbnail:', thumbErr);
+      // Fallback: try generating thumbnail without quality compression
+      try {
+        await sharp(req.file.path)
+          .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+          .toFile(thumbPath);
+      } catch (e) {
+        console.error('[Thumbnail Fallback] Failed as well:', e);
+      }
     }
+
 
     const imagePath = `/uploads/${req.file.filename}`;
     const pieces = parseInt(piecesPerSet || '4');

@@ -4,6 +4,9 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 
+// Limit sharp image processing to 1 concurrent thread to prevent CPU starvation
+sharp.concurrency(1);
+
 dotenv.config();
 
 const pool = new Pool({
@@ -115,9 +118,19 @@ export const generateMissingThumbnails = async () => {
 
       if (fs.existsSync(originalFullPath)) {
         try {
-          await sharp(originalFullPath)
-            .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
-            .toFile(thumbFullPath);
+          let sharpObj = sharp(originalFullPath)
+            .resize(320, 320, { fit: 'inside', withoutEnlargement: true });
+
+          const extension = ext.toLowerCase();
+          if (extension === '.png') {
+            sharpObj = sharpObj.png({ quality: 70, compressionLevel: 6 });
+          } else if (extension === '.webp') {
+            sharpObj = sharpObj.webp({ quality: 70 });
+          } else {
+            sharpObj = sharpObj.jpeg({ quality: 70, progressive: true });
+          }
+
+          await sharpObj.toFile(thumbFullPath);
           generatedCount++;
           console.log(`[Thumbnail Migration] Generated thumbnail for ${row.sku_id} (${filename})`);
         } catch (err) {

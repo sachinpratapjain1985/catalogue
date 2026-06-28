@@ -28,7 +28,13 @@ const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadDir));
+app.use('/uploads', express.static(uploadDir, {
+  maxAge: '30d',
+  immutable: true,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+  }
+}));
 
 // Logging middleware
 app.use((req, res, next) => {
