@@ -38,17 +38,23 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check device authorization for mobile logins (meaning deviceUuid is provided)
-    // For sales and managers, we allow web logins without deviceUuid.
-    // For stockist and both roles, they are strictly mobile-only, so they always require deviceUuid.
     const isMobileLogin = !!deviceUuid;
-    const isMobileOnlyRole = user.role === 'stockist' || user.role === 'both';
     
+    // Role-based platform access restriction:
+    // 1. Sales accounts are strictly restricted to the Web Portal (cannot log in on mobile).
+    if (user.role === 'sales' && isMobileLogin) {
+      res.status(403).json({ error: 'Sales accounts are restricted to web portal access only.' });
+      return;
+    }
+    
+    // 2. Stockist and 'both' accounts are strictly restricted to the Mobile App (cannot log in on web).
+    const isMobileOnlyRole = user.role === 'stockist' || user.role === 'both';
     if (isMobileOnlyRole && !isMobileLogin) {
-      res.status(400).json({ error: 'This account is restricted to mobile app access only.' });
+      res.status(403).json({ error: 'This account is restricted to mobile app access only.' });
       return;
     }
 
-    const requiresDeviceCheck = isMobileLogin && (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager');
+    const requiresDeviceCheck = isMobileLogin && (user.role === 'stockist' || user.role === 'both' || user.role === 'manager');
     if (requiresDeviceCheck) {
 
       // Check if device already registered
