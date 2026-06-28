@@ -74,6 +74,32 @@ function App() {
     setLoading(true);
 
     try {
+      // Retrieve or generate a persistent device UUID for this web browser
+      let webDeviceUuid = localStorage.getItem('web_device_uuid');
+      if (!webDeviceUuid) {
+        webDeviceUuid = 'web-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('web_device_uuid', webDeviceUuid);
+      }
+
+      // Determine a friendly browser name for the device whitelist
+      const getBrowserDeviceName = () => {
+        const ua = navigator.userAgent;
+        let os = 'Unknown OS';
+        if (ua.indexOf('Win') !== -1) os = 'Windows';
+        else if (ua.indexOf('Mac') !== -1) os = 'macOS';
+        else if (ua.indexOf('Linux') !== -1) os = 'Linux';
+        else if (ua.indexOf('Android') !== -1) os = 'Android';
+        else if (ua.indexOf('like Mac') !== -1) os = 'iOS';
+
+        let browser = 'Web Browser';
+        if (ua.indexOf('Firefox') !== -1) browser = 'Firefox';
+        else if (ua.indexOf('Chrome') !== -1) browser = 'Chrome';
+        else if (ua.indexOf('Safari') !== -1) browser = 'Safari';
+        else if (ua.indexOf('Edge') !== -1) browser = 'Edge';
+
+        return `${browser} on ${os}`;
+      };
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -81,7 +107,9 @@ function App() {
         },
         body: JSON.stringify({
           username: usernameInput,
-          password: passwordInput
+          password: passwordInput,
+          deviceUuid: webDeviceUuid,
+          deviceName: getBrowserDeviceName()
         })
       });
 

@@ -37,10 +37,13 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check device authorization for mobile logins (meaning deviceUuid is provided)
-    // If logging in via web browser (no deviceUuid provided), we skip device checks.
-    const requiresDeviceCheck = !!deviceUuid && (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || user.role === 'manager');
+    // Check device authorization for users (stockist, sales, both, and manager with device context)
+    const requiresDeviceCheck = user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || (user.role === 'manager' && deviceUuid);
     if (requiresDeviceCheck) {
+      if (!deviceUuid) {
+        res.status(400).json({ error: 'Device UUID is required for login' });
+        return;
+      }
 
       // Check if device already registered
       const deviceRes = await query(
