@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Search
@@ -42,7 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 fun StockistDashboard(
     sessionManager: SessionManager,
     onLogout: () -> Unit,
-    onSwitchMode: () -> Unit
+    onSwitchMode: () -> Unit,
+    onBackToSelection: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
@@ -148,6 +150,9 @@ fun StockistDashboard(
                 actions = {
                     val userRole = sessionManager.getUserRole()
                     if (userRole == "both" || userRole == "manager") {
+                        IconButton(onClick = onBackToSelection) {
+                            Icon(Icons.Default.Home, contentDescription = "Return to Dashboard")
+                        }
                         IconButton(onClick = onSwitchMode) {
                             Icon(Icons.Default.ShoppingCart, contentDescription = "Switch to Sales Mode")
                         }

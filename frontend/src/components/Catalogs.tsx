@@ -384,9 +384,17 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   };
 
   const handleToggleSelect = (itemId: number) => {
-    setSelectedItems(prev => 
-      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
-    );
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        if (user?.role === 'sales' && prev.length >= 6) {
+          showError('Sales users can only select up to 6 designs at a time.');
+          return prev;
+        }
+        return [...prev, itemId];
+      }
+    });
   };
 
   const handleToggleSelectAll = () => {
@@ -397,6 +405,18 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       setSelectedItems(prev => prev.filter(id => !allVisibleIds.includes(id)));
     } else {
       setSelectedItems(prev => {
+        if (user?.role === 'sales') {
+          const remainingSlots = 6 - prev.length;
+          if (remainingSlots <= 0) {
+            showError('Sales users can only select up to 6 designs at a time.');
+            return prev;
+          }
+          const toAdd = allVisibleIds.filter(id => !prev.includes(id)).slice(0, remainingSlots);
+          if (toAdd.length < allVisibleIds.filter(id => !prev.includes(id)).length) {
+            showError(`Sales users can only select up to 6 designs. Selected first ${toAdd.length} items.`);
+          }
+          return [...prev, ...toAdd];
+        }
         const unique = new Set([...prev, ...allVisibleIds]);
         return Array.from(unique);
       });
@@ -442,12 +462,24 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
   const handleDownloadSelectedImages = () => {
     const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
+    if (user?.role === 'sales' && selectedItemsData.length > 6) {
+      showError('Sales users can only download up to 6 designs at a time.');
+      return;
+    }
+    
     selectedItemsData.forEach((item, index) => {
       setTimeout(() => {
         const link = document.createElement('a');
-        link.href = item.image_path;
-        const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-        link.download = `${item.sku_id}${ext}`;
+        if (user?.role === 'sales') {
+          const thumbUrl = getThumbnailUrl(item.image_path);
+          link.href = thumbUrl;
+          const ext = thumbUrl.substring(thumbUrl.lastIndexOf('.'));
+          link.download = `${item.sku_id}-compressed${ext}`;
+        } else {
+          link.href = item.image_path;
+          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+          link.download = `${item.sku_id}${ext}`;
+        }
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

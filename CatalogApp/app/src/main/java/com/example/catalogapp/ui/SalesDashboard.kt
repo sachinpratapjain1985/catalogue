@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Search
@@ -45,7 +46,8 @@ import kotlinx.coroutines.launch
 fun SalesDashboard(
     sessionManager: SessionManager,
     onLogout: () -> Unit,
-    onSwitchMode: () -> Unit
+    onSwitchMode: () -> Unit,
+    onBackToSelection: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -161,6 +163,9 @@ fun SalesDashboard(
                 actions = {
                     val userRole = sessionManager.getUserRole()
                     if (userRole == "both" || userRole == "manager") {
+                        IconButton(onClick = onBackToSelection) {
+                            Icon(Icons.Default.Home, contentDescription = "Return to Dashboard")
+                        }
                         IconButton(onClick = onSwitchMode) {
                             Icon(Icons.Default.Build, contentDescription = "Switch to Stockist Mode")
                         }

@@ -30,6 +30,7 @@ fun MainNavigation() {
         // Check if user has dual-access rights ("both" or "manager")
         if ((role == "both" || role == "manager") && activeRole == null) {
             RoleSelectionScreen(
+                sessionManager = sessionManager,
                 onRoleSelected = { selectedRole ->
                     sessionManager.saveActiveRole(selectedRole)
                     activeRole = selectedRole
@@ -61,6 +62,10 @@ fun MainNavigation() {
                                 sessionManager.saveActiveRole(nextRole)
                                 activeRole = nextRole
                             }
+                        },
+                        onBackToSelection = {
+                            sessionManager.saveActiveRole(null)
+                            activeRole = null
                         }
                     )
                 }
@@ -80,6 +85,10 @@ fun MainNavigation() {
                                 sessionManager.saveActiveRole(nextRole)
                                 activeRole = nextRole
                             }
+                        },
+                        onBackToSelection = {
+                            sessionManager.saveActiveRole(null)
+                            activeRole = null
                         }
                     )
                 }

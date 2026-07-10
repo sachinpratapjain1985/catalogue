@@ -26,6 +26,13 @@ data class UserDto(
     val can_edit_rates: Boolean = false
 )
 
+data class CatalogStatsResponse(
+    val total: Int,
+    val available: Int,
+    val outofstock: Int,
+    val inactive: Int
+)
+
 data class CategoryDto(
     val id: Int,
     val name: String,
@@ -92,6 +99,9 @@ data class StockUpdateResponse(
 interface CatalogApiService {
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @GET("api/catalog/stats")
+    suspend fun getStats(): CatalogStatsResponse
 
     @GET("api/catalog/categories")
     suspend fun getCategories(): List<CategoryDto>

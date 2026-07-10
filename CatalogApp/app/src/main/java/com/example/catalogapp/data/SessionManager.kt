@@ -90,8 +90,12 @@ class SessionManager(context: Context) {
     }
 
     // Active Role for dual-role users (both/manager)
-    fun saveActiveRole(role: String) {
-        prefs.edit().putString(KEY_ACTIVE_ROLE, role).apply()
+    fun saveActiveRole(role: String?) {
+        if (role == null) {
+            prefs.edit().remove(KEY_ACTIVE_ROLE).apply()
+        } else {
+            prefs.edit().putString(KEY_ACTIVE_ROLE, role).apply()
+        }
     }
 
     fun getActiveRole(): String? {

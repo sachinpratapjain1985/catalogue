@@ -7,6 +7,26 @@ const router = Router();
 // Apply authentication middleware to all endpoints
 router.use(authenticateToken);
 
+// GET /api/catalog/stats - Retrieve overall catalog statistics
+router.get('/stats', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const totalRes = await query('SELECT COUNT(*) FROM items');
+    const availableRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count > 0');
+    const osRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count = 0');
+    const inactiveRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = false');
+
+    res.json({
+      total: parseInt(totalRes.rows[0].count || '0'),
+      available: parseInt(availableRes.rows[0].count || '0'),
+      outofstock: parseInt(osRes.rows[0].count || '0'),
+      inactive: parseInt(inactiveRes.rows[0].count || '0')
+    });
+  } catch (error) {
+    console.error('Get catalog stats error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
 // GET /api/catalog/categories - Retrieve categories folders based on user permissions
 router.get('/categories', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
