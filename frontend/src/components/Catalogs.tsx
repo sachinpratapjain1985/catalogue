@@ -471,10 +471,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       setTimeout(() => {
         const link = document.createElement('a');
         if (user?.role === 'sales') {
-          const thumbUrl = getThumbnailUrl(item.image_path);
-          link.href = thumbUrl;
-          const ext = thumbUrl.substring(thumbUrl.lastIndexOf('.'));
-          link.download = `${item.sku_id}-compressed${ext}`;
+          link.href = `/api/catalog/items/${item.id}/medium?token=${encodeURIComponent(token)}`;
+          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+          link.download = `${item.sku_id}-medium${ext}`;
         } else {
           link.href = item.image_path;
           const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));

@@ -1,6 +1,11 @@
 import { Router, Response } from 'express';
 import { query } from '../db';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import path from 'path';
+import fs from 'fs';
+import sharp from 'sharp';
+
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 
 const router = Router();
 
@@ -23,6 +28,63 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response): Promise<v
     });
   } catch (error) {
     console.error('Get catalog stats error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// GET /api/catalog/items/:id/medium - Download medium-compressed version of design
+router.get('/items/:id/medium', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const itemId = parseInt(req.params.id);
+  try {
+    const itemRes = await query('SELECT image_path, sku_id FROM items WHERE id = $1', [itemId]);
+    if (itemRes.rows.length === 0) {
+      res.status(404).json({ error: 'Item not found' });
+      return;
+    }
+
+    const item = itemRes.rows[0];
+    const imagePath = item.image_path; // e.g. "/uploads/filename.jpg"
+    const filename = path.basename(imagePath);
+    const originalFilePath = path.join(uploadDir, filename);
+
+    if (!fs.existsSync(originalFilePath)) {
+      res.status(404).json({ error: 'Original image file not found on server' });
+      return;
+    }
+
+    // Determine medium compressed file name and path
+    const ext = path.extname(filename);
+    const base = filename.substring(0, filename.length - ext.length);
+    const mediumFilename = `${base}-medium${ext}`;
+    const mediumFilePath = path.join(uploadDir, mediumFilename);
+
+    // If medium compressed version doesn't exist, generate it using sharp (max 1600px width/height, 80% quality)
+    if (!fs.existsSync(mediumFilePath)) {
+      try {
+        let sharpObj = sharp(originalFilePath)
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true });
+
+        const extension = ext.toLowerCase();
+        if (extension === '.png') {
+          sharpObj = sharpObj.png({ quality: 80, compressionLevel: 6 });
+        } else if (extension === '.webp') {
+          sharpObj = sharpObj.webp({ quality: 80 });
+        } else {
+          sharpObj = sharpObj.jpeg({ quality: 80, progressive: true });
+        }
+
+        await sharpObj.toFile(mediumFilePath);
+        console.log(`[Medium Compression] Generated compressed version at ${mediumFilePath}`);
+      } catch (sharpErr) {
+        console.error('[Medium Compression] Failed to generate medium compressed image:', sharpErr);
+        res.sendFile(originalFilePath);
+        return;
+      }
+    }
+
+    res.sendFile(mediumFilePath);
+  } catch (error) {
+    console.error('Get medium compressed design error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });
