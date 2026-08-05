@@ -149,6 +149,8 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   const offset = page && limit ? (page - 1) * limit : null;
   const search = req.query.search ? (req.query.search as string).trim() : null;
   const status = req.query.status ? (req.query.status as string).trim() : null;
+  const minRate = req.query.minRate ? parseInt(req.query.minRate as string) : null;
+  const maxRate = req.query.maxRate ? parseInt(req.query.maxRate as string) : null;
 
 
   try {
@@ -184,6 +186,16 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
+      if (minRate !== null && !isNaN(minRate)) {
+        paramCount++;
+        queryStr += ` AND i.rate >= $${paramCount}`;
+        params.push(minRate);
+      }
+      if (maxRate !== null && !isNaN(maxRate)) {
+        paramCount++;
+        queryStr += ` AND i.rate <= $${paramCount}`;
+        params.push(maxRate);
+      }
       queryStr += ` ORDER BY (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
@@ -217,6 +229,16 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         } else if (status === 'NA') {
           queryStr += ` AND s.is_available = FALSE`;
         }
+      }
+      if (minRate !== null && !isNaN(minRate)) {
+        paramCount++;
+        queryStr += ` AND i.rate >= $${paramCount}`;
+        params.push(minRate);
+      }
+      if (maxRate !== null && !isNaN(maxRate)) {
+        paramCount++;
+        queryStr += ` AND i.rate <= $${paramCount}`;
+        params.push(maxRate);
       }
       queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
       if (limit !== null && offset !== null) {

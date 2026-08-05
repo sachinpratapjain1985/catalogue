@@ -112,7 +112,9 @@ interface CatalogApiService {
         @Query("page") page: Int? = null,
         @Query("limit") limit: Int? = null,
         @Query("search") search: String? = null,
-        @Query("status") status: String? = null
+        @Query("status") status: String? = null,
+        @Query("minRate") minRate: Int? = null,
+        @Query("maxRate") maxRate: Int? = null
     ): List<SKUItemDto>
 
     @POST("api/catalog/items/{id}/stock")

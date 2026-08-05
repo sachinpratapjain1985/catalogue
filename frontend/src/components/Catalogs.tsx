@@ -100,6 +100,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [filterCatId, setFilterCatId] = useState('');
   const [filterAgeLimit, setFilterAgeLimit] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterRateRange, setFilterRateRange] = useState('');
 
   // Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -560,8 +561,18 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         (filterStatus === 'A' && item.is_available && item.sets_count > 0) ||
         (filterStatus === 'OS' && item.is_available && item.sets_count === 0) ||
         (filterStatus === 'NA' && !item.is_available);
+
+      let matchesRate = true;
+      if (filterRateRange) {
+        const [minStr, maxStr] = filterRateRange.split('-');
+        const minVal = parseInt(minStr);
+        const maxVal = parseInt(maxStr);
+        const itemRate = item.rate || 0;
+        if (!isNaN(minVal)) matchesRate = matchesRate && itemRate >= minVal;
+        if (!isNaN(maxVal)) matchesRate = matchesRate && itemRate <= maxVal;
+      }
       
-      return matchesSearch && matchesCategory && matchesAge && matchesStatus;
+      return matchesSearch && matchesCategory && matchesAge && matchesStatus && matchesRate;
     })
     .sort((a, b) => {
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
@@ -584,7 +595,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   // Reset page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCatId, filterAgeLimit, filterStatus]);
+  }, [searchTerm, filterCatId, filterAgeLimit, filterStatus, filterRateRange]);
 
   const itemsPerPage = 15;
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
@@ -983,6 +994,28 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 <option value="A">Available (A)</option>
                 <option value="OS">Out of Stock (OS)</option>
                 <option value="NA">Inactive (NA)</option>
+              </select>
+            </div>
+
+            {/* Filter Rate / Price Range */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select 
+                value={filterRateRange} 
+                onChange={e => setFilterRateRange(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Prices</option>
+                <option value="0-1000">Below ₹1,000</option>
+                <option value="0-1500">Below ₹1,500</option>
+                <option value="0-2000">Below ₹2,000</option>
+                <option value="0-2500">Below ₹2,500</option>
+                <option value="1000-1500">₹1,000 - ₹1,500</option>
+                <option value="1000-2000">₹1,000 - ₹2,000</option>
+                <option value="1500-2000">₹1,500 - ₹2,000</option>
+                <option value="2000-3000">₹2,000 - ₹3,000</option>
+                <option value="2000-999999">Above ₹2,000</option>
+                <option value="2500-999999">Above ₹2,500</option>
+                <option value="3000-999999">Above ₹3,000</option>
               </select>
             </div>
 

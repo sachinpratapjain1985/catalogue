@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -91,6 +92,7 @@ fun StockistDashboard(
 
     var searchQuery by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("") }
+    var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
 
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
@@ -106,7 +108,9 @@ fun StockistDashboard(
                     page = page,
                     limit = 30,
                     search = searchQuery.ifEmpty { null },
-                    status = statusFilter.ifEmpty { null }
+                    status = statusFilter.ifEmpty { null },
+                    minRate = selectedRateRange?.first,
+                    maxRate = selectedRateRange?.second
                 )
                 if (fetched.size < 30) {
                     hasMoreItems = false
@@ -142,6 +146,7 @@ fun StockistDashboard(
                             items = emptyList()
                             searchQuery = ""
                             statusFilter = ""
+                            selectedRateRange = null
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -337,6 +342,47 @@ fun StockistDashboard(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    // Price Filter Chips
+                    val rateOptions = listOf(
+                        "All Prices" to null,
+                        "Below ₹1k" to (null to 1000),
+                        "Below ₹1.5k" to (null to 1500),
+                        "Below ₹2k" to (null to 2000),
+                        "Below ₹2.5k" to (null to 2500),
+                        "₹1k - ₹1.5k" to (1000 to 1500),
+                        "₹1k - ₹2k" to (1000 to 2000),
+                        "₹1.5k - ₹2k" to (1500 to 2000),
+                        "₹2k - ₹3k" to (2000 to 3000),
+                        "Above ₹2k" to (2000 to null),
+                        "Above ₹2.5k" to (2500 to null),
+                        "Above ₹3k" to (3000 to null)
+                    )
+
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(rateOptions) { (label, range) ->
+                            val isSelected = selectedRateRange == range
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedRateRange = if (isSelected) null else range
+                                    loadItems(selectedCategory!!, 1)
+                                },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            )
                         }
                     }
 
