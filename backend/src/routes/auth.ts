@@ -45,18 +45,33 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Check if device already registered
+      // Check if device already registered by (user_id, device_uuid)
       const deviceRes = await query(
         'SELECT status FROM devices WHERE user_id = $1 AND device_uuid = $2',
         [user.id, deviceUuid]
       );
 
       if (deviceRes.rows.length === 0) {
-        // Register new device as pending
-        await query(
-          'INSERT INTO devices (user_id, device_uuid, device_name, status) VALUES ($1, $2, $3, $4)',
-          [user.id, deviceUuid, deviceName || 'Unknown Device', 'pending']
+        const dName = deviceName || 'Unknown Device';
+        // Check if an existing entry exists for this user and device_name (e.g. app reinstalled or cache cleared)
+        const existingNameRes = await query(
+          'SELECT id FROM devices WHERE user_id = $1 AND device_name = $2',
+          [user.id, dName]
         );
+
+        if (existingNameRes.rows.length > 0) {
+          // Replace/update existing entry for this device_name with new device_uuid and set status to pending
+          await query(
+            'UPDATE devices SET device_uuid = $1, status = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3 AND device_name = $4',
+            [deviceUuid, 'pending', user.id, dName]
+          );
+        } else {
+          // Register new device as pending
+          await query(
+            'INSERT INTO devices (user_id, device_uuid, device_name, status) VALUES ($1, $2, $3, $4)',
+            [user.id, deviceUuid, dName, 'pending']
+          );
+        }
 
         res.status(403).json({
           status: 'device_pending',

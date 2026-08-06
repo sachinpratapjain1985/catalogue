@@ -291,6 +291,78 @@ export default function Users({ token }: UsersProps) {
         </div>
       )}
 
+      {/* Pending Device Approvals Banner (Top of Page) */}
+      {devices.some(d => d.status === 'pending') && (
+        <div 
+          className="glass-card" 
+          style={{ 
+            background: 'rgba(234, 179, 8, 0.08)', 
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            padding: '1.25rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, color: 'var(--color-warning, #eab308)' }}>
+              <Clock size={22} />
+              Pending Device Approval Requests ({devices.filter(d => d.status === 'pending').length})
+            </h3>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Action required to authorize login</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+            {devices.filter(d => d.status === 'pending').map(device => (
+              <div 
+                key={device.id} 
+                style={{ 
+                  background: 'rgba(0, 0, 0, 0.2)', 
+                  padding: '1rem', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: '1px solid rgba(234, 179, 8, 0.2)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '1.05rem' }}>{device.username}</strong>
+                    <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>{device.role}</span>
+                  </div>
+                  <div style={{ fontSize: '0.9rem', marginTop: '0.25rem', color: 'var(--text-primary)' }}>
+                    💻 {device.device_name}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    Requested: {new Date(device.updated_at || device.created_at).toLocaleString()}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <button 
+                    onClick={() => handleDeviceStatus(device.id, 'approved')} 
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: '0.4rem 0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', background: '#10b981', borderColor: '#10b981' }}
+                  >
+                    <Check size={16} />
+                    Approve Device
+                  </button>
+                  <button 
+                    onClick={() => handleDeviceStatus(device.id, 'blocked')} 
+                    className="btn btn-danger"
+                    style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                  >
+                    <Ban size={16} />
+                    Block
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid-2">
         {/* User Form Container */}
         <div className="glass-card">

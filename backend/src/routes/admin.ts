@@ -511,7 +511,7 @@ router.get('/devices', requireRole(['superadmin']), async (req: Request, res: Re
               u.id as user_id, u.username, u.role
        FROM devices d
        JOIN users u ON d.user_id = u.id
-       ORDER BY d.status ASC, d.created_at DESC`
+       ORDER BY (d.status = 'pending') DESC, d.updated_at DESC, d.created_at DESC`
     );
     res.json(result.rows);
   } catch (error) {
