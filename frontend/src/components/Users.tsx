@@ -332,7 +332,7 @@ export default function Users({ token }: UsersProps) {
                     <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>{device.role}</span>
                   </div>
                   <div style={{ fontSize: '0.9rem', marginTop: '0.25rem', color: 'var(--text-primary)' }}>
-                    💻 {device.device_name}
+                    💻 {device.device_name} <span style={{ fontSize: '0.75rem', opacity: 0.7, fontFamily: 'monospace' }}>({device.device_uuid.substring(0, 10)}...)</span>
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                     Requested: {new Date(device.updated_at || device.created_at).toLocaleString()}
@@ -515,6 +515,7 @@ export default function Users({ token }: UsersProps) {
                   <div className="flex-between">
                     <div>
                       <strong style={{ fontFamily: 'Outfit', fontSize: '1rem' }}>{device.device_name}</strong>
+                      <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem', opacity: 0.6, fontFamily: 'monospace' }}>({device.device_uuid.substring(0, 10)}...)</span>
                       <span className="badge badge-info" style={{ marginLeft: '0.5rem', fontSize: '0.65rem' }}>{device.role}</span>
                     </div>
                     <span className={`badge ${

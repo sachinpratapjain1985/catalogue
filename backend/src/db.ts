@@ -78,17 +78,6 @@ export const runMigrations = async () => {
     await pool.query("UPDATE items SET description = '' WHERE description = 'DESUKA by VS FASHION Gandhi Nagar Delhi.'");
     console.log('[Migration] Cleared default descriptions from existing items.');
 
-    // 6. Deduplicate existing device records by (user_id, device_name), keeping the latest entry
-    await pool.query(`
-      DELETE FROM devices
-      WHERE id NOT IN (
-        SELECT MAX(id)
-        FROM devices
-        GROUP BY user_id, device_name
-      )
-    `);
-    console.log('[Migration] Deduplicated existing device records.');
-
     console.log('[Migration] Database migrations completed successfully!');
 
     // Run background generation of missing thumbnails for 800+ products
