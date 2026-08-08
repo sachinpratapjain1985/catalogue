@@ -97,13 +97,8 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
 
   try {
     let result;
-    let restrictFolders = false;
     if (role !== 'superadmin') {
-      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
-      restrictFolders = userCatCheck.rows.length > 0;
-    }
-    if (restrictFolders) {
-      // Stockist / Both / Manager only gets folders assigned to them
+      // Non-superadmin users (sales, stockist, both, manager) strictly get folders assigned to them in user_categories
       result = await query(
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
@@ -158,13 +153,8 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
 
 
   try {
-    // If restricted user, verify folder assignment permission
-    let restrictFolders = false;
+    // If non-superadmin user, verify folder assignment permission
     if (role !== 'superadmin') {
-      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
-      restrictFolders = userCatCheck.rows.length > 0;
-    }
-    if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',
         [userId, categoryId]
@@ -297,13 +287,8 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
 
     const item = currentRes.rows[0];
 
-    // If restricted user, verify permission for this category
-    let restrictFolders = false;
+    // If non-superadmin user, verify permission for this category
     if (role !== 'superadmin') {
-      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
-      restrictFolders = userCatCheck.rows.length > 0;
-    }
-    if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',
         [userId, item.category_id]

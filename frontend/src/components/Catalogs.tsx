@@ -133,7 +133,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/admin/categories', {
+      const response = await fetch('/api/catalog/categories', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -572,7 +572,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         if (!isNaN(maxVal)) matchesRate = matchesRate && itemRate <= maxVal;
       }
       
-      return matchesSearch && matchesCategory && matchesAge && matchesStatus && matchesRate;
+      // Ensure item belongs to one of the user's permitted categories
+      const allowedCatIds = categories.map(c => c.id);
+      const isPermittedCategory = allowedCatIds.includes(item.category_id);
+
+      return isPermittedCategory && matchesSearch && matchesCategory && matchesAge && matchesStatus && matchesRate;
     })
     .sort((a, b) => {
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
