@@ -54,10 +54,14 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       if (deviceRes.rows.length === 0) {
         const dName = deviceName || 'Unknown Device';
         // Register new device strictly by device_uuid as pending
-        await query(
-          'INSERT INTO devices (user_id, device_uuid, device_name, status) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, device_uuid) DO NOTHING',
-          [user.id, deviceUuid, dName, 'pending']
-        );
+        try {
+          await query(
+            'INSERT INTO devices (user_id, device_uuid, device_name, status) VALUES ($1, $2, $3, $4)',
+            [user.id, deviceUuid, dName, 'pending']
+          );
+        } catch (e) {
+          // Ignore duplicate constraint if already inserted concurrently
+        }
 
         res.status(403).json({
           status: 'device_pending',
