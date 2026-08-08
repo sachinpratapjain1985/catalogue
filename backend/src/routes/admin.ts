@@ -385,8 +385,8 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     const newUser = insertRes.rows[0];
 
-    // Assign categories if role is stockist/both/manager and categories provided
-    if ((role === 'stockist' || role === 'both' || role === 'manager') && Array.isArray(categoryIds) && categoryIds.length > 0) {
+    // Assign categories if role is not superadmin and categories provided
+    if (role !== 'superadmin' && Array.isArray(categoryIds) && categoryIds.length > 0) {
       for (const catId of categoryIds) {
         await query(
           'INSERT INTO user_categories (user_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
@@ -446,11 +446,11 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
     const updatedUserRes = await query(updateQuery, params);
     const updatedUser = updatedUserRes.rows[0];
 
-    // Manage category assignments for stockists/both/manager using final database role
+    // Manage category assignments for non-superadmin users using final database role
     const finalRole = updatedUser.role;
-    const isMobileRole = finalRole === 'stockist' || finalRole === 'both' || finalRole === 'manager';
+    const isRestrictedRole = finalRole !== 'superadmin';
 
-    if (isMobileRole) {
+    if (isRestrictedRole) {
       if (Array.isArray(categoryIds)) {
         // Only modify assignments if categoryIds array was explicitly passed in body
         await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
@@ -459,7 +459,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
         }
       }
     } else {
-      // If user is no longer in a role that supports folder assignments, wipe links
+      // If user is superadmin, wipe explicit link restrictions
       await query('DELETE FROM user_categories WHERE user_id = $1', [userId]);
     }
 

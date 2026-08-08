@@ -97,7 +97,11 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
 
   try {
     let result;
-    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    let restrictFolders = false;
+    if (role !== 'superadmin') {
+      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
+      restrictFolders = userCatCheck.rows.length > 0;
+    }
     if (restrictFolders) {
       // Stockist / Both / Manager only gets folders assigned to them
       result = await query(
@@ -154,8 +158,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
 
 
   try {
-    // If restricted user (stockist, both, manager), verify folder assignment permission
-    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    // If restricted user, verify folder assignment permission
+    let restrictFolders = false;
+    if (role !== 'superadmin') {
+      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
+      restrictFolders = userCatCheck.rows.length > 0;
+    }
     if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',
@@ -289,8 +297,12 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
 
     const item = currentRes.rows[0];
 
-    // If restricted user (stockist, both, manager), verify permission for this category
-    const restrictFolders = baseRole === 'stockist' || baseRole === 'both' || baseRole === 'manager';
+    // If restricted user, verify permission for this category
+    let restrictFolders = false;
+    if (role !== 'superadmin') {
+      const userCatCheck = await query('SELECT 1 FROM user_categories WHERE user_id = $1 LIMIT 1', [userId]);
+      restrictFolders = userCatCheck.rows.length > 0;
+    }
     if (restrictFolders) {
       const permissionCheck = await query(
         'SELECT 1 FROM user_categories WHERE user_id = $1 AND category_id = $2',

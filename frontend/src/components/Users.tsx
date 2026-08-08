@@ -459,8 +459,8 @@ export default function Users({ token }: UsersProps) {
               </div>
             </div>
 
-            {/* Folder accessibility checklist for Stockists */}
-            {(role === 'stockist' || role === 'both' || role === 'manager') && (
+            {/* Folder accessibility checklist */}
+            {role !== 'superadmin' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.01)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', margin: 0 }}>
