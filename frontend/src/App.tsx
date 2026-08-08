@@ -52,13 +52,7 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        // Check if user is admin, manager or sales
-        if (data.user.role !== 'superadmin' && data.user.role !== 'manager' && data.user.role !== 'sales') {
-          setLoginError('Access denied. Authorized users only.');
-          handleLogout();
-        } else {
-          setUser(data.user);
-        }
+        setUser(data.user);
       } else {
         handleLogout();
       }
@@ -116,13 +110,9 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        if (data.user.role !== 'superadmin' && data.user.role !== 'manager' && data.user.role !== 'sales') {
-          setLoginError('Access denied. Authorized users only.');
-        } else {
-          localStorage.setItem('admin_token', data.token);
-          setToken(data.token);
-          setUser(data.user);
-        }
+        localStorage.setItem('admin_token', data.token);
+        setToken(data.token);
+        setUser(data.user);
       } else {
         setLoginError(data.error || 'Login failed. Please check credentials.');
       }

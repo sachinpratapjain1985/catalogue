@@ -462,10 +462,36 @@ export default function Users({ token }: UsersProps) {
             {/* Folder accessibility checklist for Stockists */}
             {(role === 'stockist' || role === 'both' || role === 'manager') && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.01)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.5rem' }}>
-                  <FolderOpen size={12} />
-                  Assign Folder Accessibility
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', margin: 0 }}>
+                    <FolderOpen size={12} />
+                    Assign Folder Accessibility
+                  </label>
+                  {categories.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedCatIds.length === categories.length) {
+                          setSelectedCatIds([]);
+                        } else {
+                          setSelectedCatIds(categories.map(c => c.id));
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-primary)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        textDecoration: 'underline',
+                        padding: 0
+                      }}
+                    >
+                      {selectedCatIds.length === categories.length ? 'Deselect All Folders' : 'Select All Folders'}
+                    </button>
+                  )}
+                </div>
                 {categories.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Please create folder categories first.</p>
                 ) : (
