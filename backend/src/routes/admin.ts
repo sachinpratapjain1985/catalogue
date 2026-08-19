@@ -693,14 +693,39 @@ router.get('/items', async (req: Request, res: Response) => {
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
-              u.username as updated_by_user
+              u.username as updated_by_user,
+              COALESCE(ri.real_count, 0) as real_image_count
        FROM items i
        JOIN categories c ON i.category_id = c.id
        LEFT JOIN stock s ON s.item_id = i.id
        LEFT JOIN users u ON s.updated_by = u.id
+       LEFT JOIN (
+           SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
+           FROM item_real_images 
+           GROUP BY item_id
+       ) ri ON ri.item_id = i.id
        ORDER BY i.created_at DESC`
     );
-    res.json(result.rows);
+
+    let finalRows = result.rows;
+    if (finalRows.length > 0) {
+      const itemIds = finalRows.map(it => it.id);
+      const realImagesRes = await query(
+        `SELECT id, item_id, watermarked_path as image_path FROM item_real_images WHERE item_id = ANY($1) ORDER BY id ASC`,
+        [itemIds]
+      );
+      const realImagesMap: Record<number, string[]> = {};
+      realImagesRes.rows.forEach(r => {
+        if (!realImagesMap[r.item_id]) realImagesMap[r.item_id] = [];
+        realImagesMap[r.item_id].push(r.image_path);
+      });
+      finalRows = finalRows.map(it => ({
+        ...it,
+        real_images: realImagesMap[it.id] || []
+      }));
+    }
+
+    res.json(finalRows);
   } catch (error) {
     console.error('Get items error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });
@@ -1080,11 +1105,11 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
 
     const ext = path.extname(rawFilePath).toLowerCase();
     if (ext === '.png') {
-      sharpObj = sharpObj.png({ quality: 80 });
+      sharpObj = sharpObj.png({ quality: 95, compressionLevel: 3 });
     } else if (ext === '.webp') {
-      sharpObj = sharpObj.webp({ quality: 80 });
+      sharpObj = sharpObj.webp({ quality: 95 });
     } else {
-      sharpObj = sharpObj.jpeg({ quality: 80, progressive: true });
+      sharpObj = sharpObj.jpeg({ quality: 95, progressive: true });
     }
 
     await sharpObj.toFile(watermarkedFilePath);

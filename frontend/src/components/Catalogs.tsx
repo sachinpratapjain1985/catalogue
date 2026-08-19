@@ -92,6 +92,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [sharePhone, setSharePhone] = useState('');
   const [webSendDescription, setWebSendDescription] = useState(false);
+  const [webShareRealImages, setWebShareRealImages] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
 
@@ -297,7 +298,19 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       });
       if (response.ok) {
         const newImgs = await response.json();
-        setRealImagesList([...realImagesList, ...newImgs]);
+        const updatedList = [...realImagesList, ...newImgs];
+        setRealImagesList(updatedList);
+        setItems(prevItems => prevItems.map(it => {
+          if (it.id === realImagesModalItem.id) {
+            return {
+              ...it,
+              real_image_count: updatedList.length,
+              real_images: updatedList.map(img => img.watermarked_path)
+            };
+          }
+          return it;
+        }));
+        setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
         showSuccess('RAW Real photos uploaded and watermarked successfully');
         fetchSKUs();
       } else {
@@ -319,7 +332,21 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        setRealImagesList(realImagesList.filter(img => img.id !== imageId));
+        const updatedList = realImagesList.filter(img => img.id !== imageId);
+        setRealImagesList(updatedList);
+        if (realImagesModalItem) {
+          setItems(prevItems => prevItems.map(it => {
+            if (it.id === realImagesModalItem.id) {
+              return {
+                ...it,
+                real_image_count: updatedList.length,
+                real_images: updatedList.map(img => img.watermarked_path)
+              };
+            }
+            return it;
+          }));
+          setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
+        }
         showSuccess('Real photo deleted');
         fetchSKUs();
       } else {
@@ -561,22 +588,38 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       return;
     }
     
-    selectedItemsData.forEach((item, index) => {
-      setTimeout(() => {
-        const link = document.createElement('a');
-        if (user?.role === 'sales') {
-          link.href = `/api/catalog/items/${item.id}/medium?token=${encodeURIComponent(token)}`;
-          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-          link.download = `${item.sku_id}-medium${ext}`;
-        } else {
-          link.href = item.image_path;
-          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-          link.download = `${item.sku_id}${ext}`;
-        }
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }, index * 250);
+    let downloadDelay = 0;
+    selectedItemsData.forEach(item => {
+      if (webShareRealImages && item.real_images && item.real_images.length > 0) {
+        item.real_images.forEach((realPath, rIdx) => {
+          setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = realPath;
+            link.download = `${item.sku_id}-real-${rIdx + 1}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }, downloadDelay);
+          downloadDelay += 300;
+        });
+      } else {
+        setTimeout(() => {
+          const link = document.createElement('a');
+          if (user?.role === 'sales') {
+            link.href = `/api/catalog/items/${item.id}/medium?token=${encodeURIComponent(token)}`;
+            const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+            link.download = `${item.sku_id}-medium${ext}`;
+          } else {
+            link.href = item.image_path;
+            const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+            link.download = `${item.sku_id}${ext}`;
+          }
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }, downloadDelay);
+        downloadDelay += 300;
+      }
     });
   };
 
@@ -1699,6 +1742,26 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
                 Send Description
               </label>
+
+              {items.some(it => selectedItems.includes(it.id) && (it.real_image_count || 0) > 0) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem' }}>
+                  <input 
+                    type="checkbox" 
+                    id="web-share-real"
+                    checked={webShareRealImages}
+                    onChange={e => setWebShareRealImages(e.target.checked)}
+                    style={{ 
+                      width: '18px', 
+                      height: '18px', 
+                      cursor: 'pointer',
+                      accentColor: '#3b82f6'
+                    }}
+                  />
+                  <label htmlFor="web-share-real" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', cursor: 'pointer', userSelect: 'none' }}>
+                    📷 Download / Share RAW Real Photos (Watermarked)
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1808,7 +1871,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 ) : (
                   realImagesList.map(img => (
                     <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                      <img src={img.watermarked_path} alt="Real photo" style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }} />
+                      <a 
+                        href={img.watermarked_path}
+                        download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ position: 'absolute', top: '4px', left: '4px', background: 'rgba(0,0,0,0.7)', color: '#ffffff', borderRadius: '50%', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Download Watermarked Photo"
+                      >
+                        <Download size={12} />
+                      </a>
                       {(user?.role === 'superadmin' || user?.role === 'manager') && (
                         <button 
                           onClick={() => handleDeleteRealImage(img.id)}
