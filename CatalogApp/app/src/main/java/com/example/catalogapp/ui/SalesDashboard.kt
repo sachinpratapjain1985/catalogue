@@ -153,6 +153,27 @@ fun SalesDashboard(
         }
     }
 
+    var showShareChoiceModal by remember { mutableStateOf(false) }
+
+    fun executeShare(shareReal: Boolean) {
+        isSharing = true
+        coroutineScope.launch {
+            SharingUtils.downloadAndShareImages(
+                context = context,
+                selectedItems = selectedItems.toList(),
+                sessionManager = sessionManager,
+                shareDescription = shareDescription,
+                shareRealImages = shareReal,
+                onProgress = { shareProgressMsg = it },
+                onError = {
+                    isSharing = false
+                    Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                }
+            )
+            isSharing = false
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -243,20 +264,11 @@ fun SalesDashboard(
 
                         Button(
                             onClick = {
-                                isSharing = true
-                                coroutineScope.launch {
-                                    SharingUtils.downloadAndShareImages(
-                                        context = context,
-                                        selectedItems = selectedItems.toList(),
-                                        sessionManager = sessionManager,
-                                        shareDescription = shareDescription,
-                                        onProgress = { shareProgressMsg = it },
-                                        onError = {
-                                            isSharing = false
-                                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                    isSharing = false
+                                val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                    showShareChoiceModal = true
+                                } else {
+                                    executeShare(shareReal = false)
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
@@ -270,6 +282,47 @@ fun SalesDashboard(
             }
         }
     ) { paddingValues ->
+        // Share Type Choice Dialog Modal
+        if (showShareChoiceModal) {
+            AlertDialog(
+                onDismissRequest = { showShareChoiceModal = false },
+                title = { Text("Select Photos to Share") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Choose which type of photos to share for selected designs:")
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = {
+                                showShareChoiceModal = false
+                                executeShare(shareReal = false)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share Catalog Images (Standard)")
+                        }
+                        Button(
+                            onClick = {
+                                showShareChoiceModal = false
+                                executeShare(shareReal = true)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share RAW Real Photos (Watermarked)")
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showShareChoiceModal = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -707,6 +760,7 @@ fun SalesItemCard(
         ImageZoomDialog(
             item = item,
             serverUrl = sessionManager.getServerUrl(),
+            sessionManager = sessionManager,
             onDismiss = { showZoomDialog = false }
         )
     }

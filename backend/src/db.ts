@@ -51,9 +51,10 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] Items table columns verified.');
 
-    // 2b. Add can_edit_rates to users
+    // 2b. Add can_edit_rates & can_access_real_images to users
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_rates BOOLEAN NOT NULL DEFAULT FALSE');
-    console.log('[Migration] Users can_edit_rates column verified.');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_real_images BOOLEAN NOT NULL DEFAULT TRUE');
+    console.log('[Migration] Users columns verified.');
 
     // 3. Create rate_logs table
     await pool.query(`
@@ -68,10 +69,23 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] rate_logs table verified.');
 
+    // 3b. Create item_real_images table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS item_real_images (
+          id SERIAL PRIMARY KEY,
+          item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          image_path TEXT NOT NULL,
+          watermarked_path TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('[Migration] item_real_images table verified.');
+
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_real_images_item ON item_real_images(item_id)');
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_uuid ON devices (user_id, device_uuid)');
     console.log('[Migration] Performance indexes verified.');
 

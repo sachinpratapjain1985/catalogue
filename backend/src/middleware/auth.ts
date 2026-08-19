@@ -12,6 +12,7 @@ export interface AuthenticatedRequest extends Request {
     baseRole: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
     deviceUuid?: string;
     can_edit_rates?: boolean;
+    can_access_real_images?: boolean;
   };
 }
 
@@ -40,9 +41,9 @@ export const authenticateToken = async (
       deviceUuid?: string;
     };
 
-    // 1. Fetch user status and working hours from database to ensure fresh state
+    // 1. Fetch user status, working hours, and permissions from database to ensure fresh state
     const userRes = await query(
-      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates FROM users WHERE id = $1',
+      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images FROM users WHERE id = $1',
       [decoded.userId]
     );
 
@@ -138,7 +139,8 @@ export const authenticateToken = async (
       role: activeRole as any,
       baseRole: user.role,
       deviceUuid: decoded.deviceUuid,
-      can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates
+      can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates,
+      can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false
     };
 
     next();

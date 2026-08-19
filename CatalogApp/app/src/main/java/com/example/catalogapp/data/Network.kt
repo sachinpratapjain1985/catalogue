@@ -23,7 +23,8 @@ data class UserDto(
     val id: Int,
     val username: String,
     val role: String,
-    val can_edit_rates: Boolean = false
+    val can_edit_rates: Boolean = false,
+    val can_access_real_images: Boolean = true
 )
 
 data class CatalogStatsResponse(
@@ -55,7 +56,9 @@ data class SKUItemDto(
     val is_available: Boolean,
     val rate: Int = 0,
     val original_created_at: String? = null,
-    val age_in_days: Int? = null
+    val age_in_days: Int? = null,
+    val real_image_count: Int = 0,
+    val real_images: List<String> = emptyList()
 ) {
     // Helper to get full Image URL
     fun getFullImageUrl(baseUrl: String): String {
@@ -65,6 +68,18 @@ data class SKUItemDto(
             val formattedBase = if (baseUrl.endsWith("/")) baseUrl.dropLast(1) else baseUrl
             val formattedPath = if (image_path.startsWith("/")) image_path else "/$image_path"
             "$formattedBase$formattedPath"
+        }
+    }
+
+    // Helper to get full Real Image URLs
+    fun getFullRealImageUrls(baseUrl: String): List<String> {
+        val formattedBase = if (baseUrl.endsWith("/")) baseUrl.dropLast(1) else baseUrl
+        return real_images.map { rPath ->
+            if (rPath.startsWith("http")) rPath
+            else {
+                val formattedPath = if (rPath.startsWith("/")) rPath else "/$rPath"
+                "$formattedBase$formattedPath"
+            }
         }
     }
 

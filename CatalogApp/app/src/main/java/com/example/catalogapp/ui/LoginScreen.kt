@@ -142,7 +142,8 @@ fun LoginScreen(
                                     id = response.user.id,
                                     username = response.user.username,
                                     role = response.user.role,
-                                    canEditRates = response.user.can_edit_rates
+                                    canEditRates = response.user.can_edit_rates,
+                                    canAccessRealImages = response.user.can_access_real_images
                                 )
                                 
                                 onLoginSuccess()

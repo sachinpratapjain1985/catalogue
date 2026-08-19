@@ -174,9 +174,15 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       let queryStr = `
          SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
-                s.sets_count, s.total_pieces, s.is_available
+                s.sets_count, s.total_pieces, s.is_available,
+                COALESCE(ri.real_count, 0) as real_image_count
          FROM items i
          JOIN stock s ON s.item_id = i.id
+         LEFT JOIN (
+             SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
+             FROM item_real_images 
+             GROUP BY item_id
+         ) ri ON ri.item_id = i.id
          WHERE i.category_id = $1 AND s.is_available = TRUE
       `;
       if (search) {
@@ -209,9 +215,15 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       let queryStr = `
          SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
-                s.sets_count, s.total_pieces, s.is_available
+                s.sets_count, s.total_pieces, s.is_available,
+                COALESCE(ri.real_count, 0) as real_image_count
          FROM items i
          JOIN stock s ON s.item_id = i.id
+         LEFT JOIN (
+             SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
+             FROM item_real_images 
+             GROUP BY item_id
+         ) ri ON ri.item_id = i.id
          WHERE i.category_id = $1
       `;
       if (search) {
@@ -250,7 +262,33 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       itemsRes = await query(queryStr, params);
     }
 
-    res.json(itemsRes.rows);
+    const canAccessRealImages = req.user?.role === 'superadmin' || req.user?.can_access_real_images !== false;
+    let finalItems = itemsRes.rows;
+
+    if (canAccessRealImages && finalItems.length > 0) {
+      const itemIds = finalItems.map(it => it.id);
+      const realImagesRes = await query(
+        `SELECT id, item_id, watermarked_path as image_path FROM item_real_images WHERE item_id = ANY($1) ORDER BY id ASC`,
+        [itemIds]
+      );
+      const realImagesMap: Record<number, string[]> = {};
+      realImagesRes.rows.forEach(r => {
+        if (!realImagesMap[r.item_id]) realImagesMap[r.item_id] = [];
+        realImagesMap[r.item_id].push(r.image_path);
+      });
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_images: realImagesMap[it.id] || []
+      }));
+    } else {
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_image_count: 0,
+        real_images: []
+      }));
+    }
+
+    res.json(finalItems);
   } catch (error) {
     console.error('Get catalog items error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });

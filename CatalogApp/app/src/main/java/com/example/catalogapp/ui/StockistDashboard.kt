@@ -540,7 +540,7 @@ fun StockItemCard(
                     contentScale = ContentScale.Crop
                 )
 
-                // Zoom Hint Badge
+                // Real Photos / Zoom Hint Badge
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -560,7 +560,7 @@ fun StockItemCard(
                             modifier = Modifier.size(11.dp)
                         )
                         Text(
-                            text = "Zoom",
+                            text = if (sessionManager.canAccessRealImages() && item.real_image_count > 0) "Real (${item.real_image_count})" else "Zoom",
                             color = Color.White,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold
@@ -741,6 +741,7 @@ fun StockItemCard(
         ImageZoomDialog(
             item = item,
             serverUrl = sessionManager.getServerUrl(),
+            sessionManager = sessionManager,
             onDismiss = { showZoomDialog = false }
         )
     }
@@ -750,6 +751,7 @@ fun StockItemCard(
 fun ImageZoomDialog(
     item: SKUItemDto,
     serverUrl: String,
+    sessionManager: SessionManager,
     onDismiss: () -> Unit
 ) {
     var scale by remember { mutableStateOf(1f) }
@@ -762,6 +764,16 @@ fun ImageZoomDialog(
         } else {
             offset = Offset.Zero
         }
+    }
+
+    val canAccessReal = sessionManager.canAccessRealImages()
+    val realImageUrls = remember(item) { item.getFullRealImageUrls(serverUrl) }
+    var selectedImageIndex by remember { mutableIntStateOf(0) }
+
+    val currentDisplayUrl = if (selectedImageIndex > 0 && selectedImageIndex <= realImageUrls.size) {
+        realImageUrls[selectedImageIndex - 1]
+    } else {
+        item.getFullImageUrl(serverUrl)
     }
 
     Dialog(
@@ -820,6 +832,41 @@ fun ImageZoomDialog(
                     }
                 }
 
+                // Selector chips for Catalog vs RAW Real Photos
+                if (canAccessReal && realImageUrls.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.85f))
+                            .padding(vertical = 4.dp, horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = selectedImageIndex == 0,
+                            onClick = { 
+                                selectedImageIndex = 0
+                                scale = 1f
+                                offset = Offset.Zero
+                            },
+                            label = { Text("Catalog Design", fontSize = 11.sp) }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        realImageUrls.forEachIndexed { idx, _ ->
+                            FilterChip(
+                                selected = selectedImageIndex == idx + 1,
+                                onClick = { 
+                                    selectedImageIndex = idx + 1
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                },
+                                label = { Text("📷 Real ${idx + 1}", fontSize = 11.sp) }
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                    }
+                }
+
                 // Center Image Area with Gesture Zooming
                 Box(
                     modifier = Modifier
@@ -843,7 +890,7 @@ fun ImageZoomDialog(
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(item.getFullImageUrl(serverUrl))
+                            .data(currentDisplayUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = item.sku_id,
@@ -865,7 +912,7 @@ fun ImageZoomDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Pinch or double-tap to zoom • Tap to close",
+                        text = if (selectedImageIndex > 0) "Viewing Watermarked Real Photo • Pinch or double-tap to zoom" else "Pinch or double-tap to zoom • Tap to close",
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,

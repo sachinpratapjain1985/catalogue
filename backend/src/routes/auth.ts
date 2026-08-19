@@ -107,7 +107,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         id: user.id,
         username: user.username,
         role: user.role,
-        can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates
+        can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates,
+        can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false
       },
     });
   } catch (error) {

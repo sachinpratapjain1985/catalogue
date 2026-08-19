@@ -40,6 +40,7 @@ object SharingUtils {
         selectedItems: List<SKUItemDto>,
         sessionManager: SessionManager,
         shareDescription: Boolean = false,
+        shareRealImages: Boolean = false,
         onProgress: (String) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -56,37 +57,45 @@ object SharingUtils {
                     val progressMsg = "Downloading ${item.sku_id} (${index + 1}/${selectedItems.size})..."
                     withContext(Dispatchers.Main) { onProgress(progressMsg) }
 
-                    val imageUrl = item.getFullImageUrl(sessionManager.getServerUrl())
-                    val request = Request.Builder()
-                        .url(imageUrl)
-                        .header("Authorization", "Bearer ${sessionManager.getToken() ?: ""}")
-                        .build()
-
-                    val response = client.newCall(request).execute()
-                    if (!response.isSuccessful) {
-                        throw Exception("HTTP error code ${response.code} for ${item.sku_id}")
+                    val targetUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
+                        item.getFullRealImageUrls(sessionManager.getServerUrl())
+                    } else {
+                        listOf(item.getFullImageUrl(sessionManager.getServerUrl()))
                     }
 
-                    val body = response.body ?: throw Exception("Empty body for ${item.sku_id}")
-                    val suffix = if (imageUrl.endsWith(".png", true)) ".png" else ".jpg"
-                    val file = File(cacheFolder, "${item.sku_id}$suffix")
-                    
-                    val inputStream: InputStream = body.byteStream()
-                    val outputStream = FileOutputStream(file)
-                    
-                    inputStream.use { input ->
-                        outputStream.use { output ->
-                            input.copyTo(output)
+                    targetUrls.forEachIndexed { imgIdx, imageUrl ->
+                        val request = Request.Builder()
+                            .url(imageUrl)
+                            .header("Authorization", "Bearer ${sessionManager.getToken() ?: ""}")
+                            .build()
+
+                        val response = client.newCall(request).execute()
+                        if (!response.isSuccessful) {
+                            throw Exception("HTTP error code ${response.code} for ${item.sku_id}")
                         }
-                    }
 
-                    // Get shareable Content Uri from FileProvider
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "com.example.catalogapp.fileprovider",
-                        file
-                    )
-                    uris.add(uri)
+                        val body = response.body ?: throw Exception("Empty body for ${item.sku_id}")
+                        val suffix = if (imageUrl.endsWith(".png", true)) ".png" else ".jpg"
+                        val filename = if (targetUrls.size > 1) "${item.sku_id}_real_${imgIdx + 1}$suffix" else "${item.sku_id}$suffix"
+                        val file = File(cacheFolder, filename)
+                        
+                        val inputStream: InputStream = body.byteStream()
+                        val outputStream = FileOutputStream(file)
+                        
+                        inputStream.use { input ->
+                            outputStream.use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Get shareable Content Uri from FileProvider
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "com.example.catalogapp.fileprovider",
+                            file
+                        )
+                        uris.add(uri)
+                    }
                 }
 
                 if (uris.isEmpty()) {

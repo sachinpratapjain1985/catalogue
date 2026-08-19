@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Share2,
   Copy,
-  Download
+  Download,
+  Camera
 } from 'lucide-react';
 
 interface Category {
@@ -28,15 +29,17 @@ interface SKUItem {
   category_id: number;
   image_path: string;
   pieces_per_set: number;
-  description?: string;
-  material?: string;
-  created_at: string;
-  category_name: string;
+  description: string;
+  material: string;
+  rate: number;
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
-  rate: number;
-  original_created_at: string;
+  original_created_at?: string;
+  created_at: string;
+  category_name?: string;
+  real_image_count?: number;
+  real_images?: string[];
 }
 
 interface UserProfile {
@@ -91,6 +94,13 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [webSendDescription, setWebSendDescription] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
+
+  // RAW Real Images states
+  const [realImagesFiles, setRealImagesFiles] = useState<File[]>([]);
+  const [realImagesPreviews, setRealImagesPreviews] = useState<string[]>([]);
+  const [realImagesModalItem, setRealImagesModalItem] = useState<SKUItem | null>(null);
+  const [realImagesList, setRealImagesList] = useState<Array<{ id: number; item_id: number; image_path: string; watermarked_path: string }>>([]);
+  const [uploadingRealImages, setUploadingRealImages] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -246,6 +256,81 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     }
   };
 
+  const handleRealImagesFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArr = Array.from(e.target.files).slice(0, 5);
+      setRealImagesFiles(filesArr);
+      setRealImagesPreviews(filesArr.map(f => URL.createObjectURL(f)));
+    }
+  };
+
+  const fetchRealImagesForItem = async (item: SKUItem) => {
+    setRealImagesModalItem(item);
+    try {
+      const response = await fetch(`/api/admin/items/${item.id}/real-images`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRealImagesList(data);
+      }
+    } catch (e) {
+      console.error('Failed to load real images', e);
+    }
+  };
+
+  const handleUploadRealImagesToExistingItem = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!realImagesModalItem || !e.target.files || e.target.files.length === 0) return;
+    const filesArr = Array.from(e.target.files).slice(0, 5);
+    
+    setUploadingRealImages(true);
+    const formData = new FormData();
+    filesArr.forEach(file => {
+      formData.append('real_images', file);
+    });
+
+    try {
+      const response = await fetch(`/api/admin/items/${realImagesModalItem.id}/real-images`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (response.ok) {
+        const newImgs = await response.json();
+        setRealImagesList([...realImagesList, ...newImgs]);
+        showSuccess('RAW Real photos uploaded and watermarked successfully');
+        fetchSKUs();
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to upload real images');
+      }
+    } catch (err) {
+      showError('Network error');
+    } finally {
+      setUploadingRealImages(false);
+    }
+  };
+
+  const handleDeleteRealImage = async (imageId: number) => {
+    if (!window.confirm('Are you sure you want to delete this real photo?')) return;
+    try {
+      const response = await fetch(`/api/admin/items/real-images/${imageId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setRealImagesList(realImagesList.filter(img => img.id !== imageId));
+        showSuccess('Real photo deleted');
+        fetchSKUs();
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete real image');
+      }
+    } catch (e) {
+      showError('Network error');
+    }
+  };
+
   const handleUploadSKU = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!skuId.trim() || !selectedCatId || !selectedFile) {
@@ -266,6 +351,12 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     formData.append('rate', rate.trim() || '0');
     formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
+
+    if (realImagesFiles.length > 0) {
+      realImagesFiles.forEach(file => {
+        formData.append('real_images', file);
+      });
+    }
 
     try {
       const response = await fetch('/api/admin/items', {
@@ -291,6 +382,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
         setSelectedFile(null);
         setFilePreview(null);
+        setRealImagesFiles([]);
+        setRealImagesPreviews([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
         
         showSuccess(`SKU ${data.sku_id} created successfully`);
@@ -937,6 +1030,28 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               )}
             </div>
 
+            {/* Optional RAW Real Photos Selector */}
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                <Camera size={14} color="var(--color-primary)" />
+                Optional: RAW Real Photos (2-3 photos)
+              </label>
+              <input 
+                type="file" 
+                multiple
+                accept="image/*"
+                onChange={handleRealImagesFilesChange}
+                style={{ fontSize: '0.85rem' }}
+              />
+              {realImagesPreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                  {realImagesPreviews.map((src, i) => (
+                    <img key={i} src={src} alt={`Real ${i}`} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }} disabled={loading}>
               {loading ? 'Uploading File...' : 'Upload Design'}
             </button>
@@ -1120,6 +1235,14 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                       <div className="flex-between">
                         <span className="sku-tag">{item.sku_id}</span>
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <button 
+                            onClick={() => fetchRealImagesForItem(item)}
+                            style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
+                            title="Manage RAW Real Photos"
+                          >
+                            <Camera size={12} />
+                            RAW ({item.real_image_count || 0})
+                          </button>
                           {user?.role !== 'sales' && (
                             <button 
                               onClick={() => {
@@ -1646,6 +1769,59 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 <Share2 size={16} />
                 Share via WhatsApp
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAW Real Images Management Modal */}
+      {realImagesModalItem && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3>📷 RAW Real Photos: {realImagesModalItem.sku_id}</h3>
+              <button className="close-btn" onClick={() => setRealImagesModalItem(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  Upload Additional RAW Real Photos (Watermark auto-applied):
+                </label>
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*"
+                  onChange={handleUploadRealImagesToExistingItem}
+                  disabled={uploadingRealImages}
+                  style={{ fontSize: '0.85rem' }}
+                />
+                {uploadingRealImages && <p style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.5rem' }}>Uploading & applying watermark...</p>}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
+                {realImagesList.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1rem' }}>
+                    No RAW real photos uploaded for this design yet.
+                  </p>
+                ) : (
+                  realImagesList.map(img => (
+                    <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                      <img src={img.watermarked_path} alt="Real photo" style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }} />
+                      {(user?.role === 'superadmin' || user?.role === 'manager') && (
+                        <button 
+                          onClick={() => handleDeleteRealImage(img.id)}
+                          style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#ef4444', border: 'none', borderRadius: '50%', padding: '4px', cursor: 'pointer' }}
+                          title="Delete photo"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

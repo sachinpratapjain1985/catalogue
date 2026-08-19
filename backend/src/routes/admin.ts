@@ -310,7 +310,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
   try {
     // Get all users
     const usersRes = await query(
-      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, created_at 
+      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, created_at 
        FROM users 
        ORDER BY role ASC, username ASC`
     );
@@ -350,7 +350,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
 
 // POST /api/admin/users
 router.post('/users', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
-  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates } = req.body;
+  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages } = req.body;
 
   if (!username || !password || !role) {
     res.status(400).json({ error: 'Username, password, and role are required' });
@@ -369,9 +369,9 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     // Insert user
     const insertRes = await query(
-      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates`,
+      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images`,
       [
         username,
         hash,
@@ -380,6 +380,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
         workingHoursStart || '00:00:00',
         workingHoursEnd || '23:59:59',
         canEditRates === undefined ? false : !!canEditRates,
+        canAccessRealImages === undefined ? true : !!canAccessRealImages,
       ]
     );
 
@@ -408,7 +409,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 // PUT /api/admin/users/:id
 router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
-  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates } = req.body;
+  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages } = req.body;
 
   try {
     const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -421,7 +422,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
 
     let updateQuery = `
       UPDATE users 
-      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, updated_at = CURRENT_TIMESTAMP
+      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, can_access_real_images = $6, updated_at = CURRENT_TIMESTAMP
     `;
     const params: any[] = [
       role || user.role,
@@ -429,8 +430,9 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       workingHoursStart || user.working_hours_start,
       workingHoursEnd || user.working_hours_end,
       canEditRates !== undefined ? !!canEditRates : user.can_edit_rates,
+      canAccessRealImages !== undefined ? !!canAccessRealImages : (user.can_access_real_images !== false),
     ];
-    let paramIndex = 6;
+    let paramIndex = 7;
 
     if (password && password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
@@ -440,7 +442,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       paramIndex++;
     }
 
-    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates`;
+    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images`;
     params.push(userId);
 
     const updatedUserRes = await query(updateQuery, params);
@@ -706,11 +708,14 @@ router.get('/items', async (req: Request, res: Response) => {
 });
 
 // POST /api/admin/items - Upload new SKU
-router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'real_images', maxCount: 5 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { skuId, categoryId, piecesPerSet, description, material, rate, originalCreatedAt } = req.body;
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  const primaryFile = files?.['image']?.[0];
+  const realFiles = files?.['real_images'] || [];
 
-  if (!skuId || !categoryId || !req.file) {
-    res.status(400).json({ error: 'SKU ID, Category ID, and image file are required' });
+  if (!skuId || !categoryId || !primaryFile) {
+    res.status(400).json({ error: 'SKU ID, Category ID, and primary image file are required' });
     return;
   }
 
@@ -722,8 +727,8 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
     originalDate = new Date(originalCreatedAt);
   }
 
-  const ext = path.extname(req.file.filename);
-  const baseName = path.basename(req.file.filename, ext);
+  const ext = path.extname(primaryFile.filename);
+  const baseName = path.basename(primaryFile.filename, ext);
   const thumbFilename = `${baseName}-thumb${ext}`;
   const thumbPath = path.join(uploadDir, thumbFilename);
 
@@ -732,14 +737,14 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
     const skuExists = await query('SELECT id FROM items WHERE UPPER(sku_id) = UPPER($1)', [skuId.trim()]);
     if (skuExists.rows.length > 0) {
       // Remove uploaded file if SKU already exists
-      fs.unlinkSync(req.file.path);
+      fs.unlinkSync(primaryFile.path);
       res.status(400).json({ error: `SKU ID '${skuId.trim()}' already exists. Please choose a unique SKU.` });
       return;
     }
 
-    // Generate optimized thumbnail using sharp (we leave the original uploaded file in req.file.path completely untouched to preserve 100% original quality)
+    // Generate optimized thumbnail using sharp
     try {
-      let sharpObj = sharp(req.file.path)
+      let sharpObj = sharp(primaryFile.path)
         .resize(320, 320, { fit: 'inside', withoutEnlargement: true });
 
       const extension = ext.toLowerCase();
@@ -755,9 +760,8 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       console.log(`[Thumbnail] Generated optimized thumbnail at ${thumbPath}`);
     } catch (thumbErr) {
       console.error('[Thumbnail] Failed to generate optimized thumbnail:', thumbErr);
-      // Fallback: try generating thumbnail without quality compression
       try {
-        await sharp(req.file.path)
+        await sharp(primaryFile.path)
           .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
           .toFile(thumbPath);
       } catch (e) {
@@ -765,8 +769,7 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
       }
     }
 
-
-    const imagePath = `/uploads/${req.file.filename}`;
+    const imagePath = `/uploads/${primaryFile.filename}`;
     const pieces = parseInt(piecesPerSet || '4');
 
     // Insert Item
@@ -778,6 +781,14 @@ router.post('/items', upload.single('image'), async (req: AuthenticatedRequest, 
     );
 
     const newItem = itemRes.rows[0];
+
+    // Process optional raw real images uploaded during creation
+    if (realFiles && realFiles.length > 0) {
+      for (const rFile of realFiles) {
+        await processAndSaveRealImage(newItem.id, rFile);
+        if (fs.existsSync(rFile.path)) fs.unlinkSync(rFile.path);
+      }
+    }
 
     // Initialize stock (available: true, sets: 0, pieces: 0)
     await query(
@@ -1013,6 +1024,155 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     res.json(updatedRes.rows[0]);
   } catch (error) {
     console.error('Update item details error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// ==========================================
+// RAW REAL IMAGES & WATERMARKING
+// ==========================================
+
+const realUploadDir = path.join(uploadDir, 'real');
+if (!fs.existsSync(realUploadDir)) {
+  fs.mkdirSync(realUploadDir, { recursive: true });
+}
+
+export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: string) => {
+  try {
+    const metadata = await sharp(rawFilePath).metadata();
+    const width = metadata.width || 1200;
+    const height = metadata.height || 1200;
+
+    const text = "VS FASHION DESUKA";
+    const fontSize = Math.max(22, Math.floor(width / 15));
+    const svgOverlay = Buffer.from(`
+      <svg width="${width}" height="${height}">
+        <style>
+          .wm-text {
+            fill: rgba(255, 255, 255, 0.52);
+            font-size: ${fontSize}px;
+            font-family: Arial, sans-serif;
+            font-weight: 900;
+            letter-spacing: 4px;
+          }
+          .wm-shadow {
+            fill: rgba(0, 0, 0, 0.40);
+            font-size: ${fontSize}px;
+            font-family: Arial, sans-serif;
+            font-weight: 900;
+            letter-spacing: 4px;
+          }
+        </style>
+        <g transform="rotate(-35 ${width / 2} ${height / 2})">
+          <text x="${width / 2 + 2}" y="${height / 2 - 140 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
+          <text x="${width / 2}" y="${height / 2 - 140}" text-anchor="middle" class="wm-text">${text}</text>
+
+          <text x="${width / 2 + 2}" y="${height / 2 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
+          <text x="${width / 2}" y="${height / 2}" text-anchor="middle" class="wm-text">${text}</text>
+
+          <text x="${width / 2 + 2}" y="${height / 2 + 140 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
+          <text x="${width / 2}" y="${height / 2 + 140}" text-anchor="middle" class="wm-text">${text}</text>
+        </g>
+      </svg>
+    `);
+
+    let sharpObj = sharp(rawFilePath).composite([{ input: svgOverlay }]);
+
+    const ext = path.extname(rawFilePath).toLowerCase();
+    if (ext === '.png') {
+      sharpObj = sharpObj.png({ quality: 80 });
+    } else if (ext === '.webp') {
+      sharpObj = sharpObj.webp({ quality: 80 });
+    } else {
+      sharpObj = sharpObj.jpeg({ quality: 80, progressive: true });
+    }
+
+    await sharpObj.toFile(watermarkedFilePath);
+    console.log(`[Watermark] Generated watermarked photo at ${watermarkedFilePath}`);
+  } catch (err) {
+    console.error('[Watermark Error] Fallback copy without SVG:', err);
+    fs.copyFileSync(rawFilePath, watermarkedFilePath);
+  }
+};
+
+export const processAndSaveRealImage = async (itemId: number, file: Express.Multer.File) => {
+  const ext = path.extname(file.filename);
+  const baseName = path.basename(file.filename, ext);
+  const rawFilename = `raw_${Date.now()}_${baseName}${ext}`;
+  const wmFilename = `wm_${Date.now()}_${baseName}${ext}`;
+
+  const rawPath = path.join(realUploadDir, rawFilename);
+  const wmPath = path.join(realUploadDir, wmFilename);
+
+  fs.copyFileSync(file.path, rawPath);
+  await applyWatermark(rawPath, wmPath);
+
+  const rawUrlPath = `/uploads/real/${rawFilename}`;
+  const wmUrlPath = `/uploads/real/${wmFilename}`;
+
+  const insertRes = await query(
+    'INSERT INTO item_real_images (item_id, image_path, watermarked_path) VALUES ($1, $2, $3) RETURNING *',
+    [itemId, rawUrlPath, wmUrlPath]
+  );
+
+  return insertRes.rows[0];
+};
+
+// GET /api/admin/items/:id/real-images
+router.get('/items/:id/real-images', async (req: Request, res: Response): Promise<void> => {
+  const itemId = parseInt(req.params.id);
+  try {
+    const resImg = await query('SELECT * FROM item_real_images WHERE item_id = $1 ORDER BY id ASC', [itemId]);
+    res.json(resImg.rows);
+  } catch (error) {
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// POST /api/admin/items/:id/real-images - Upload real images against existing item
+router.post('/items/:id/real-images', upload.array('real_images', 5), async (req: Request, res: Response): Promise<void> => {
+  const itemId = parseInt(req.params.id);
+  const files = req.files as Express.Multer.File[];
+
+  if (!files || files.length === 0) {
+    res.status(400).json({ error: 'No real image files uploaded' });
+    return;
+  }
+
+  try {
+    const savedImages: any[] = [];
+    for (const file of files) {
+      const savedImg = await processAndSaveRealImage(itemId, file);
+      savedImages.push(savedImg);
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+    res.json(savedImages);
+  } catch (error) {
+    console.error('Upload real images error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// DELETE /api/admin/items/real-images/:imageId
+router.delete('/items/real-images/:imageId', async (req: Request, res: Response): Promise<void> => {
+  const imageId = parseInt(req.params.imageId);
+  try {
+    const imgRes = await query('SELECT * FROM item_real_images WHERE id = $1', [imageId]);
+    if (imgRes.rows.length === 0) {
+      res.status(404).json({ error: 'Real image not found' });
+      return;
+    }
+    const img = imgRes.rows[0];
+
+    const rawDiskPath = path.join(uploadDir, '..', img.image_path);
+    const wmDiskPath = path.join(uploadDir, '..', img.watermarked_path);
+    if (fs.existsSync(rawDiskPath)) fs.unlinkSync(rawDiskPath);
+    if (fs.existsSync(wmDiskPath)) fs.unlinkSync(wmDiskPath);
+
+    await query('DELETE FROM item_real_images WHERE id = $1', [imageId]);
+    res.json({ success: true, id: imageId });
+  } catch (error) {
+    console.error('Delete real image error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }
 });

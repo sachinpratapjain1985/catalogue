@@ -17,6 +17,7 @@ class SessionManager(context: Context) {
         private const val KEY_DEVICE_UUID = "device_uuid"
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_CAN_EDIT_RATES = "can_edit_rates"
+        private const val KEY_CAN_ACCESS_REAL_IMAGES = "can_access_real_images"
     }
 
     init {
@@ -68,17 +69,22 @@ class SessionManager(context: Context) {
     }
 
     // User details
-    fun saveUser(id: Int, username: String, role: String, canEditRates: Boolean) {
+    fun saveUser(id: Int, username: String, role: String, canEditRates: Boolean, canAccessRealImages: Boolean = true) {
         prefs.edit().apply {
             putInt(KEY_USER_ID, id)
             putString(KEY_USERNAME, username)
             putString(KEY_ROLE, role)
             putBoolean(KEY_CAN_EDIT_RATES, canEditRates)
+            putBoolean(KEY_CAN_ACCESS_REAL_IMAGES, canAccessRealImages)
         }.apply()
     }
 
     fun canEditRates(): Boolean {
         return prefs.getBoolean(KEY_CAN_EDIT_RATES, false)
+    }
+
+    fun canAccessRealImages(): Boolean {
+        return prefs.getBoolean(KEY_CAN_ACCESS_REAL_IMAGES, true)
     }
 
     fun getUserRole(): String? {
