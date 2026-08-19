@@ -156,6 +156,8 @@ if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
   server = http.createServer(app);
 }
 
+import { reprocessExistingWatermarks } from './routes/admin';
+
 // Start Server
 server.listen(PORT, async () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT} via ${isHttps ? 'HTTPS' : 'HTTP'}`);
@@ -164,7 +166,8 @@ server.listen(PORT, async () => {
   } catch (e) {
     console.error('Failed to run migrations on startup:', e);
   }
-  // Run admin seed in the background on startup
+  // Run admin seed and reprocess watermarks in background on startup
   seedAdmin();
+  reprocessExistingWatermarks();
 });
 

@@ -1073,19 +1073,18 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
     const width = metadata.width || 1200;
     const height = metadata.height || 1600;
 
-    const text = "VS FASHION (DESUKA&#174;)";
-    const fontSize = Math.max(16, Math.floor(width / 24));
-    const stepY = fontSize * 3.6;
+    const text = "VS FASHION (DESUKA®)";
+    const fontSize = Math.max(18, Math.floor(width / 22));
+    const stepY = fontSize * 3.8;
 
-    const linesCount = Math.ceil((height * 1.5) / stepY);
-    const startY = -height * 0.3;
+    const linesCount = Math.ceil((height * 1.6) / stepY);
+    const startY = -height * 0.35;
 
     let svgLines = '';
     for (let i = 0; i < linesCount; i++) {
       const y = startY + i * stepY;
       const offsetX = (i % 2 === 0) ? 0 : width * 0.15;
       svgLines += `
-        <text x="${width / 2 + offsetX + 2}" y="${y + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
         <text x="${width / 2 + offsetX}" y="${y}" text-anchor="middle" class="wm-text">${text}</text>
       `;
     }
@@ -1094,18 +1093,15 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <style>
           .wm-text {
-            fill: rgba(255, 255, 255, 0.48);
+            fill: #ffffff;
+            stroke: #000000;
+            stroke-width: ${Math.max(1.2, fontSize / 12)}px;
+            paint-order: stroke fill;
             font-size: ${fontSize}px;
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-weight: 800;
-            letter-spacing: 2px;
-          }
-          .wm-shadow {
-            fill: rgba(0, 0, 0, 0.35);
-            font-size: ${fontSize}px;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-weight: 800;
-            letter-spacing: 2px;
+            font-weight: 900;
+            letter-spacing: 2.5px;
+            opacity: 0.85;
           }
         </style>
         <g transform="rotate(-30 ${width / 2} ${height / 2})">
@@ -1135,6 +1131,27 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
     } catch (fallbackErr) {
       fs.copyFileSync(rawFilePath, watermarkedFilePath);
     }
+  }
+};
+
+export const reprocessExistingWatermarks = async () => {
+  try {
+    const res = await query('SELECT * FROM item_real_images');
+    if (res.rows.length === 0) return;
+    console.log(`[Auto-Watermark] Reprocessing ${res.rows.length} existing real photos with auto-orientation and VS FASHION (DESUKA®) mark...`);
+    for (const row of res.rows) {
+      const rawRelPath = row.image_path.replace(/^\/uploads/, '');
+      const wmRelPath = row.watermarked_path.replace(/^\/uploads/, '');
+      const rawFullPath = path.join(uploadDir, rawRelPath);
+      const wmFullPath = path.join(uploadDir, wmRelPath);
+
+      if (fs.existsSync(rawFullPath)) {
+        await applyWatermark(rawFullPath, wmFullPath);
+      }
+    }
+    console.log('[Auto-Watermark] All existing real photos successfully re-watermarked!');
+  } catch (err) {
+    console.error('[Auto-Watermark Error] Failed to reprocess existing real images:', err);
   }
 };
 
