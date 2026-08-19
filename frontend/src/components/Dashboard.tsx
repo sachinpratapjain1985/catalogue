@@ -34,6 +34,8 @@ interface DashboardData {
     change_type: 'addition' | 'reduction' | 'status_change';
     sets_changed: number;
     pieces_changed: number;
+    previous_available?: boolean;
+    new_available?: boolean;
     created_at: string;
     sku_id: string;
     category_name: string;
@@ -328,8 +330,10 @@ export default function Dashboard({ token }: DashboardProps) {
                           {log.change_type}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 700, color: log.change_type === 'addition' ? 'var(--color-success)' : log.change_type === 'reduction' ? 'var(--color-danger)' : 'inherit' }}>
-                        {log.change_type === 'status_change' ? 'Status Toggled' : (
+                      <td style={{ fontWeight: 700, color: log.change_type === 'addition' ? 'var(--color-success)' : log.change_type === 'reduction' ? 'var(--color-danger)' : (log.new_available === false ? '#ef4444' : '#10b981') }}>
+                        {log.change_type === 'status_change' ? (
+                          log.new_available === false ? 'Marked Inactive (Out of Stock)' : 'Marked Active (In Stock)'
+                        ) : (
                           log.change_type === 'addition' ? `+${log.sets_changed} sets` : `${log.sets_changed} sets`
                         )}
                         {log.change_type !== 'status_change' && (

@@ -105,7 +105,7 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
 
     // Recent activity logs (Last 10 updates)
     const recentActivity = await query(
-      `SELECT sl.id, sl.change_type, sl.sets_changed, sl.pieces_changed, sl.created_at,
+      `SELECT sl.id, sl.change_type, sl.sets_changed, sl.pieces_changed, sl.previous_available, sl.new_available, sl.created_at,
               i.sku_id, c.name as category_name, u.username
        FROM stock_logs sl
        JOIN items i ON sl.item_id = i.id
