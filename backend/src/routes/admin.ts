@@ -1064,44 +1064,58 @@ if (!fs.existsSync(realUploadDir)) {
 
 export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: string) => {
   try {
-    const metadata = await sharp(rawFilePath).metadata();
-    const width = metadata.width || 1200;
-    const height = metadata.height || 1200;
+    // Auto-orient according to EXIF metadata so mobile phone camera photos are NEVER rotated sideways!
+    const orientedBuffer = await sharp(rawFilePath)
+      .rotate()
+      .toBuffer();
 
-    const text = "VS FASHION DESUKA";
-    const fontSize = Math.max(22, Math.floor(width / 15));
+    const metadata = await sharp(orientedBuffer).metadata();
+    const width = metadata.width || 1200;
+    const height = metadata.height || 1600;
+
+    const text = "VS FASHION (DESUKA&#174;)";
+    const fontSize = Math.max(16, Math.floor(width / 24));
+    const stepY = fontSize * 3.6;
+
+    const linesCount = Math.ceil((height * 1.5) / stepY);
+    const startY = -height * 0.3;
+
+    let svgLines = '';
+    for (let i = 0; i < linesCount; i++) {
+      const y = startY + i * stepY;
+      const offsetX = (i % 2 === 0) ? 0 : width * 0.15;
+      svgLines += `
+        <text x="${width / 2 + offsetX + 2}" y="${y + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
+        <text x="${width / 2 + offsetX}" y="${y}" text-anchor="middle" class="wm-text">${text}</text>
+      `;
+    }
+
     const svgOverlay = Buffer.from(`
-      <svg width="${width}" height="${height}">
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <style>
           .wm-text {
-            fill: rgba(255, 255, 255, 0.52);
+            fill: rgba(255, 255, 255, 0.48);
             font-size: ${fontSize}px;
-            font-family: Arial, sans-serif;
-            font-weight: 900;
-            letter-spacing: 4px;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-weight: 800;
+            letter-spacing: 2px;
           }
           .wm-shadow {
-            fill: rgba(0, 0, 0, 0.40);
+            fill: rgba(0, 0, 0, 0.35);
             font-size: ${fontSize}px;
-            font-family: Arial, sans-serif;
-            font-weight: 900;
-            letter-spacing: 4px;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-weight: 800;
+            letter-spacing: 2px;
           }
         </style>
-        <g transform="rotate(-35 ${width / 2} ${height / 2})">
-          <text x="${width / 2 + 2}" y="${height / 2 - 140 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
-          <text x="${width / 2}" y="${height / 2 - 140}" text-anchor="middle" class="wm-text">${text}</text>
-
-          <text x="${width / 2 + 2}" y="${height / 2 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
-          <text x="${width / 2}" y="${height / 2}" text-anchor="middle" class="wm-text">${text}</text>
-
-          <text x="${width / 2 + 2}" y="${height / 2 + 140 + 2}" text-anchor="middle" class="wm-shadow">${text}</text>
-          <text x="${width / 2}" y="${height / 2 + 140}" text-anchor="middle" class="wm-text">${text}</text>
+        <g transform="rotate(-30 ${width / 2} ${height / 2})">
+          ${svgLines}
         </g>
       </svg>
     `);
 
-    let sharpObj = sharp(rawFilePath).composite([{ input: svgOverlay }]);
+    let sharpObj = sharp(orientedBuffer)
+      .composite([{ input: svgOverlay }]);
 
     const ext = path.extname(rawFilePath).toLowerCase();
     if (ext === '.png') {
@@ -1115,8 +1129,12 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
     await sharpObj.toFile(watermarkedFilePath);
     console.log(`[Watermark] Generated watermarked photo at ${watermarkedFilePath}`);
   } catch (err) {
-    console.error('[Watermark Error] Fallback copy without SVG:', err);
-    fs.copyFileSync(rawFilePath, watermarkedFilePath);
+    console.error('[Watermark Error] Fallback copy with auto-rotate:', err);
+    try {
+      await sharp(rawFilePath).rotate().toFile(watermarkedFilePath);
+    } catch (fallbackErr) {
+      fs.copyFileSync(rawFilePath, watermarkedFilePath);
+    }
   }
 };
 
@@ -1129,7 +1147,13 @@ export const processAndSaveRealImage = async (itemId: number, file: Express.Mult
   const rawPath = path.join(realUploadDir, rawFilename);
   const wmPath = path.join(realUploadDir, wmFilename);
 
-  fs.copyFileSync(file.path, rawPath);
+  // Auto-orient raw photo based on EXIF camera tag when saving
+  try {
+    await sharp(file.path).rotate().toFile(rawPath);
+  } catch (e) {
+    fs.copyFileSync(file.path, rawPath);
+  }
+
   await applyWatermark(rawPath, wmPath);
 
   const rawUrlPath = `/uploads/real/${rawFilename}`;
