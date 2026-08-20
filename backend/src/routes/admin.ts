@@ -1062,10 +1062,10 @@ if (!fs.existsSync(realUploadDir)) {
   fs.mkdirSync(realUploadDir, { recursive: true });
 }
 
-export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: string) => {
+export const applyWatermark = async (inputFilePath: string, outputFilePath: string) => {
   try {
     // Auto-orient according to EXIF metadata so mobile phone camera photos are NEVER rotated sideways!
-    const orientedBuffer = await sharp(rawFilePath)
+    const orientedBuffer = await sharp(inputFilePath)
       .rotate()
       .toBuffer();
 
@@ -1074,8 +1074,8 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
     const height = metadata.height || 1600;
 
     const text = "VS FASHION (DESUKA®)";
-    const fontSize = Math.max(18, Math.floor(width / 22));
-    const stepY = fontSize * 3.8;
+    const fontSize = Math.max(20, Math.floor(width / 20));
+    const stepY = fontSize * 3.5;
 
     const linesCount = Math.ceil((height * 1.6) / stepY);
     const startY = -height * 0.35;
@@ -1085,25 +1085,13 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
       const y = startY + i * stepY;
       const offsetX = (i % 2 === 0) ? 0 : width * 0.15;
       svgLines += `
-        <text x="${width / 2 + offsetX}" y="${y}" text-anchor="middle" class="wm-text">${text}</text>
+        <text x="${width / 2 + offsetX + 2}" y="${y + 2}" text-anchor="middle" fill="rgba(0, 0, 0, 0.70)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="2.5px">${text}</text>
+        <text x="${width / 2 + offsetX}" y="${y}" text-anchor="middle" fill="rgba(255, 255, 255, 0.92)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="2.5px">${text}</text>
       `;
     }
 
     const svgOverlay = Buffer.from(`
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-        <style>
-          .wm-text {
-            fill: #ffffff;
-            stroke: #000000;
-            stroke-width: ${Math.max(1.2, fontSize / 12)}px;
-            paint-order: stroke fill;
-            font-size: ${fontSize}px;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-weight: 900;
-            letter-spacing: 2.5px;
-            opacity: 0.85;
-          }
-        </style>
         <g transform="rotate(-30 ${width / 2} ${height / 2})">
           ${svgLines}
         </g>
@@ -1113,7 +1101,7 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
     let sharpObj = sharp(orientedBuffer)
       .composite([{ input: svgOverlay }]);
 
-    const ext = path.extname(rawFilePath).toLowerCase();
+    const ext = path.extname(inputFilePath).toLowerCase();
     if (ext === '.png') {
       sharpObj = sharpObj.png({ quality: 95, compressionLevel: 3 });
     } else if (ext === '.webp') {
@@ -1122,36 +1110,57 @@ export const applyWatermark = async (rawFilePath: string, watermarkedFilePath: s
       sharpObj = sharpObj.jpeg({ quality: 95, progressive: true });
     }
 
-    await sharpObj.toFile(watermarkedFilePath);
-    console.log(`[Watermark] Generated watermarked photo at ${watermarkedFilePath}`);
+    if (inputFilePath === outputFilePath) {
+      const buf = await sharpObj.toBuffer();
+      fs.writeFileSync(outputFilePath, buf);
+    } else {
+      await sharpObj.toFile(outputFilePath);
+    }
+    console.log(`[Watermark] Successfully applied VS FASHION (DESUKA®) watermark to ${outputFilePath}`);
   } catch (err) {
-    console.error('[Watermark Error] Fallback copy with auto-rotate:', err);
+    console.error('[Watermark Error] Failed to composite watermark:', err);
     try {
-      await sharp(rawFilePath).rotate().toFile(watermarkedFilePath);
+      if (inputFilePath !== outputFilePath) {
+        await sharp(inputFilePath).rotate().toFile(outputFilePath);
+      }
     } catch (fallbackErr) {
-      fs.copyFileSync(rawFilePath, watermarkedFilePath);
+      if (inputFilePath !== outputFilePath) {
+        fs.copyFileSync(inputFilePath, outputFilePath);
+      }
     }
   }
 };
 
 export const reprocessExistingWatermarks = async () => {
   try {
-    const res = await query('SELECT * FROM item_real_images');
-    if (res.rows.length === 0) return;
-    console.log(`[Auto-Watermark] Reprocessing ${res.rows.length} existing real photos with auto-orientation and VS FASHION (DESUKA®) mark...`);
-    for (const row of res.rows) {
-      const rawRelPath = row.image_path.replace(/^\/uploads/, '');
-      const wmRelPath = row.watermarked_path.replace(/^\/uploads/, '');
-      const rawFullPath = path.join(uploadDir, rawRelPath);
-      const wmFullPath = path.join(uploadDir, wmRelPath);
-
-      if (fs.existsSync(rawFullPath)) {
-        await applyWatermark(rawFullPath, wmFullPath);
+    // 1. Reprocess all real images
+    const realRes = await query('SELECT * FROM item_real_images');
+    console.log(`[Auto-Watermark] Reprocessing ${realRes.rows.length} real photos...`);
+    for (const row of realRes.rows) {
+      const relPath = row.watermarked_path.replace(/^\/uploads/, '');
+      const fullPath = path.join(uploadDir, relPath);
+      if (fs.existsSync(fullPath)) {
+        await applyWatermark(fullPath, fullPath);
+      }
+      // Ensure image_path column also points to watermarked_path
+      if (row.image_path !== row.watermarked_path) {
+        await query('UPDATE item_real_images SET image_path = $1 WHERE id = $2', [row.watermarked_path, row.id]);
       }
     }
-    console.log('[Auto-Watermark] All existing real photos successfully re-watermarked!');
+
+    // 2. Reprocess all primary SKU catalog images
+    const itemRes = await query('SELECT id, image_path FROM items');
+    console.log(`[Auto-Watermark] Reprocessing ${itemRes.rows.length} primary catalog item images...`);
+    for (const row of itemRes.rows) {
+      const relPath = row.image_path.replace(/^\/uploads/, '');
+      const fullPath = path.join(uploadDir, relPath);
+      if (fs.existsSync(fullPath)) {
+        await applyWatermark(fullPath, fullPath);
+      }
+    }
+    console.log('[Auto-Watermark] All catalog and real photos successfully watermarked with VS FASHION (DESUKA®)!');
   } catch (err) {
-    console.error('[Auto-Watermark Error] Failed to reprocess existing real images:', err);
+    console.error('[Auto-Watermark Error] Failed to reprocess existing images:', err);
   }
 };
 
@@ -1173,12 +1182,12 @@ export const processAndSaveRealImage = async (itemId: number, file: Express.Mult
 
   await applyWatermark(rawPath, wmPath);
 
-  const rawUrlPath = `/uploads/real/${rawFilename}`;
   const wmUrlPath = `/uploads/real/${wmFilename}`;
 
+  // Store watermarked URL for BOTH image_path and watermarked_path so unwatermarked image is NEVER served
   const insertRes = await query(
     'INSERT INTO item_real_images (item_id, image_path, watermarked_path) VALUES ($1, $2, $3) RETURNING *',
-    [itemId, rawUrlPath, wmUrlPath]
+    [itemId, wmUrlPath, wmUrlPath]
   );
 
   return insertRes.rows[0];
