@@ -102,6 +102,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [realImagesModalItem, setRealImagesModalItem] = useState<SKUItem | null>(null);
   const [realImagesList, setRealImagesList] = useState<Array<{ id: number; item_id: number; image_path: string; watermarked_path: string }>>([]);
   const [uploadingRealImages, setUploadingRealImages] = useState(false);
+  const [modalSelectedFiles, setModalSelectedFiles] = useState<File[]>([]);
+  const [modalSuccessMsg, setModalSuccessMsg] = useState('');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -267,6 +269,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
   const fetchRealImagesForItem = async (item: SKUItem) => {
     setRealImagesModalItem(item);
+    setModalSelectedFiles([]);
+    setModalSuccessMsg('');
     try {
       const response = await fetch(`/api/admin/items/${item.id}/real-images`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -280,13 +284,21 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     }
   };
 
-  const handleUploadRealImagesToExistingItem = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!realImagesModalItem || !e.target.files || e.target.files.length === 0) return;
-    const filesArr = Array.from(e.target.files).slice(0, 5);
+  const handleSelectModalRealFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const filesArr = Array.from(e.target.files).slice(0, 5);
+      setModalSelectedFiles(filesArr);
+      setModalSuccessMsg('');
+    }
+  };
+
+  const handleSaveModalRealImages = async () => {
+    if (!realImagesModalItem || modalSelectedFiles.length === 0) return;
     
     setUploadingRealImages(true);
+    setModalSuccessMsg('');
     const formData = new FormData();
-    filesArr.forEach(file => {
+    modalSelectedFiles.forEach(file => {
       formData.append('real_images', file);
     });
 
@@ -300,6 +312,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         const newImgs = await response.json();
         const updatedList = [...realImagesList, ...newImgs];
         setRealImagesList(updatedList);
+        setModalSelectedFiles([]);
+        setModalSuccessMsg(`✅ ${newImgs.length} Real Photo(s) Saved & Watermarked Successfully for ${realImagesModalItem.sku_id}!`);
         setItems(prevItems => prevItems.map(it => {
           if (it.id === realImagesModalItem.id) {
             return {
@@ -1840,59 +1854,103 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       {/* RAW Real Images Management Modal */}
       {realImagesModalItem && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
+          <div className="modal-content" style={{ maxWidth: '650px' }}>
             <div className="modal-header">
-              <h3>📷 RAW Real Photos: {realImagesModalItem.sku_id}</h3>
+              <h3>📷 Manage RAW Real Photos: {realImagesModalItem.sku_id}</h3>
               <button className="close-btn" onClick={() => setRealImagesModalItem(null)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem' }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
-                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                  Upload Additional RAW Real Photos (Watermark auto-applied):
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '1.2rem' }}>
+              
+              {/* Task Done Success Notification */}
+              {modalSuccessMsg && (
+                <div style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22c55e', color: '#22c55e', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  {modalSuccessMsg}
+                </div>
+              )}
+
+              {/* Upload Box */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', color: 'white' }}>
+                  Select & Upload RAW Real Photos (Watermark Auto-Applied):
                 </label>
                 <input 
                   type="file" 
                   multiple 
                   accept="image/*"
-                  onChange={handleUploadRealImagesToExistingItem}
+                  onChange={handleSelectModalRealFiles}
                   disabled={uploadingRealImages}
                   style={{ fontSize: '0.85rem' }}
                 />
-                {uploadingRealImages && <p style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.5rem' }}>Uploading & applying watermark...</p>}
+                
+                {modalSelectedFiles.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.6rem 0.8rem', borderRadius: '6px' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#38bdf8' }}>
+                      📌 {modalSelectedFiles.length} file(s) selected to upload for {realImagesModalItem.sku_id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveModalRealImages}
+                      disabled={uploadingRealImages}
+                      className="btn btn-primary"
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      {uploadingRealImages ? 'Uploading & Watermarking...' : '💾 Save & Upload Real Photos'}
+                    </button>
+                  </div>
+                )}
+
+                {uploadingRealImages && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-primary)', margin: 0, fontWeight: 600 }}>
+                    ⏳ Task in progress: Processing, auto-orienting EXIF & watermarking real photos...
+                  </p>
+                )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
-                {realImagesList.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1rem' }}>
-                    No RAW real photos uploaded for this design yet.
-                  </p>
-                ) : (
-                  realImagesList.map(img => (
-                    <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                      <a 
-                        href={img.watermarked_path}
-                        download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ position: 'absolute', top: '4px', left: '4px', background: 'rgba(0,0,0,0.7)', color: '#ffffff', borderRadius: '50%', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Download Watermarked Photo"
-                      >
-                        <Download size={12} />
-                      </a>
-                      {(user?.role === 'superadmin' || user?.role === 'manager') && (
-                        <button 
-                          onClick={() => handleDeleteRealImage(img.id)}
-                          style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#ef4444', border: 'none', borderRadius: '50%', padding: '4px', cursor: 'pointer' }}
-                          title="Delete photo"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  ))
-                )}
+              {/* Uploaded Photos Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Currently Available Real Photos ({realImagesList.length}):
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {realImagesList.length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.01)', borderRadius: '8px' }}>
+                      No RAW real photos uploaded for this design yet.
+                    </p>
+                  ) : (
+                    realImagesList.map(img => (
+                      <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: '8px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+                        <img 
+                          src={img.watermarked_path} 
+                          alt="Real photo preview" 
+                          style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} 
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem', background: 'rgba(0,0,0,0.6)', gap: '0.4rem' }}>
+                          <a 
+                            href={img.watermarked_path}
+                            download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.75rem', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px' }}
+                            title="Download Watermarked Photo"
+                          >
+                            <Download size={12} /> Download
+                          </a>
+                          {(user?.role === 'superadmin' || user?.role === 'manager') && (
+                            <button 
+                              onClick={() => handleDeleteRealImage(img.id)}
+                              style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '4px', padding: '2px 6px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                              title="Remove photo from article"
+                            >
+                              <Trash2 size={12} /> Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
