@@ -1074,26 +1074,14 @@ export const applyWatermark = async (inputFilePath: string, outputFilePath: stri
     const height = metadata.height || 1600;
 
     const text = "VS FASHION (DESUKA®)";
-    const fontSize = Math.max(20, Math.floor(width / 20));
-    const stepY = fontSize * 3.5;
-
-    const linesCount = Math.ceil((height * 1.6) / stepY);
-    const startY = -height * 0.35;
-
-    let svgLines = '';
-    for (let i = 0; i < linesCount; i++) {
-      const y = startY + i * stepY;
-      const offsetX = (i % 2 === 0) ? 0 : width * 0.15;
-      svgLines += `
-        <text x="${width / 2 + offsetX + 2}" y="${y + 2}" text-anchor="middle" fill="rgba(0, 0, 0, 0.70)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="2.5px">${text}</text>
-        <text x="${width / 2 + offsetX}" y="${y}" text-anchor="middle" fill="rgba(255, 255, 255, 0.92)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="2.5px">${text}</text>
-      `;
-    }
+    // 50% larger font size for prominent centered brand presence
+    const fontSize = Math.max(28, Math.floor(width / 12));
 
     const svgOverlay = Buffer.from(`
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <g transform="rotate(-30 ${width / 2} ${height / 2})">
-          ${svgLines}
+          <text x="${width / 2 + 3}" y="${height / 2 + 3}" text-anchor="middle" fill="rgba(0, 0, 0, 0.30)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+          <text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="rgba(255, 255, 255, 0.42)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
         </g>
       </svg>
     `);
@@ -1116,7 +1104,7 @@ export const applyWatermark = async (inputFilePath: string, outputFilePath: stri
     } else {
       await sharpObj.toFile(outputFilePath);
     }
-    console.log(`[Watermark] Successfully applied VS FASHION (DESUKA®) watermark to ${outputFilePath}`);
+    console.log(`[Watermark] Successfully applied centered VS FASHION (DESUKA®) watermark to ${outputFilePath}`);
   } catch (err) {
     console.error('[Watermark Error] Failed to composite watermark:', err);
     try {
