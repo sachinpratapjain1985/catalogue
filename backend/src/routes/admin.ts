@@ -767,6 +767,13 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
       return;
     }
 
+    // Watermark primary image immediately upon upload
+    try {
+      await applyWatermark(primaryFile.path, primaryFile.path);
+    } catch (wmErr) {
+      console.error('[Upload Watermark Error] Failed to watermark primary image:', wmErr);
+    }
+
     // Generate optimized thumbnail using sharp
     try {
       let sharpObj = sharp(primaryFile.path)

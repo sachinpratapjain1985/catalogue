@@ -107,50 +107,35 @@ object SharingUtils {
 
                 // Create share intent targeting WhatsApp specifically or generic chooser targeting it
                 val shareIntent = if (uris.size == 1) {
-                    val item = selectedItems[0]
-                    val detailsText = buildString {
-                        append("Design SKU: ${item.sku_id}\n")
-                        if (!item.material.isNullOrBlank()) {
-                            append("Work/Material: ${item.material}\n")
-                        }
-                        if (shareDescription) {
-                            val desc = sanitizeDescription(item.description)
-                            if (desc.isNotEmpty()) {
-                                append("Description: $desc\n")
-                            }
-                        }
-                        append("\nShared via Desuka Catalog")
-                    }
-
                     Intent(Intent.ACTION_SEND).apply {
                         type = "image/*"
                         putExtra(Intent.EXTRA_STREAM, uris[0])
-                        putExtra(Intent.EXTRA_TEXT, detailsText)
+                        if (shareDescription) {
+                            val item = selectedItems[0]
+                            val desc = sanitizeDescription(item.description)
+                            if (desc.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, desc)
+                            }
+                        }
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                 } else {
-                    val detailsText = buildString {
-                        append("Designs from Desuka Catalogue:\n\n")
-                        selectedItems.forEach { item ->
-                            append("• SKU: ${item.sku_id}\n")
-                            if (!item.material.isNullOrBlank()) {
-                                append("  Work/Material: ${item.material}\n")
-                            }
-                            if (shareDescription) {
-                                val desc = sanitizeDescription(item.description)
-                                if (desc.isNotEmpty()) {
-                                    append("  Description: $desc\n")
-                                }
-                            }
-                            append("\n")
-                        }
-                        append("Shared via Desuka Catalog")
-                    }
-
                     Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                         type = "image/*"
                         putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                        putExtra(Intent.EXTRA_TEXT, detailsText)
+                        if (shareDescription) {
+                            val detailsText = buildString {
+                                selectedItems.forEach { item ->
+                                    val desc = sanitizeDescription(item.description)
+                                    if (desc.isNotEmpty()) {
+                                        append("• SKU: ${item.sku_id}: $desc\n")
+                                    }
+                                }
+                            }
+                            if (detailsText.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, detailsText)
+                            }
+                        }
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                 }
