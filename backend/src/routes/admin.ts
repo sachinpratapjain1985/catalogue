@@ -1080,15 +1080,27 @@ export const applyWatermark = async (inputFilePath: string, outputFilePath: stri
     const width = metadata.width || 1200;
     const height = metadata.height || 1600;
 
-    const text = "VS FASHION (DESUKA®)";
-    // 50% larger font size for prominent centered brand presence
-    const fontSize = Math.max(28, Math.floor(width / 12));
+    const text = "VS FASHION (DESUKA)";
+    const fontSize = Math.max(26, Math.floor(width / 14));
 
-    const svgOverlay = Buffer.from(`
+    const lineY1 = height * 0.3;
+    const lineY2 = height * 0.5;
+    const lineY3 = height * 0.7;
+
+    const svgOverlay = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <g transform="rotate(-30 ${width / 2} ${height / 2})">
-          <text x="${width / 2 + 3}" y="${height / 2 + 3}" text-anchor="middle" fill="rgba(0, 0, 0, 0.30)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
-          <text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="rgba(255, 255, 255, 0.42)" font-size="${fontSize}px" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+          <!-- Line 1: Upper blouse section -->
+          <text x="${width / 2 - width * 0.1 + 2}" y="${lineY1 + 2}" text-anchor="middle" fill="rgba(0, 0, 0, 0.65)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+          <text x="${width / 2 - width * 0.1}" y="${lineY1}" text-anchor="middle" fill="rgba(255, 255, 255, 0.88)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+
+          <!-- Line 2: Center waist section -->
+          <text x="${width / 2 + 2}" y="${lineY2 + 2}" text-anchor="middle" fill="rgba(0, 0, 0, 0.65)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+          <text x="${width / 2}" y="${lineY2}" text-anchor="middle" fill="rgba(255, 255, 255, 0.88)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+
+          <!-- Line 3: Lower skirt section -->
+          <text x="${width / 2 + width * 0.1 + 2}" y="${lineY3 + 2}" text-anchor="middle" fill="rgba(0, 0, 0, 0.65)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
+          <text x="${width / 2 + width * 0.1}" y="${lineY3}" text-anchor="middle" fill="rgba(255, 255, 255, 0.88)" font-size="${fontSize}px" font-family="Arial, sans-serif" font-weight="900" letter-spacing="3px">${text}</text>
         </g>
       </svg>
     `);
@@ -1098,11 +1110,11 @@ export const applyWatermark = async (inputFilePath: string, outputFilePath: stri
 
     const ext = path.extname(inputFilePath).toLowerCase();
     if (ext === '.png') {
-      sharpObj = sharpObj.png({ quality: 95, compressionLevel: 3 });
+      sharpObj = sharpObj.png({ compressionLevel: 2 });
     } else if (ext === '.webp') {
-      sharpObj = sharpObj.webp({ quality: 95 });
+      sharpObj = sharpObj.webp({ quality: 100, lossless: true });
     } else {
-      sharpObj = sharpObj.jpeg({ quality: 95, progressive: true });
+      sharpObj = sharpObj.jpeg({ quality: 100, chromaSubsampling: '4:4:4', progressive: false });
     }
 
     if (inputFilePath === outputFilePath) {
@@ -1111,7 +1123,7 @@ export const applyWatermark = async (inputFilePath: string, outputFilePath: stri
     } else {
       await sharpObj.toFile(outputFilePath);
     }
-    console.log(`[Watermark] Successfully applied centered VS FASHION (DESUKA®) watermark to ${outputFilePath}`);
+    console.log(`[Watermark] Successfully applied 100% quality VS FASHION (DESUKA) watermark to ${outputFilePath}`);
   } catch (err) {
     console.error('[Watermark Error] Failed to composite watermark:', err);
     try {
