@@ -2,6 +2,12 @@ package com.example.catalogapp.utils
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.example.catalogapp.data.SKUItemDto
@@ -12,7 +18,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 
 object SharingUtils {
 
@@ -33,7 +38,47 @@ object SharingUtils {
     }
 
     /**
-     * Downloads list of selected images to cache and shares them over WhatsApp.
+     * Renders a clean, light diagonal watermark in the center of the bitmap.
+     */
+    fun addWatermarkToBitmap(originalBitmap: Bitmap): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        val text = "VS FASHION (DESUKA)"
+        val fontSize = (width / 12f).coerceAtLeast(32f)
+
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(60, 0, 0, 0)
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.06f
+        }
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(125, 255, 255, 255)
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.06f
+        }
+
+        canvas.save()
+        canvas.rotate(-30f, width / 2f, height / 2f)
+
+        // Draw shadow offset by +2px
+        canvas.drawText(text, width / 2f + 2f, height / 2f + 2f, shadowPaint)
+        // Draw light translucent white text
+        canvas.drawText(text, width / 2f, height / 2f, textPaint)
+
+        canvas.restore()
+        return mutableBitmap
+    }
+
+    /**
+     * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp.
      */
     suspend fun downloadAndShareImages(
         context: Context,
@@ -54,7 +99,7 @@ object SharingUtils {
 
             try {
                 selectedItems.forEachIndexed { index, item ->
-                    val progressMsg = "Downloading ${item.sku_id} (${index + 1}/${selectedItems.size})..."
+                    val progressMsg = "Processing ${item.sku_id} (${index + 1}/${selectedItems.size})..."
                     withContext(Dispatchers.Main) { onProgress(progressMsg) }
 
                     val targetUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
@@ -79,12 +124,21 @@ object SharingUtils {
                         val filename = if (targetUrls.size > 1) "${item.sku_id}_real_${imgIdx + 1}$suffix" else "${item.sku_id}$suffix"
                         val file = File(cacheFolder, filename)
                         
-                        val inputStream: InputStream = body.byteStream()
-                        val outputStream = FileOutputStream(file)
+                        val bytes = body.bytes()
+                        val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         
-                        inputStream.use { input ->
-                            outputStream.use { output ->
-                                input.copyTo(output)
+                        if (rawBitmap != null) {
+                            val watermarkedBitmap = addWatermarkToBitmap(rawBitmap)
+                            FileOutputStream(file).use { out ->
+                                watermarkedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                            }
+                            if (watermarkedBitmap != rawBitmap) {
+                                rawBitmap.recycle()
+                            }
+                            watermarkedBitmap.recycle()
+                        } else {
+                            FileOutputStream(file).use { out ->
+                                out.write(bytes)
                             }
                         }
 
