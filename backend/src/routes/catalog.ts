@@ -137,6 +137,17 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
   }
 });
 
+// GET /api/catalog/works - Retrieve active works master list for app and web dropdowns
+router.get('/works', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const result = await query('SELECT * FROM works ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get catalog works error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
 // GET /api/catalog/categories/:id/items - Retrieve SKU designs under a category (with pagination and age calculation)
 router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const categoryId = parseInt(req.params.id);
@@ -148,6 +159,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   const offset = page && limit ? (page - 1) * limit : null;
   const search = req.query.search ? (req.query.search as string).trim() : null;
   const status = req.query.status ? (req.query.status as string).trim() : null;
+  const work = req.query.work ? (req.query.work as string).trim() : null;
   const minRate = req.query.minRate ? parseInt(req.query.minRate as string) : null;
   const maxRate = req.query.maxRate ? parseInt(req.query.maxRate as string) : null;
 
@@ -172,7 +184,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     if (role === 'sales') {
       // Sales user only sees available stock items
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
@@ -187,8 +199,13 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       `;
       if (search) {
         paramCount++;
-        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
+        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount} OR i.work ILIKE $${paramCount})`;
         params.push(`%${search}%`);
+      }
+      if (work) {
+        paramCount++;
+        queryStr += ` AND i.work = $${paramCount}`;
+        params.push(work);
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;
@@ -213,7 +230,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     } else {
       // Stockists and Admins see all items to maintain stock
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
@@ -228,7 +245,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       `;
       if (search) {
         paramCount++;
-        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount})`;
+        queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount} OR i.work ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
       if (status) {
@@ -239,6 +256,11 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         } else if (status === 'NA') {
           queryStr += ` AND s.is_available = FALSE`;
         }
+      }
+      if (work) {
+        paramCount++;
+        queryStr += ` AND i.work = $${paramCount}`;
+        params.push(work);
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;

@@ -60,6 +60,7 @@ fun StockistDashboard(
 ) {
     val coroutineScope = rememberCoroutineScope()
     var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
+    var works by remember { mutableStateOf<List<WorkDto>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf<CategoryDto?>(null) }
     var items by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
     
@@ -78,6 +79,11 @@ fun StockistDashboard(
         coroutineScope.launch {
             try {
                 categories = apiService.getCategories()
+                try {
+                    works = apiService.getWorks()
+                } catch (e: Exception) {
+                    // Non-fatal
+                }
             } catch (e: retrofit2.HttpException) {
                 val errorBody = e.response()?.errorBody()?.string()
                 if (errorBody != null && errorBody.contains("pending")) {
@@ -104,6 +110,7 @@ fun StockistDashboard(
     var searchQuery by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("") }
     var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
+    var selectedWork by remember { mutableStateOf<String?>(null) }
 
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
@@ -120,6 +127,7 @@ fun StockistDashboard(
                     limit = 30,
                     search = searchQuery.ifEmpty { null },
                     status = statusFilter.ifEmpty { null },
+                    work = selectedWork,
                     minRate = selectedRateRange?.first,
                     maxRate = selectedRateRange?.second
                 )
@@ -375,7 +383,7 @@ fun StockistDashboard(
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(rateOptions) { (label, range) ->
@@ -394,6 +402,52 @@ fun StockistDashboard(
                                     )
                                 }
                             )
+                        }
+                    }
+
+                    // Work Filter Chips
+                    if (works.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = selectedWork == null,
+                                    onClick = {
+                                        if (selectedWork != null) {
+                                            selectedWork = null
+                                            loadItems(selectedCategory!!, 1)
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "All Works",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                )
+                            }
+                            items(works) { w ->
+                                val isSelected = selectedWork == w.name
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedWork = if (isSelected) null else w.name
+                                        loadItems(selectedCategory!!, 1)
+                                    },
+                                    label = {
+                                        Text(
+                                            text = w.name,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -581,7 +635,7 @@ fun StockItemCard(
                     fontSize = 16.sp
                 )
                 Text(
-                    text = "Pack: ${item.pieces_per_set} pcs/set",
+                    text = "Pack: ${item.pieces_per_set} pcs/set" + if (!item.work.isNullOrBlank()) " | ✨ ${item.work}" else "",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -811,7 +865,7 @@ fun ImageZoomDialog(
                                 fontSize = 18.sp
                             )
                             Text(
-                                text = "Rate: ₹${item.rate} | Pack: ${item.pieces_per_set} pcs/set",
+                                text = "Rate: ₹${item.rate} | Pack: ${item.pieces_per_set} pcs/set" + if (!item.work.isNullOrBlank()) " | ✨ ${item.work}" else "",
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 12.sp
                             )

@@ -43,6 +43,11 @@ data class CategoryDto(
     val na_count: Int = 0
 )
 
+data class WorkDto(
+    val id: Int,
+    val name: String
+)
+
 data class SKUItemDto(
     val id: Int,
     val sku_id: String,
@@ -51,6 +56,7 @@ data class SKUItemDto(
     val pieces_per_set: Int,
     val description: String?,
     val material: String?,
+    val work: String? = null,
     val sets_count: Int,
     val total_pieces: Int,
     val is_available: Boolean,
@@ -121,6 +127,9 @@ interface CatalogApiService {
     @GET("api/catalog/categories")
     suspend fun getCategories(): List<CategoryDto>
 
+    @GET("api/catalog/works")
+    suspend fun getWorks(): List<WorkDto>
+
     @GET("api/catalog/categories/{id}/items")
     suspend fun getCategoryItems(
         @Path("id") categoryId: Int,
@@ -128,6 +137,7 @@ interface CatalogApiService {
         @Query("limit") limit: Int? = null,
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
+        @Query("work") work: String? = null,
         @Query("minRate") minRate: Int? = null,
         @Query("maxRate") maxRate: Int? = null
     ): List<SKUItemDto>

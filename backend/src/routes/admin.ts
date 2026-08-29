@@ -683,6 +683,104 @@ router.delete('/categories/:id', requireRole(['superadmin']), async (req: Reques
 });
 
 // ==========================================
+// 4b. WORK MASTER MANAGEMENT
+// ==========================================
+
+// GET /api/admin/works
+router.get('/works', async (req: Request, res: Response) => {
+  try {
+    const result = await query('SELECT * FROM works ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get works error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// POST /api/admin/works
+router.post('/works', async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.body;
+
+  if (!name || name.trim() === '') {
+    res.status(400).json({ error: 'Work name is required' });
+    return;
+  }
+
+  try {
+    const result = await query(
+      'INSERT INTO works (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [name.trim()]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(400).json({ error: 'Work type already exists' });
+      return;
+    }
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create work error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// PUT /api/admin/works/:id - Rename work
+router.put('/works/:id', async (req: Request, res: Response): Promise<void> => {
+  const workId = parseInt(req.params.id);
+  const { name } = req.body;
+
+  if (!name || name.trim() === '') {
+    res.status(400).json({ error: 'Work name is required' });
+    return;
+  }
+
+  try {
+    const currentRes = await query('SELECT name FROM works WHERE id = $1', [workId]);
+    if (currentRes.rows.length === 0) {
+      res.status(404).json({ error: 'Work not found' });
+      return;
+    }
+    const oldName = currentRes.rows[0].name;
+
+    const result = await query(
+      'UPDATE works SET name = $1 WHERE id = $2 RETURNING *',
+      [name.trim(), workId]
+    );
+
+    if (oldName !== name.trim()) {
+      await query('UPDATE items SET work = $1 WHERE work = $2', [name.trim(), oldName]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update work error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// DELETE /api/admin/works/:id - Delete work
+router.delete('/works/:id', async (req: Request, res: Response): Promise<void> => {
+  const workId = parseInt(req.params.id);
+
+  try {
+    const currentRes = await query('SELECT name FROM works WHERE id = $1', [workId]);
+    if (currentRes.rows.length === 0) {
+      res.status(404).json({ error: 'Work not found' });
+      return;
+    }
+    const workName = currentRes.rows[0].name;
+
+    await query('DELETE FROM works WHERE id = $1', [workId]);
+    await query("UPDATE items SET work = '' WHERE work = $1", [workName]);
+
+    res.json({ message: 'Work type deleted successfully' });
+  } catch (error) {
+    console.error('Delete work error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// ==========================================
 // 5. SKU / CATALOG DESIGN MANAGEMENT
 // ==========================================
 
@@ -690,7 +788,7 @@ router.delete('/categories/:id', requireRole(['superadmin']), async (req: Reques
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
               u.username as updated_by_user,
@@ -734,7 +832,7 @@ router.get('/items', async (req: Request, res: Response) => {
 
 // POST /api/admin/items - Upload new SKU
 router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'real_images', maxCount: 5 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { skuId, categoryId, piecesPerSet, description, material, rate, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, rate, originalCreatedAt } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
   const primaryFile = files?.['image']?.[0];
   const realFiles = files?.['real_images'] || [];
@@ -746,6 +844,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
   const clientUserId = req.user?.id || 1; // Fallback to admin
   const finalDescription = description && description.trim() !== '' ? description.trim() : '';
+  const finalWork = work && work.trim() !== '' ? work.trim() : '';
   const finalRate = parseInt(rate || '0');
   let originalDate = new Date();
   if (originalCreatedAt) {
@@ -806,10 +905,10 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     // Insert Item
     const itemRes = await query(
-      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, rate, original_created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, work, rate, original_created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalRate, originalDate]
+      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalWork, finalRate, originalDate]
     );
 
     const newItem = itemRes.rows[0];
@@ -839,7 +938,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     // Fetch newly created row with all category/stock attributes for catalog state mapping
     const completedRes = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i
@@ -912,7 +1011,7 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
 router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 1;
-  const { skuId, categoryId, piecesPerSet, description, material, rate, setsCount, isAvailable, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, rate, setsCount, isAvailable, originalCreatedAt } = req.body;
 
   try {
     // 1. Get current item and stock state
@@ -971,6 +1070,11 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     if (material !== undefined) {
       updateFields.push(`material = $${paramIndex}`);
       params.push(material.trim());
+      paramIndex++;
+    }
+    if (work !== undefined) {
+      updateFields.push(`work = $${paramIndex}`);
+      params.push(work.trim());
       paramIndex++;
     }
     if (rate !== undefined) {

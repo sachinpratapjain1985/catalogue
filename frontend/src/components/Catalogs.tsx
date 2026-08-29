@@ -15,10 +15,16 @@ import {
   Share2,
   Copy,
   Download,
-  Camera
+  Camera,
+  Sparkles
 } from 'lucide-react';
 
 interface Category {
+  id: number;
+  name: string;
+}
+
+interface Work {
   id: number;
   name: string;
 }
@@ -31,6 +37,7 @@ interface SKUItem {
   pieces_per_set: number;
   description: string;
   material: string;
+  work?: string;
   rate: number;
   sets_count: number;
   total_pieces: number;
@@ -55,10 +62,17 @@ interface CatalogsProps {
 
 export default function Catalogs({ token, user }: CatalogsProps) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [works, setWorks] = useState<Work[]>([]);
   const [items, setItems] = useState<SKUItem[]>([]);
   
   // Category creation states
   const [newCatName, setNewCatName] = useState('');
+
+  // Work Master management states
+  const [showWorksModal, setShowWorksModal] = useState(false);
+  const [newWorkName, setNewWorkName] = useState('');
+  const [editingWorkId, setEditingWorkId] = useState<number | null>(null);
+  const [editingWorkName, setEditingWorkName] = useState('');
   
   // SKU creation states
   const [skuId, setSkuId] = useState('');
@@ -66,6 +80,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [piecesPerSet, setPiecesPerSet] = useState(4);
   const [description, setDescription] = useState('');
   const [material, setMaterial] = useState('');
+  const [work, setWork] = useState('');
   const [rate, setRate] = useState('');
   const [stockType, setStockType] = useState<'new' | 'old'>('new');
   const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
@@ -79,6 +94,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editPiecesPerSet, setEditPiecesPerSet] = useState(4);
   const [editMaterial, setEditMaterial] = useState('');
+  const [editWork, setEditWork] = useState('');
   const [editRate, setEditRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
@@ -111,6 +127,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   // Filters/Search
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCatId, setFilterCatId] = useState('');
+  const [filterWork, setFilterWork] = useState('');
   const [filterAgeLimit, setFilterAgeLimit] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterRateRange, setFilterRateRange] = useState('');
@@ -125,6 +142,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
   useEffect(() => {
     fetchCategories();
+    fetchWorks();
     fetchSKUs();
   }, []);
 
@@ -155,6 +173,100 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       }
     } catch (e) {
       console.error('Failed to load categories', e);
+    }
+  };
+
+  const fetchWorks = async () => {
+    try {
+      const response = await fetch('/api/catalog/works', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWorks(data);
+      }
+    } catch (e) {
+      console.error('Failed to load works', e);
+    }
+  };
+
+  const handleCreateWork = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWorkName.trim()) return;
+
+    try {
+      const response = await fetch('/api/admin/works', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: newWorkName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setWorks([...works, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewWorkName('');
+        showSuccess('Work type created successfully');
+      } else {
+        showError(data.error || 'Failed to create work type');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleRenameWork = async (workId: number) => {
+    if (!editingWorkName.trim()) return;
+
+    try {
+      const response = await fetch(`/api/admin/works/${workId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: editingWorkName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setWorks(works.map(w => w.id === workId ? data : w).sort((a, b) => a.name.localeCompare(b.name)));
+        setEditingWorkId(null);
+        fetchSKUs();
+        showSuccess('Work type renamed successfully');
+      } else {
+        showError(data.error || 'Failed to rename work type');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleDeleteWork = async (workId: number, workName: string) => {
+    if (!window.confirm(`Are you sure you want to delete work type "${workName}"? Existing items with this work will have their work field cleared.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/works/${workId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setWorks(works.filter(w => w.id !== workId));
+        fetchSKUs();
+        showSuccess('Work type deleted');
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete work type');
+      }
+    } catch (e) {
+      showError('Network error');
     }
   };
 
@@ -389,6 +501,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     formData.append('piecesPerSet', piecesPerSet.toString());
     formData.append('description', description.trim());
     formData.append('material', material.trim());
+    formData.append('work', work.trim());
     formData.append('rate', rate.trim() || '0');
     formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
@@ -418,6 +531,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setPiecesPerSet(4);
         setDescription('');
         setMaterial('');
+        setWork('');
         setRate('');
         setStockType('new');
         setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
@@ -454,6 +568,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           categoryId: editCategoryId,
           piecesPerSet: editPiecesPerSet,
           material: editMaterial,
+          work: editWork,
           rate: editRate,
           setsCount: editSetsCount,
           isAvailable: editIsAvailable,
@@ -721,12 +836,14 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         if (!isNaN(minVal)) matchesRate = matchesRate && itemRate >= minVal;
         if (!isNaN(maxVal)) matchesRate = matchesRate && itemRate <= maxVal;
       }
+
+      const matchesWork = filterWork === '' || (item.work || '') === filterWork;
       
       // Ensure item belongs to one of the user's permitted categories
       const allowedCatIds = categories.map(c => c.id);
       const isPermittedCategory = allowedCatIds.includes(item.category_id);
 
-      return isPermittedCategory && matchesSearch && matchesCategory && matchesAge && matchesStatus && matchesRate;
+      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate;
     })
     .sort((a, b) => {
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
@@ -825,12 +942,23 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
       {user?.role !== 'sales' && (
         <div className="grid-2">
-        {/* Create Folder / Category */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FolderPlus size={20} color="var(--color-primary)" />
-            Create Category Folder
-          </h3>
+          {/* Create Folder / Category */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <FolderPlus size={20} color="var(--color-primary)" />
+                Create Category Folder
+              </h3>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setShowWorksModal(true)}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Sparkles size={14} color="#c084fc" />
+                Manage Works ({works.length})
+              </button>
+            </div>
           <form onSubmit={handleCreateCategory} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
               <label>Folder / Category Name</label>
@@ -971,6 +1099,19 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Work Type</label>
+                <select 
+                  value={work} 
+                  onChange={e => setWork(e.target.value)}
+                >
+                  <option value="">Select Work (Optional)</option>
+                  {works.map(w => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="form-group" style={{ flex: 1 }}>
                 <label>Material Details</label>
                 <input 
@@ -1158,6 +1299,23 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </select>
             </div>
 
+            {/* Filter Work */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sparkles size={16} color="#c084fc" />
+              <select 
+                value={filterWork} 
+                onChange={e => setFilterWork(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Works</option>
+                {works.map(w => (
+                  <option key={w.id} value={w.name}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Filter Status */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Filter size={16} color="var(--text-muted)" />
@@ -1308,6 +1466,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                                 setEditCategoryId(item.category_id.toString());
                                 setEditPiecesPerSet(item.pieces_per_set);
                                 setEditMaterial(item.material || '');
+                                setEditWork(item.work || '');
                                 setEditRate(item.rate.toString());
                                 setEditSetsCount(item.sets_count);
                                 setEditIsAvailable(item.is_available);
@@ -1332,8 +1491,15 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                         </div>
                       </div>
                       
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                        <span className="folder-tag">{item.category_name}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap', gap: '4px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span className="folder-tag">{item.category_name}</span>
+                          {item.work && (
+                            <span className="folder-tag" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                              ✨ {item.work}
+                            </span>
+                          )}
+                        </div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                           Age: <strong>{ageInDays} days</strong>
                         </span>
@@ -1382,7 +1548,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     key={page}
                     onClick={() => setCurrentPage(page)}
                     className={`btn ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ padding: '0.5rem 1rem', minWidth: '40px' }}
+                    style={{ padding: '0.5rem 0.8rem', minWidth: '36px' }}
                   >
                     {page}
                   </button>
@@ -1421,7 +1587,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         }}>
           <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="flex-between">
-              <h3>Edit SKU Design Details</h3>
+              <h3>Edit SKU: {editingItem?.sku_id}</h3>
               <button 
                 onClick={() => {
                   setIsEditModalOpen(false);
@@ -1472,6 +1638,19 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <div className="form-group" style={{ flex: 1 }}>
+                  <label>Work Type</label>
+                  <select 
+                    value={editWork} 
+                    onChange={e => setEditWork(e.target.value)}
+                  >
+                    <option value="">Select Work (Optional)</option>
+                    {works.map(w => (
+                      <option key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ flex: 1 }}>
                   <label>Material Details</label>
                   <input 
                     type="text" 
@@ -1481,7 +1660,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
 
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label>Rate / Price of Article (₹)</label>
+                  <label>Rate / Price (₹)</label>
                   <input 
                     type="number" 
                     value={editRate}
@@ -1952,6 +2131,150 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Work Master Management Modal */}
+      {showWorksModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          padding: '1rem'
+        }}>
+          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '550px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="flex-between">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Sparkles size={20} color="#c084fc" />
+                Work Master Management
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowWorksModal(false);
+                  setEditingWorkId(null);
+                }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Create New Work Type */}
+            <form onSubmit={handleCreateWork} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Add New Work Type</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Zari Work, Mirror Work, Thread Embroidery" 
+                  value={newWorkName}
+                  onChange={e => setNewWorkName(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Sparkles size={14} /> Add Work
+              </button>
+            </form>
+
+            <hr style={{ border: '0', borderTop: '1px solid var(--glass-border)', margin: '0.5rem 0' }} />
+
+            {/* List of Existing Works */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Active Work Masters ({works.length})</label>
+              <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingRight: '4px' }}>
+                {works.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '1.5rem' }}>No work types found. Add one above!</p>
+                ) : (
+                  works.map(w => {
+                    const isEditing = editingWorkId === w.id;
+                    const itemsCount = items.filter(it => (it.work || '') === w.name).length;
+
+                    return (
+                      <div key={w.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.05)', minHeight: '44px' }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
+                            <input 
+                              type="text" 
+                              value={editingWorkName}
+                              onChange={e => setEditingWorkName(e.target.value)}
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
+                            />
+                            <button 
+                              onClick={() => handleRenameWork(w.id)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
+                              title="Save Name"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button 
+                              onClick={() => setEditingWorkId(null)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+                              title="Cancel"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontWeight: 600 }}>{w.name}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '10px' }}>
+                                {itemsCount} items
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {(user?.role === 'superadmin' || user?.role === 'manager') && (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingWorkId(w.id);
+                                      setEditingWorkName(w.name);
+                                    }}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
+                                    title="Rename Work Type"
+                                  >
+                                    <Edit2 size={15} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteWork(w.id, w.name)}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
+                                    title="Delete Work Type"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setShowWorksModal(false);
+                  setEditingWorkId(null);
+                }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

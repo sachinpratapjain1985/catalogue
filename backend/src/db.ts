@@ -81,15 +81,51 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] item_real_images table verified.');
 
+    // 3c. Create works master table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS works (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(100) UNIQUE NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('[Migration] works master table verified.');
+
+    // 3d. Add work column to items table
+    await pool.query("ALTER TABLE items ADD COLUMN IF NOT EXISTS work VARCHAR(100) NOT NULL DEFAULT ''");
+    console.log('[Migration] items.work column verified.');
+
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_items_work ON items(work)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_real_images_item ON item_real_images(item_id)');
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_uuid ON devices (user_id, device_uuid)');
     console.log('[Migration] Performance indexes verified.');
 
-    // 5. Update items to clear default descriptions
+    // 5. Auto-seed standard works if table is empty
+    const worksCount = await pool.query('SELECT COUNT(*) FROM works');
+    if (parseInt(worksCount.rows[0].count) === 0) {
+      const defaultWorks = [
+        'Handwork',
+        'Mirror Work',
+        'Thread Embroidery',
+        'Zari Work',
+        'Digital Print',
+        'Sequins',
+        'Chikankari',
+        'Gota Patti',
+        'Cutwork',
+        'Plain / Solid'
+      ];
+      for (const w of defaultWorks) {
+        await pool.query('INSERT INTO works (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [w]);
+      }
+      console.log('[Migration] Default work master entries seeded.');
+    }
+
+    // 6. Update items to clear default descriptions
     await pool.query("UPDATE items SET description = '' WHERE description = 'DESUKA by VS FASHION Gandhi Nagar Delhi.'");
     console.log('[Migration] Cleared default descriptions from existing items.');
 
