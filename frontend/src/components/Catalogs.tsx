@@ -109,6 +109,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [sharePhone, setSharePhone] = useState('');
   const [webSendDescription, setWebSendDescription] = useState(false);
   const [webShareRealImages, setWebShareRealImages] = useState(false);
+  const [shareImagesPerItem, setShareImagesPerItem] = useState<number>(1);
+  const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState(false);
   const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
 
@@ -119,6 +121,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [realImagesList, setRealImagesList] = useState<Array<{ id: number; item_id: number; image_path: string; watermarked_path: string }>>([]);
   const [uploadingRealImages, setUploadingRealImages] = useState(false);
   const [modalSelectedFiles, setModalSelectedFiles] = useState<File[]>([]);
+  const [modalSelectedPreviews, setModalSelectedPreviews] = useState<string[]>([]);
   const [modalSuccessMsg, setModalSuccessMsg] = useState('');
 
   // Pagination state
@@ -400,8 +403,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     if (e.target.files && e.target.files.length > 0) {
       const filesArr = Array.from(e.target.files).slice(0, 5);
       setModalSelectedFiles(filesArr);
+      setModalSelectedPreviews(filesArr.map(f => URL.createObjectURL(f)));
       setModalSuccessMsg('');
     }
+  };
+
+  const handleRemoveModalSelectedFile = (index: number) => {
+    const newFiles = modalSelectedFiles.filter((_, i) => i !== index);
+    const newPreviews = modalSelectedPreviews.filter((_, i) => i !== index);
+    setModalSelectedFiles(newFiles);
+    setModalSelectedPreviews(newPreviews);
   };
 
   const handleSaveModalRealImages = async () => {
@@ -425,7 +436,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         const updatedList = [...realImagesList, ...newImgs];
         setRealImagesList(updatedList);
         setModalSelectedFiles([]);
-        setModalSuccessMsg(`✅ ${newImgs.length} Real Photo(s) Saved & Watermarked Successfully for ${realImagesModalItem.sku_id}!`);
+        setModalSelectedPreviews([]);
+        setModalSuccessMsg(`✅ ${newImgs.length} Real Photo(s) Uploaded Successfully for ${realImagesModalItem.sku_id}!`);
         setItems(prevItems => prevItems.map(it => {
           if (it.id === realImagesModalItem.id) {
             return {
@@ -437,7 +449,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           return it;
         }));
         setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
-        showSuccess('RAW Real photos uploaded and watermarked successfully');
+        showSuccess('Real photos uploaded successfully');
         fetchSKUs();
       } else {
         const data = await response.json();
@@ -720,7 +732,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     let downloadDelay = 0;
     selectedItemsData.forEach(item => {
       if (webShareRealImages && item.real_images && item.real_images.length > 0) {
-        item.real_images.forEach((realPath, rIdx) => {
+        const targetRealImages = item.real_images.slice(0, shareImagesPerItem);
+        targetRealImages.forEach((realPath, rIdx) => {
           setTimeout(() => {
             const link = document.createElement('a');
             link.href = realPath;
@@ -1918,26 +1931,51 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               />
             </div>
             
-            {/* Send Description Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
-              <input 
-                type="checkbox" 
-                id="web-send-desc"
-                checked={webSendDescription}
-                onChange={e => setWebSendDescription(e.target.checked)}
-                style={{ 
-                  width: '18px', 
-                  height: '18px', 
-                  cursor: 'pointer',
-                  accentColor: 'var(--color-primary)'
-                }}
-              />
-              <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
-                Send Description
-              </label>
+            {/* Images Per Design Selector & Send Description */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1.2rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Photos / SKU:</span>
+                <select 
+                  value={shareImagesPerItem} 
+                  onChange={e => setShareImagesPerItem(parseInt(e.target.value) || 1)}
+                  style={{ 
+                    padding: '0.4rem 0.6rem', 
+                    fontSize: '0.8rem', 
+                    borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value={1} style={{ background: '#1e293b', color: 'white' }}>1 Photo (Default)</option>
+                  <option value={2} style={{ background: '#1e293b', color: 'white' }}>2 Photos</option>
+                  <option value={3} style={{ background: '#1e293b', color: 'white' }}>3 Photos</option>
+                  <option value={10} style={{ background: '#1e293b', color: 'white' }}>All Photos</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="web-send-desc"
+                  checked={webSendDescription}
+                  onChange={e => setWebSendDescription(e.target.checked)}
+                  style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    cursor: 'pointer',
+                    accentColor: 'var(--color-primary)'
+                  }}
+                />
+                <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
+                  Send Description
+                </label>
+              </div>
 
               {items.some(it => selectedItems.includes(it.id) && (it.real_image_count || 0) > 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <input 
                     type="checkbox" 
                     id="web-share-real"
@@ -1951,7 +1989,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     }}
                   />
                   <label htmlFor="web-share-real" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', cursor: 'pointer', userSelect: 'none' }}>
-                    📷 Download / Share RAW Real Photos (Watermarked)
+                    📷 RAW Real Photos
                   </label>
                 </div>
               )}
@@ -2052,7 +2090,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               {/* Upload Box */}
               <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', color: 'white' }}>
-                  Select & Upload RAW Real Photos (Watermark Auto-Applied):
+                  Select & Upload RAW Real Photos:
                 </label>
                 <input 
                   type="file" 
@@ -2063,26 +2101,77 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   style={{ fontSize: '0.85rem' }}
                 />
                 
+                {/* Local Previews of newly selected files before uploading */}
                 {modalSelectedFiles.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.6rem 0.8rem', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#38bdf8' }}>
-                      📌 {modalSelectedFiles.length} file(s) selected to upload for {realImagesModalItem.sku_id}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSaveModalRealImages}
-                      disabled={uploadingRealImages}
-                      className="btn btn-primary"
-                      style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                    >
-                      {uploadingRealImages ? 'Uploading & Watermarking...' : '💾 Save & Upload Real Photos'}
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(255,255,255,0.04)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 600 }}>
+                        📌 Selected to upload ({modalSelectedFiles.length} files):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalSelectedFiles([]);
+                          setModalSelectedPreviews([]);
+                        }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', padding: '4px 0' }}>
+                      {modalSelectedFiles.map((file, fIdx) => (
+                        <div key={fIdx} style={{ position: 'relative', width: '70px', height: '70px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                          <img 
+                            src={modalSelectedPreviews[fIdx]} 
+                            alt={file.name} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModalSelectedFile(fIdx)}
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '2px',
+                              background: 'rgba(0,0,0,0.75)',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '18px',
+                              height: '18px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                            title="Remove file"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                      <button
+                        type="button"
+                        onClick={handleSaveModalRealImages}
+                        disabled={uploadingRealImages}
+                        className="btn btn-primary"
+                        style={{ padding: '0.45rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                      >
+                        {uploadingRealImages ? 'Uploading...' : '💾 Save & Upload Selected Photos'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {uploadingRealImages && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--color-primary)', margin: 0, fontWeight: 600 }}>
-                    ⏳ Task in progress: Processing, auto-orienting EXIF & watermarking real photos...
+                    ⏳ Task in progress: Uploading and saving real photos...
                   </p>
                 )}
               </div>
@@ -2098,31 +2187,40 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                       No RAW real photos uploaded for this design yet.
                     </p>
                   ) : (
-                    realImagesList.map(img => (
+                    realImagesList.map((img, idx) => (
                       <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: '8px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
-                        <img 
-                          src={img.watermarked_path} 
-                          alt="Real photo preview" 
-                          style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} 
-                        />
+                        <div 
+                          style={{ position: 'relative', cursor: 'pointer' }}
+                          onClick={() => setPreviewLightboxUrl(img.watermarked_path || img.image_path)}
+                          title="Click to zoom preview"
+                        >
+                          <img 
+                            src={img.watermarked_path || img.image_path} 
+                            alt={`Real photo ${idx + 1}`} 
+                            style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} 
+                          />
+                          <div style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', borderRadius: '4px', padding: '2px 5px', fontSize: '0.7rem', color: 'white' }}>
+                            🔍 Zoom
+                          </div>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem', background: 'rgba(0,0,0,0.6)', gap: '0.4rem' }}>
                           <a 
-                            href={img.watermarked_path}
+                            href={img.watermarked_path || img.image_path}
                             download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ fontSize: '0.75rem', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px' }}
-                            title="Download Watermarked Photo"
+                            title="Download Photo"
                           >
                             <Download size={12} /> Download
                           </a>
-                          {(user?.role === 'superadmin' || user?.role === 'manager') && (
+                          {(user?.role === 'superadmin' || user?.role === 'manager' || user?.role === 'both') && (
                             <button 
                               onClick={() => handleDeleteRealImage(img.id)}
-                              style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '4px', padding: '2px 6px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
-                              title="Remove photo from article"
+                              style={{ background: 'rgba(239, 68, 68, 0.25)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}
+                              title="Delete photo from article"
                             >
-                              <Trash2 size={12} /> Remove
+                              <Trash2 size={12} /> Delete
                             </button>
                           )}
                         </div>
@@ -2276,6 +2374,58 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Resolution Lightbox Zoom Modal */}
+      {previewLightboxUrl && (
+        <div 
+          onClick={() => setPreviewLightboxUrl(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.9)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 11000,
+            cursor: 'zoom-out',
+            padding: '1rem'
+          }}
+        >
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center' }}>
+            <img 
+              src={previewLightboxUrl} 
+              alt="Zoomed preview" 
+              style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} 
+            />
+            <button 
+              onClick={() => setPreviewLightboxUrl(null)}
+              style={{
+                position: 'absolute',
+                top: '-15px',
+                right: '-15px',
+                background: 'rgba(255,255,255,0.9)',
+                color: '#000',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.5)'
+              }}
+              title="Close Preview"
+            >
+              <X size={20} />
+            </button>
           </div>
         </div>
       )}

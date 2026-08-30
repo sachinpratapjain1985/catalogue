@@ -866,13 +866,6 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
       return;
     }
 
-    // Watermark primary image immediately upon upload
-    try {
-      await applyWatermark(primaryFile.path, primaryFile.path);
-    } catch (wmErr) {
-      console.error('[Upload Watermark Error] Failed to watermark primary image:', wmErr);
-    }
-
     // Generate optimized thumbnail using sharp
     try {
       let sharpObj = sharp(primaryFile.path)
@@ -1266,27 +1259,21 @@ export const reprocessExistingWatermarks = async () => {
 export const processAndSaveRealImage = async (itemId: number, file: Express.Multer.File) => {
   const ext = path.extname(file.filename);
   const baseName = path.basename(file.filename, ext);
-  const rawFilename = `raw_${Date.now()}_${baseName}${ext}`;
-  const wmFilename = `wm_${Date.now()}_${baseName}${ext}`;
-
-  const rawPath = path.join(realUploadDir, rawFilename);
-  const wmPath = path.join(realUploadDir, wmFilename);
+  const realFilename = `real_${Date.now()}_${baseName}${ext}`;
+  const realPath = path.join(realUploadDir, realFilename);
 
   // Auto-orient raw photo based on EXIF camera tag when saving
   try {
-    await sharp(file.path).rotate().toFile(rawPath);
+    await sharp(file.path).rotate().toFile(realPath);
   } catch (e) {
-    fs.copyFileSync(file.path, rawPath);
+    fs.copyFileSync(file.path, realPath);
   }
 
-  await applyWatermark(rawPath, wmPath);
+  const urlPath = `/uploads/real/${realFilename}`;
 
-  const wmUrlPath = `/uploads/real/${wmFilename}`;
-
-  // Store watermarked URL for BOTH image_path and watermarked_path so unwatermarked image is NEVER served
   const insertRes = await query(
     'INSERT INTO item_real_images (item_id, image_path, watermarked_path) VALUES ($1, $2, $3) RETURNING *',
-    [itemId, wmUrlPath, wmUrlPath]
+    [itemId, urlPath, urlPath]
   );
 
   return insertRes.rows[0];

@@ -444,4 +444,39 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
+// DELETE /api/catalog/real-images/:id - Delete a real photo from mobile or web (Admin/Manager/Permitted)
+router.delete('/real-images/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const imageId = parseInt(req.params.id);
+  const userRole = req.user?.role;
+
+  if (userRole !== 'superadmin' && userRole !== 'manager' && userRole !== 'both' && userRole !== 'stockist') {
+    res.status(403).json({ error: 'Permission denied to delete photos' });
+    return;
+  }
+
+  try {
+    const imgRes = await query('SELECT * FROM item_real_images WHERE id = $1', [imageId]);
+    if (imgRes.rows.length === 0) {
+      res.status(404).json({ error: 'Photo not found' });
+      return;
+    }
+    const img = imgRes.rows[0];
+
+    const rawDiskPath = path.join(uploadDir, '..', img.image_path);
+    const wmDiskPath = path.join(uploadDir, '..', img.watermarked_path);
+    if (fs.existsSync(rawDiskPath)) {
+      try { fs.unlinkSync(rawDiskPath); } catch (e) {}
+    }
+    if (fs.existsSync(wmDiskPath) && wmDiskPath !== rawDiskPath) {
+      try { fs.unlinkSync(wmDiskPath); } catch (e) {}
+    }
+
+    await query('DELETE FROM item_real_images WHERE id = $1', [imageId]);
+    res.json({ success: true, id: imageId, item_id: img.item_id });
+  } catch (error) {
+    console.error('Delete real image error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
 export default router;

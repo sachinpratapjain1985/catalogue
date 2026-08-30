@@ -86,6 +86,7 @@ object SharingUtils {
         sessionManager: SessionManager,
         shareDescription: Boolean = false,
         shareRealImages: Boolean = false,
+        imagesPerItem: Int = 1,
         onProgress: (String) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -102,11 +103,13 @@ object SharingUtils {
                     val progressMsg = "Processing ${item.sku_id} (${index + 1}/${selectedItems.size})..."
                     withContext(Dispatchers.Main) { onProgress(progressMsg) }
 
-                    val targetUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
+                    val allUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
                         item.getFullRealImageUrls(sessionManager.getServerUrl())
                     } else {
                         listOf(item.getFullImageUrl(sessionManager.getServerUrl()))
                     }
+
+                    val targetUrls = allUrls.take(imagesPerItem.coerceAtLeast(1))
 
                     targetUrls.forEachIndexed { imgIdx, imageUrl ->
                         val request = Request.Builder()

@@ -162,6 +162,7 @@ fun SalesDashboard(
     }
 
     var showShareChoiceModal by remember { mutableStateOf(false) }
+    var imagesPerItem by remember { mutableIntStateOf(1) }
 
     fun executeShare(shareReal: Boolean) {
         isSharing = true
@@ -172,6 +173,7 @@ fun SalesDashboard(
                 sessionManager = sessionManager,
                 shareDescription = shareDescription,
                 shareRealImages = shareReal,
+                imagesPerItem = imagesPerItem,
                 onProgress = { shareProgressMsg = it },
                 onError = {
                     isSharing = false
@@ -237,53 +239,89 @@ fun SalesDashboard(
                     shadowElevation = 8.dp,
                     color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "${selectedItems.size} items selected",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { shareDescription = !shareDescription }
-                                    .padding(top = 2.dp)
-                            ) {
-                                Checkbox(
-                                    checked = shareDescription,
-                                    onCheckedChange = null,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                        // Top row of bottomBar: Item count, Description check, and Share Button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
                                 Text(
-                                    text = "Send Description",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "${selectedItems.size} items selected",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
                                 )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clickable { shareDescription = !shareDescription }
+                                        .padding(top = 2.dp)
+                                ) {
+                                    Checkbox(
+                                        checked = shareDescription,
+                                        onCheckedChange = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Send Description",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                        showShareChoiceModal = true
+                                    } else {
+                                        executeShare(shareReal = false)
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Share to WhatsApp", fontWeight = FontWeight.Bold)
                             }
                         }
 
-                        Button(
-                            onClick = {
-                                val hasRealImages = selectedItems.any { it.real_image_count > 0 }
-                                if (sessionManager.canAccessRealImages() && hasRealImages) {
-                                    showShareChoiceModal = true
-                                } else {
-                                    executeShare(shareReal = false)
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                        // Bottom row of bottomBar: Images per SKU selector (1 default, 2, 3, All)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Share via WhatsApp", fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Photos/design:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
+                                val isSelected = imagesPerItem == count
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { imagesPerItem = count },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -296,8 +334,36 @@ fun SalesDashboard(
                 onDismissRequest = { showShareChoiceModal = false },
                 title = { Text("Select Photos to Share") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Choose which type of photos to share for selected designs:")
+
+                        // Images per design selector in modal as well
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Photos/design:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
+                                val isSelected = imagesPerItem == count
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { imagesPerItem = count },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.height(30.dp)
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(
                             onClick = {
