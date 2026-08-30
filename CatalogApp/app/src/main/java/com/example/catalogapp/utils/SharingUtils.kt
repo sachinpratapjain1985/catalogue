@@ -126,20 +126,27 @@ object SharingUtils {
                         val suffix = if (imageUrl.endsWith(".png", true)) ".png" else ".jpg"
                         val filename = if (targetUrls.size > 1) "${item.sku_id}_real_${imgIdx + 1}$suffix" else "${item.sku_id}$suffix"
                         val file = File(cacheFolder, filename)
-                        
                         val bytes = body.bytes()
-                        val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        val isRealImage = shareRealImages && item.real_images.isNotEmpty()
                         
-                        if (rawBitmap != null) {
-                            val watermarkedBitmap = addWatermarkToBitmap(rawBitmap)
-                            FileOutputStream(file).use { out ->
-                                watermarkedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                        if (isRealImage) {
+                            val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            if (rawBitmap != null) {
+                                val watermarkedBitmap = addWatermarkToBitmap(rawBitmap)
+                                FileOutputStream(file).use { out ->
+                                    watermarkedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                                }
+                                if (watermarkedBitmap != rawBitmap) {
+                                    rawBitmap.recycle()
+                                }
+                                watermarkedBitmap.recycle()
+                            } else {
+                                FileOutputStream(file).use { out ->
+                                    out.write(bytes)
+                                }
                             }
-                            if (watermarkedBitmap != rawBitmap) {
-                                rawBitmap.recycle()
-                            }
-                            watermarkedBitmap.recycle()
                         } else {
+                            // Standard catalog images are already designed/watermarked; save pristine original file directly
                             FileOutputStream(file).use { out ->
                                 out.write(bytes)
                             }
