@@ -1284,11 +1284,11 @@ export const processAndSaveRealImage = async (itemId: number, file: Express.Mult
   const realFilename = `real_${Date.now()}_${baseName}${ext}`;
   const realPath = path.join(realUploadDir, realFilename);
 
-  // Auto-orient raw photo based on EXIF camera tag when saving
+  // Preserve pristine raw uncompressed photo directly from upload with zero quality loss
   try {
-    await sharp(file.path).rotate().toFile(realPath);
-  } catch (e) {
     fs.copyFileSync(file.path, realPath);
+  } catch (e) {
+    console.error('Failed to copy raw real photo:', e);
   }
 
   const urlPath = `/uploads/real/${realFilename}`;

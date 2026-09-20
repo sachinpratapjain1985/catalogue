@@ -1654,8 +1654,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
                   <label>Folder / Category</label>
                   <select 
                     value={editCategoryId} 
@@ -1668,7 +1668,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   </select>
                 </div>
 
-                <div className="form-group" style={{ flex: 1 }}>
+                <div className="form-group">
                   <label>Pieces per Set</label>
                   <input 
                     type="number" 
@@ -1680,8 +1680,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
                   <label>Work Type</label>
                   <select 
                     value={editWork} 
@@ -1694,16 +1694,19 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   </select>
                 </div>
 
-                <div className="form-group" style={{ flex: 1 }}>
+                <div className="form-group">
                   <label>Material Details</label>
                   <input 
                     type="text" 
+                    placeholder="e.g. Net Cotton, Silk"
                     value={editMaterial}
                     onChange={e => setEditMaterial(e.target.value)}
                   />
                 </div>
+              </div>
 
-                <div className="form-group" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
                   <label>Base Rate (₹)</label>
                   <input 
                     type="number" 
@@ -1713,11 +1716,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   />
                 </div>
 
-                <div className="form-group" style={{ flex: 1 }}>
+                <div className="form-group">
                   <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 New / Revised Rate (₹)</label>
                   <input 
                     type="number" 
-                    placeholder="e.g. 450 (or blank)"
+                    placeholder="e.g. 450 (or leave blank)"
                     value={editRevisedRate}
                     onChange={e => setEditRevisedRate(e.target.value)}
                     style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined }}
@@ -1725,8 +1728,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'center' }}>
+                <div className="form-group">
                   <label>Sets Count</label>
                   <input 
                     type="number" 
@@ -1736,12 +1739,13 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     required
                   />
                 </div>
-                <div className="form-group" style={{ flex: 1, justifyContent: 'center', marginBottom: 0 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '1.5rem', textTransform: 'none', fontWeight: 600 }}>
+                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600 }}>
                     <input 
                       type="checkbox"
                       checked={editIsAvailable}
                       onChange={e => setEditIsAvailable(e.target.checked)}
+                      style={{ width: '18px', height: '18px' }}
                     />
                     Available in Stock
                   </label>
@@ -1767,7 +1771,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
                 <button 
                   type="button" 

@@ -199,32 +199,25 @@ object SharingUtils {
                         val isRealImage = shareRealImages && item.real_images.isNotEmpty()
                         val hasRevisedRate = item.revised_rate != null && item.revised_rate > 0
                         
-                        if (isRealImage || hasRevisedRate) {
-                            val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (isRealImage) {
+                            // RAW real photos: send original uncompressed high-resolution file directly with zero loss
+                            FileOutputStream(file).use { out ->
+                                out.write(bytes)
+                            }
+                        } else if (hasRevisedRate) {
+                            // Catalog design images with revised rate: stamp crisp top-right rate badge at full resolution
+                            val decodeOptions = BitmapFactory.Options().apply {
+                                inPreferredConfig = Bitmap.Config.ARGB_8888
+                                inScaled = false
+                            }
+                            val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
                             if (rawBitmap != null) {
-                                var processedBitmap = rawBitmap
-                                
-                                if (isRealImage) {
-                                    val wmBitmap = addWatermarkToBitmap(processedBitmap)
-                                    if (processedBitmap != rawBitmap && processedBitmap != wmBitmap) {
-                                        processedBitmap.recycle()
-                                    }
-                                    processedBitmap = wmBitmap
-                                }
-
-                                if (hasRevisedRate) {
-                                    val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${item.revised_rate}")
-                                    if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
-                                        processedBitmap.recycle()
-                                    }
-                                    processedBitmap = rateBadgeBitmap
-                                }
-
+                                val rateBadgeBitmap = addTopRightRateBadge(rawBitmap, "₹${item.revised_rate}")
                                 FileOutputStream(file).use { out ->
-                                    processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                                    rateBadgeBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
                                 }
-                                if (processedBitmap != rawBitmap) {
-                                    processedBitmap.recycle()
+                                if (rateBadgeBitmap != rawBitmap) {
+                                    rateBadgeBitmap.recycle()
                                 }
                                 rawBitmap.recycle()
                             } else {
@@ -233,7 +226,7 @@ object SharingUtils {
                                 }
                             }
                         } else {
-                            // Standard catalog images with no revised rate saved pristine
+                            // Standard regular catalog images: write pristine original image bytes
                             FileOutputStream(file).use { out ->
                                 out.write(bytes)
                             }
