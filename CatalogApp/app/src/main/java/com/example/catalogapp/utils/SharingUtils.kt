@@ -228,25 +228,46 @@ object SharingUtils {
                         val isRealImage = shareRealImages && item.real_images.isNotEmpty()
                         val hasRevisedRate = item.revised_rate != null && item.revised_rate > 0
                         
-                        if (isRealImage) {
-                            // RAW real photos: send original uncompressed high-resolution file directly with zero loss
-                            FileOutputStream(file).use { out ->
-                                out.write(bytes)
-                            }
-                        } else if (hasRevisedRate) {
-                            // Catalog design images with revised rate: stamp crisp top-right rate badge at full resolution
+                        if (isRealImage || hasRevisedRate) {
+                            // Decode at full 100% unscaled resolution with ARGB_8888
                             val decodeOptions = BitmapFactory.Options().apply {
                                 inPreferredConfig = Bitmap.Config.ARGB_8888
                                 inScaled = false
+                                inDither = false
+                                inPremultiplied = true
                             }
                             val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
                             if (rawBitmap != null) {
-                                val rateBadgeBitmap = addTopRightRateBadge(rawBitmap, "₹${item.revised_rate}")
-                                FileOutputStream(file).use { out ->
-                                    rateBadgeBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                                var processedBitmap = rawBitmap
+
+                                // 1. Always apply VS FASHION (DESUKA) watermark on RAW images
+                                if (isRealImage) {
+                                    val wmBitmap = addWatermarkToBitmap(processedBitmap)
+                                    if (processedBitmap != rawBitmap && processedBitmap != wmBitmap) {
+                                        processedBitmap.recycle()
+                                    }
+                                    processedBitmap = wmBitmap
                                 }
-                                if (rateBadgeBitmap != rawBitmap) {
-                                    rateBadgeBitmap.recycle()
+
+                                // 2. Apply NEW OFFER PRICE top-right watermark badge if revised rate exists
+                                if (hasRevisedRate) {
+                                    val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${item.revised_rate}")
+                                    if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
+                                        processedBitmap.recycle()
+                                    }
+                                    processedBitmap = rateBadgeBitmap
+                                }
+
+                                // 3. Save at 100% maximum uncompressed quality
+                                FileOutputStream(file).use { out ->
+                                    if (suffix.equals(".png", ignoreCase = true)) {
+                                        processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                    } else {
+                                        processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                                    }
+                                }
+                                if (processedBitmap != rawBitmap) {
+                                    processedBitmap.recycle()
                                 }
                                 rawBitmap.recycle()
                             } else {
@@ -255,7 +276,7 @@ object SharingUtils {
                                 }
                             }
                         } else {
-                            // Standard regular catalog images: write pristine original image bytes
+                            // Standard regular catalog images (already watermarked on server)
                             FileOutputStream(file).use { out ->
                                 out.write(bytes)
                             }
