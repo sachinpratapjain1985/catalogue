@@ -83,7 +83,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [material, setMaterial] = useState('');
   const [work, setWork] = useState('');
   const [rate, setRate] = useState('');
-  const [revisedRate, setRevisedRate] = useState('');
   const [stockType, setStockType] = useState<'new' | 'old'>('new');
   const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -135,6 +134,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [filterCatId, setFilterCatId] = useState('');
   const [filterWork, setFilterWork] = useState('');
   const [filterAgeLimit, setFilterAgeLimit] = useState(false);
+  const [filterOffersOnly, setFilterOffersOnly] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterRateRange, setFilterRateRange] = useState('');
 
@@ -518,9 +518,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     formData.append('material', material.trim());
     formData.append('work', work.trim());
     formData.append('rate', rate.trim() || '0');
-    if (revisedRate.trim()) {
-      formData.append('revisedRate', revisedRate.trim());
-    }
     formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
 
@@ -551,7 +548,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setMaterial('');
         setWork('');
         setRate('');
-        setRevisedRate('');
         setStockType('new');
         setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
         setSelectedFile(null);
@@ -843,6 +839,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         matchesAge = ageInDays >= 60;
       }
 
+      let matchesOffers = true;
+      if (filterOffersOnly) {
+        matchesOffers = !!(item.revised_rate && item.revised_rate > 0);
+      }
+
       const matchesStatus = filterStatus === '' || 
         (filterStatus === 'A' && item.is_available && item.sets_count > 0) ||
         (filterStatus === 'OS' && item.is_available && item.sets_count === 0) ||
@@ -864,7 +865,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       const allowedCatIds = categories.map(c => c.id);
       const isPermittedCategory = allowedCatIds.includes(item.category_id);
 
-      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate;
+      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers;
     })
     .sort((a, b) => {
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
@@ -887,7 +888,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   // Reset page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCatId, filterAgeLimit, filterStatus, filterRateRange]);
+  }, [searchTerm, filterCatId, filterAgeLimit, filterOffersOnly, filterStatus, filterRateRange]);
 
   const itemsPerPage = 15;
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
@@ -898,6 +899,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0).length;
   const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0).length;
   const inactiveDesigns = items.filter(item => !item.is_available).length;
+  const revisedDesigns = items.filter(item => item.revised_rate && item.revised_rate > 0).length;
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -907,7 +909,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       </div>
 
       {/* Design Counts Summary Ribbon */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
         <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total SKU Designs</div>
@@ -935,6 +937,34 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           </div>
           <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-warning)' }}>
             <AlertCircle size={20} />
+          </div>
+        </div>
+
+        <div 
+          className="glass-card" 
+          onClick={() => setFilterOffersOnly(!filterOffersOnly)}
+          style={{ 
+            padding: '1rem', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            borderColor: filterOffersOnly ? '#f59e0b' : 'rgba(245, 158, 11, 0.25)',
+            background: filterOffersOnly ? 'rgba(245, 158, 11, 0.15)' : undefined,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          title="Click to view only Revised Offer Price designs"
+        >
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 700 }}>
+              🔥 Offers (Revised)
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.25rem' }}>
+              {revisedDesigns}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.35rem 0.55rem', borderRadius: 'var(--radius-sm)', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 800 }}>
+            {filterOffersOnly ? 'ACTIVE' : 'FILTER'}
           </div>
         </div>
 
@@ -1151,17 +1181,6 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   value={rate}
                   onChange={e => setRate(e.target.value)}
                   required
-                />
-              </div>
-
-              <div className="form-group" style={{ flex: 1 }}>
-                <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 New / Revised Rate (₹) (Optional)</label>
-                <input 
-                  type="number" 
-                  placeholder="e.g. 1250 (leave blank if normal)" 
-                  value={revisedRate}
-                  onChange={e => setRevisedRate(e.target.value)}
-                  style={{ borderColor: revisedRate ? '#fbbf24' : undefined }}
                 />
               </div>
             </div>
@@ -1385,6 +1404,25 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </select>
             </div>
 
+            {/* Filter Offers Only */}
+            <button 
+              type="button"
+              className={`btn ${filterOffersOnly ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterOffersOnly(!filterOffersOnly)}
+              style={{ 
+                padding: '0.6rem 1.2rem', 
+                fontSize: '0.85rem', 
+                whiteSpace: 'nowrap',
+                background: filterOffersOnly ? '#f59e0b' : undefined,
+                color: filterOffersOnly ? '#000' : '#fbbf24',
+                borderColor: '#f59e0b',
+                fontWeight: 700
+              }}
+              title="Filter to show only articles with New / Revised Offer Price"
+            >
+              🔥 Offers Only ({revisedDesigns})
+            </button>
+
             {/* Filter Age */}
             <button 
               type="button"
@@ -1557,10 +1595,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                         {item.revised_rate && item.revised_rate > 0 ? (
                           <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: '0.65rem', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
-                              🔥 REVISED
+                              🔥 NEW OFFER PRICE
                             </span>
-                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
-                              ₹{item.revised_rate}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
+                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f59e0b' }}>₹{item.revised_rate}</span>
                             </div>
                           </div>
                         ) : (

@@ -78,7 +78,8 @@ object SharingUtils {
     }
 
     /**
-     * Renders a crisp white rate watermark badge highlighted in the top right corner of the bitmap.
+     * Renders a crisp luxury rate watermark badge positioned safely below top-right brand logos.
+     * Features "NEW OFFER PRICE" in gold followed by the highlighted amount in crisp white.
      */
     fun addTopRightRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
         val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -86,62 +87,90 @@ object SharingUtils {
         val width = mutableBitmap.width.toFloat()
         val height = mutableBitmap.height.toFloat()
 
-        // Responsive font size based on image width
-        val fontSize = (width / 16f).coerceIn(36f, 100f)
-        val paddingHorizontal = fontSize * 0.55f
-        val paddingVertical = fontSize * 0.3f
-        val cornerRadius = fontSize * 0.35f
-        val margin = width * 0.04f // 4% margin from top and right edges
+        // 10% reduced font size for sleek elegance
+        val amountFontSize = (width / 18f).coerceIn(30f, 85f)
+        val labelFontSize = (amountFontSize * 0.38f).coerceIn(12f, 32f)
 
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val paddingHorizontal = amountFontSize * 0.55f
+        val paddingVertical = amountFontSize * 0.32f
+        val cornerRadius = amountFontSize * 0.32f
+
+        // Positioned 9% from top edge so VS FASHION brand watermark remains completely unobstructed
+        val marginTop = width * 0.09f
+        val marginRight = width * 0.04f
+
+        val labelText = "NEW OFFER PRICE"
+
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(251, 191, 36) // Luxury gold (#FBBF24)
+            textSize = labelFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.10f // Elegant luxury letter-spacing
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = fontSize
+            textSize = amountFontSize
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
         // Measure text dimensions
-        val textBounds = android.graphics.Rect()
-        textPaint.getTextBounds(rateText, 0, rateText.length, textBounds)
-        val textWidth = textPaint.measureText(rateText)
-        val textHeight = textBounds.height().toFloat()
+        val labelBounds = android.graphics.Rect()
+        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
+        val labelWidth = labelPaint.measureText(labelText)
+        val labelHeight = labelBounds.height().toFloat()
 
-        val badgeWidth = textWidth + (paddingHorizontal * 2f)
-        val badgeHeight = textHeight + (paddingVertical * 2f)
+        val amountBounds = android.graphics.Rect()
+        amountPaint.getTextBounds(rateText, 0, rateText.length, amountBounds)
+        val amountWidth = amountPaint.measureText(rateText)
+        val amountHeight = amountBounds.height().toFloat()
 
-        val right = width - margin
+        val lineSpacing = labelFontSize * 0.45f
+        val contentWidth = maxOf(labelWidth, amountWidth)
+        val badgeWidth = contentWidth + (paddingHorizontal * 2f)
+        val badgeHeight = labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)
+
+        val right = width - marginRight
         val left = right - badgeWidth
-        val top = margin
+        val top = marginTop
         val bottom = top + badgeHeight
 
         val badgeRect = android.graphics.RectF(left, top, right, bottom)
 
         // Draw soft outer shadow
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(90, 0, 0, 0)
+            color = Color.argb(100, 0, 0, 0)
             style = Paint.Style.FILL
         }
-        val shadowRect = android.graphics.RectF(left + 3f, top + 3f, right + 3f, bottom + 3f)
+        val shadowRect = android.graphics.RectF(left + 3f, top + 4f, right + 3f, bottom + 4f)
         canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
 
-        // Draw stylish dark translucent background pill for high contrast
+        // Draw stylish dark translucent background pill
         val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(210, 18, 20, 28)
+            color = Color.argb(225, 15, 17, 24)
             style = Paint.Style.FILL
         }
         canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
 
+        // Draw luxury gold highlight border
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(230, 245, 158, 11) // Highlight gold border
+            color = Color.argb(240, 245, 158, 11) // Gold border (#F59E0B)
             style = Paint.Style.STROKE
-            strokeWidth = (fontSize * 0.06f).coerceAtLeast(2.5f)
+            strokeWidth = (amountFontSize * 0.055f).coerceAtLeast(2.5f)
         }
         canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
 
-        // Draw bold crisp white text centered in the badge
-        val textX = badgeRect.centerX()
-        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
-        canvas.drawText(rateText, textX, textY, textPaint)
+        val centerX = badgeRect.centerX()
+
+        // Line 1: NEW OFFER PRICE (Gold with letter spacing)
+        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
+        canvas.drawText(labelText, centerX, labelY, labelPaint)
+
+        // Line 2: Amount (Bold White)
+        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
+        canvas.drawText(rateText, centerX, amountY, amountPaint)
 
         return mutableBitmap
     }
