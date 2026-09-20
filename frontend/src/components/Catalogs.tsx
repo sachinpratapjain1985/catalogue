@@ -39,6 +39,7 @@ interface SKUItem {
   material: string;
   work?: string;
   rate: number;
+  revised_rate?: number | null;
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
@@ -96,6 +97,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editMaterial, setEditMaterial] = useState('');
   const [editWork, setEditWork] = useState('');
   const [editRate, setEditRate] = useState('');
+  const [editRevisedRate, setEditRevisedRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
   const [editDescription, setEditDescription] = useState('');
@@ -582,6 +584,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           material: editMaterial,
           work: editWork,
           rate: editRate,
+          revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
           setsCount: editSetsCount,
           isAvailable: editIsAvailable,
           description: editDescription
@@ -1481,6 +1484,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                                 setEditMaterial(item.material || '');
                                 setEditWork(item.work || '');
                                 setEditRate(item.rate.toString());
+                                setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
                                 setEditSetsCount(item.sets_count);
                                 setEditIsAvailable(item.is_available);
                                 setEditDescription(item.description || '');
@@ -1534,9 +1538,20 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                           <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
                           <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Qty: <strong>{item.total_pieces}</strong></span>
                         </div>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                          ₹{item.rate || 0}
-                        </span>
+                        {item.revised_rate && item.revised_rate > 0 ? (
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.65rem', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
+                              🔥 REVISED
+                            </span>
+                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
+                              ₹{item.revised_rate}
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                            ₹{item.rate || 0}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1673,12 +1688,23 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
 
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label>Rate / Price (₹)</label>
+                  <label>Base Rate (₹)</label>
                   <input 
                     type="number" 
                     value={editRate}
                     onChange={e => setEditRate(e.target.value)}
                     required
+                  />
+                </div>
+
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 New / Revised Rate (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 450 (or blank)"
+                    value={editRevisedRate}
+                    onChange={e => setEditRevisedRate(e.target.value)}
+                    style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined }}
                   />
                 </div>
               </div>

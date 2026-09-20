@@ -3,9 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Declare Package Visibility for WhatsApp sharing -->
+    <!-- Declare Package Visibility for WhatsApp and WhatsApp Business sharing -->
     <queries>
         <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
     </queries>
 
     <application

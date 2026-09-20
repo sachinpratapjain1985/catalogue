@@ -788,7 +788,7 @@ router.delete('/works/:id', async (req: Request, res: Response): Promise<void> =
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
               u.username as updated_by_user,
@@ -1004,7 +1004,7 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
 router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 1;
-  const { skuId, categoryId, piecesPerSet, description, material, work, rate, setsCount, isAvailable, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, rate, revisedRate, setsCount, isAvailable, originalCreatedAt } = req.body;
 
   try {
     // 1. Get current item and stock state
@@ -1075,6 +1075,17 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       params.push(parseInt(rate));
       paramIndex++;
     }
+    if (revisedRate !== undefined) {
+      if (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) {
+        updateFields.push(`revised_rate = $${paramIndex}`);
+        params.push(null);
+        paramIndex++;
+      } else {
+        updateFields.push(`revised_rate = $${paramIndex}`);
+        params.push(parseInt(revisedRate));
+        paramIndex++;
+      }
+    }
     if (originalCreatedAt !== undefined) {
       updateFields.push(`original_created_at = $${paramIndex}`);
       params.push(new Date(originalCreatedAt));
@@ -1087,13 +1098,23 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       await query(queryStr, params);
     }
 
-    // 3. Log rate change if rate changed
+    // 3. Log rate change if rate or revised_rate changed
     if (rate !== undefined && parseInt(rate) !== item.rate) {
       await query(
         `INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)`,
         [itemId, userId, item.rate, parseInt(rate)]
       );
       console.log(`[Rate Log] Rate for item ${itemId} changed from ${item.rate} to ${rate} by user ${userId}`);
+    }
+    if (revisedRate !== undefined) {
+      const parsedRevised = (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) ? null : parseInt(revisedRate);
+      if (parsedRevised !== item.revised_rate) {
+        await query(
+          `INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)`,
+          [itemId, userId, item.revised_rate ?? item.rate, parsedRevised ?? item.rate]
+        );
+        console.log(`[Rate Log] Revised Rate for item ${itemId} changed from ${item.revised_rate} to ${parsedRevised} by user ${userId}`);
+      }
     }
 
     // 4. Update stock levels if provided
@@ -1140,7 +1161,7 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
 
     // Fetch updated row
     const updatedRes = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.rate, i.original_created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i

@@ -61,11 +61,23 @@ data class SKUItemDto(
     val total_pieces: Int,
     val is_available: Boolean,
     val rate: Int = 0,
+    val revised_rate: Int? = null,
     val original_created_at: String? = null,
     val age_in_days: Int? = null,
     val real_image_count: Int = 0,
-    val real_images: List<String> = emptyList()
+    val real_images: List<String> = emptyList(),
+    val category_name: String? = null
 ) {
+    // Helper to get effective price for display and sharing
+    fun getEffectiveRate(): Int {
+        return if (revised_rate != null && revised_rate > 0) revised_rate else rate
+    }
+
+    // Helper to check if item is currently on offer / revised price
+    fun isRevised(): Boolean {
+        return revised_rate != null && revised_rate > 0
+    }
+
     // Helper to get full Image URL
     fun getFullImageUrl(baseUrl: String): String {
         return if (image_path.startsWith("http")) {
@@ -104,7 +116,8 @@ data class SKUItemDto(
 data class StockUpdateRequest(
     val setsCount: Int?,
     val isAvailable: Boolean?,
-    val rate: Int? = null
+    val rate: Int? = null,
+    val revisedRate: Int? = null
 )
 
 data class StockUpdateResponse(
@@ -113,6 +126,7 @@ data class StockUpdateResponse(
     val total_pieces: Int,
     val is_available: Boolean,
     val rate: Int? = null,
+    val revised_rate: Int? = null,
     val updated_by: Int
 )
 
@@ -137,6 +151,16 @@ interface CatalogApiService {
         @Query("limit") limit: Int? = null,
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
+        @Query("work") work: String? = null,
+        @Query("minRate") minRate: Int? = null,
+        @Query("maxRate") maxRate: Int? = null
+    ): List<SKUItemDto>
+
+    @GET("api/catalog/revised-items")
+    suspend fun getRevisedItems(
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("search") search: String? = null,
         @Query("work") work: String? = null,
         @Query("minRate") minRate: Int? = null,
         @Query("maxRate") maxRate: Int? = null

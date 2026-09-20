@@ -640,6 +640,16 @@ fun StockItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                if (item.isRevised()) {
+                    Text(
+                        text = "🔥 Offer Rate: ₹${item.revised_rate}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD97706),
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                }
+
                 // Stock Age Badge
                 Text(
                     text = "$age days old",

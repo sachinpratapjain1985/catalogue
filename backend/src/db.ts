@@ -95,10 +95,15 @@ export const runMigrations = async () => {
     await pool.query("ALTER TABLE items ADD COLUMN IF NOT EXISTS work VARCHAR(100) NOT NULL DEFAULT ''");
     console.log('[Migration] items.work column verified.');
 
+    // 3e. Add revised_rate column to items table
+    await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS revised_rate INTEGER DEFAULT NULL');
+    console.log('[Migration] items.revised_rate column verified.');
+
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_work ON items(work)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_items_revised_rate ON items(revised_rate) WHERE revised_rate IS NOT NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_real_images_item ON item_real_images(item_id)');
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_uuid ON devices (user_id, device_uuid)');

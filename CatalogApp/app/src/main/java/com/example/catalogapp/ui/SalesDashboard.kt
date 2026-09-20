@@ -121,6 +121,8 @@ fun SalesDashboard(
         loadCategories()
     }
 
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Folders, 1 = Offers
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
     var selectedWork by remember { mutableStateOf<String?>(null) }
@@ -161,6 +163,41 @@ fun SalesDashboard(
         }
     }
 
+    val loadRevisedItems = { page: Int ->
+        if (page == 1) {
+            isLoading = true
+            items = emptyList()
+            selectedItems.clear()
+            currentPage = 1
+            hasMoreItems = true
+        }
+        coroutineScope.launch {
+            try {
+                val fetched = apiService.getRevisedItems(
+                    page = page,
+                    limit = 30,
+                    search = searchQuery.ifEmpty { null },
+                    work = selectedWork,
+                    minRate = selectedRateRange?.first,
+                    maxRate = selectedRateRange?.second
+                )
+                if (fetched.size < 30) {
+                    hasMoreItems = false
+                }
+                if (page == 1) {
+                    items = fetched
+                } else {
+                    items = items + fetched
+                }
+                currentPage = page
+            } catch (e: Exception) {
+                errorMsg = "Failed to fetch revised offer designs."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     var showShareChoiceModal by remember { mutableStateOf(false) }
     var imagesPerItem by remember { mutableIntStateOf(1) }
 
@@ -189,7 +226,11 @@ fun SalesDashboard(
             TopAppBar(
                 title = { 
                     Text(
-                        text = selectedCategory?.name ?: "Sales Catalogue",
+                        text = when {
+                            selectedCategory != null -> selectedCategory!!.name
+                            selectedTab == 1 -> "🔥 Special Offers"
+                            else -> "Sales Catalogue"
+                        },
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
@@ -202,6 +243,7 @@ fun SalesDashboard(
                             selectedItems.clear()
                             searchQuery = ""
                             selectedRateRange = null
+                            selectedWork = null
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -218,7 +260,13 @@ fun SalesDashboard(
                         }
                     }
                     IconButton(onClick = { 
-                        if (selectedCategory != null) loadItems(selectedCategory!!, 1) else loadCategories()
+                        if (selectedCategory != null) {
+                            loadItems(selectedCategory!!, 1)
+                        } else if (selectedTab == 1) {
+                            loadRevisedItems(1)
+                        } else {
+                            loadCategories()
+                        }
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -417,97 +465,184 @@ fun SalesDashboard(
                         .align(Alignment.Center)
                         .padding(16.dp)
                 )
-            } else if (selectedCategory == null) {
-                // Categories List Selection
-                if (categories.isEmpty()) {
-                    Text(
-                        text = "No folder categories available.",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+            } else if (selectedCategory == null && selectedTab == 0) {
+                // Main Dashboard View with TabRow + Categories List Selection
+                Column(modifier = Modifier.fillMaxSize()) {
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        contentColor = MaterialTheme.colorScheme.primary
                     ) {
-                        items(categories) { category ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { 
-                                        selectedCategory = category
-                                        loadItems(category, 1)
-                                    },
-                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                            ) {
-                                Row(
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = {
+                                selectedTab = 0
+                                searchQuery = ""
+                                selectedRateRange = null
+                                selectedWork = null
+                                loadCategories()
+                            },
+                            text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = {
+                                selectedTab = 1
+                                searchQuery = ""
+                                selectedRateRange = null
+                                selectedWork = null
+                                loadRevisedItems(1)
+                            },
+                            text = { 
+                                Text(
+                                    text = "🔥 Offers (Revised)", 
+                                    fontWeight = FontWeight.Bold, 
+                                    fontSize = 13.sp,
+                                    color = if (selectedTab == 1) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) 
+                            }
+                        )
+                    }
+
+                    if (categories.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No folder categories available.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(categories) { category ->
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(20.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clickable { 
+                                            selectedCategory = category
+                                            loadItems(category, 1)
+                                        },
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                                 ) {
-                                    Column {
-                                        Text(
-                                            text = category.name,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${category.active_count} active designs",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = category.name,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "${category.active_count} active designs",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.Share, 
+                                            contentDescription = null, 
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    Icon(
-                                        Icons.Default.Share, 
-                                        contentDescription = null, 
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
                                 }
                             }
-                        }
 
-                        item {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Powered by VS FASHION",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                                Text(
-                                    text = "Designed by VS FASHION",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Powered by VS FASHION",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "Designed by VS FASHION",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 }
             } else {
-                // SKU Showcase Grid Selection
+                // SKU Showcase Grid Selection (Category View OR Unified Offers View)
+                val isOffersTab = selectedCategory == null && selectedTab == 1
+
                 Column(modifier = Modifier.fillMaxSize()) {
+                    if (isOffersTab) {
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ) {
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = {
+                                    selectedTab = 0
+                                    searchQuery = ""
+                                    selectedRateRange = null
+                                    selectedWork = null
+                                    loadCategories()
+                                },
+                                text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                            )
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = {
+                                    selectedTab = 1
+                                    searchQuery = ""
+                                    selectedRateRange = null
+                                    selectedWork = null
+                                    loadRevisedItems(1)
+                                },
+                                text = { 
+                                    Text(
+                                        text = "🔥 Offers (Revised)", 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFD97706)
+                                    ) 
+                                }
+                            )
+                        }
+                    }
+
                     // Search Bar
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { 
                             searchQuery = it 
-                            loadItems(selectedCategory!!, 1)
+                            if (selectedCategory != null) {
+                                loadItems(selectedCategory!!, 1)
+                            } else {
+                                loadRevisedItems(1)
+                            }
                         },
-                        placeholder = { Text("Search SKU ID...") },
+                        placeholder = { Text(if (isOffersTab) "Search offers across all folders..." else "Search SKU ID...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { 
                                     searchQuery = "" 
-                                    loadItems(selectedCategory!!, 1)
+                                    if (selectedCategory != null) {
+                                        loadItems(selectedCategory!!, 1)
+                                    } else {
+                                        loadRevisedItems(1)
+                                    }
                                 }) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear")
                                 }
@@ -548,7 +683,11 @@ fun SalesDashboard(
                                 selected = isSelected,
                                 onClick = {
                                     selectedRateRange = if (isSelected) null else range
-                                    loadItems(selectedCategory!!, 1)
+                                    if (selectedCategory != null) {
+                                        loadItems(selectedCategory!!, 1)
+                                    } else {
+                                        loadRevisedItems(1)
+                                    }
                                 },
                                 label = {
                                     Text(
@@ -575,7 +714,11 @@ fun SalesDashboard(
                                     onClick = {
                                         if (selectedWork != null) {
                                             selectedWork = null
-                                            loadItems(selectedCategory!!, 1)
+                                            if (selectedCategory != null) {
+                                                loadItems(selectedCategory!!, 1)
+                                            } else {
+                                                loadRevisedItems(1)
+                                            }
                                         }
                                     },
                                     label = {
@@ -593,7 +736,11 @@ fun SalesDashboard(
                                     selected = isSelected,
                                     onClick = {
                                         selectedWork = if (isSelected) null else w.name
-                                        loadItems(selectedCategory!!, 1)
+                                        if (selectedCategory != null) {
+                                            loadItems(selectedCategory!!, 1)
+                                        } else {
+                                            loadRevisedItems(1)
+                                        }
                                     },
                                     label = {
                                         Text(
@@ -607,12 +754,12 @@ fun SalesDashboard(
                         }
                     }
 
-                    // Folder active count header
+                    // Active count header
                     Text(
-                        text = "Total Active: ${selectedCategory?.active_count ?: 0} articles",
+                        text = if (isOffersTab) "🔥 All Folders Offer Designs (${items.size} loaded)" else "Total Active: ${selectedCategory?.active_count ?: 0} articles",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (isOffersTab) Color(0xFFD97706) else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
 
@@ -631,13 +778,13 @@ fun SalesDashboard(
                                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = "Loading articles, please wait...",
+                                        text = "Loading designs, please wait...",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             } else {
                                 Text(
-                                    text = if (searchQuery.isNotEmpty()) "No SKUs match \"$searchQuery\"" else "No available items found in this section.",
+                                    text = if (searchQuery.isNotEmpty()) "No designs match \"$searchQuery\"" else if (isOffersTab) "No revised price / offer designs currently available." else "No available items found in this section.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(16.dp),
                                     textAlign = TextAlign.Center
@@ -679,7 +826,13 @@ fun SalesDashboard(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Button(
-                                            onClick = { loadItems(selectedCategory!!, currentPage + 1) },
+                                            onClick = { 
+                                                if (selectedCategory != null) {
+                                                    loadItems(selectedCategory!!, currentPage + 1) 
+                                                } else {
+                                                    loadRevisedItems(currentPage + 1)
+                                                }
+                                            },
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -850,13 +1003,33 @@ fun SalesItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "₹${item.rate}",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (item.isRevised()) {
+                    Column {
+                        Text(
+                            text = "🔥 OFFER",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFD97706)
+                        )
+                        Text(
+                            text = "₹${item.revised_rate}",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFD97706)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "₹${item.rate}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
                 val detailText = when {
+                    !item.category_name.isNullOrBlank() && !item.work.isNullOrBlank() -> "${item.category_name} • ${item.work}"
+                    !item.category_name.isNullOrBlank() -> item.category_name
                     !item.work.isNullOrBlank() && !item.material.isNullOrBlank() -> "${item.work} | ${item.material}"
                     !item.work.isNullOrBlank() -> item.work
                     !item.material.isNullOrBlank() -> item.material

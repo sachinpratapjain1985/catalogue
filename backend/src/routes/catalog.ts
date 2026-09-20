@@ -148,6 +148,119 @@ router.get('/works', async (req: AuthenticatedRequest, res: Response): Promise<v
   }
 });
 
+// GET /api/catalog/revised-items - Retrieve all revised rate (Offer) items across folders
+router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const role = req.user?.role;
+  const page = req.query.page ? parseInt(req.query.page as string) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : null;
+  const offset = page && limit ? (page - 1) * limit : null;
+  const search = req.query.search ? (req.query.search as string).trim() : null;
+  const work = req.query.work ? (req.query.work as string).trim() : null;
+  const minRate = req.query.minRate ? parseInt(req.query.minRate as string) : null;
+  const maxRate = req.query.maxRate ? parseInt(req.query.maxRate as string) : null;
+
+  try {
+    let categoryCondition = '';
+    const params: any[] = [];
+    let paramCount = 0;
+
+    if (role !== 'superadmin') {
+      paramCount++;
+      categoryCondition = `AND i.category_id IN (SELECT category_id FROM user_categories WHERE user_id = $${paramCount})`;
+      params.push(userId);
+    }
+
+    let queryStr = `
+       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
+              c.name as category_name,
+              (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
+              s.sets_count, s.total_pieces, s.is_available,
+              COALESCE(ri.real_count, 0) as real_image_count
+       FROM items i
+       JOIN categories c ON i.category_id = c.id
+       JOIN stock s ON s.item_id = i.id
+       LEFT JOIN (
+           SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
+           FROM item_real_images 
+           GROUP BY item_id
+       ) ri ON ri.item_id = i.id
+       WHERE i.revised_rate IS NOT NULL AND i.revised_rate > 0
+    `;
+
+    if (role === 'sales') {
+      queryStr += ` AND s.is_available = TRUE`;
+    }
+
+    queryStr += ` ${categoryCondition}`;
+
+    if (search) {
+      paramCount++;
+      queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount} OR i.work ILIKE $${paramCount} OR c.name ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+    if (work) {
+      paramCount++;
+      queryStr += ` AND i.work = $${paramCount}`;
+      params.push(work);
+    }
+    if (minRate !== null && !isNaN(minRate)) {
+      paramCount++;
+      queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+      params.push(minRate);
+    }
+    if (maxRate !== null && !isNaN(maxRate)) {
+      paramCount++;
+      queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+      params.push(maxRate);
+    }
+
+    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
+
+    if (limit !== null && offset !== null) {
+      paramCount++;
+      const limitParam = `$${paramCount}`;
+      paramCount++;
+      const offsetParam = `$${paramCount}`;
+      queryStr += ` LIMIT ${limitParam} OFFSET ${offsetParam}`;
+      params.push(limit, offset);
+    }
+
+    const itemsRes = await query(queryStr, params);
+
+    const canAccessRealImages = req.user?.role === 'superadmin' || req.user?.can_access_real_images !== false;
+    let finalItems = itemsRes.rows;
+
+    if (canAccessRealImages && finalItems.length > 0) {
+      const itemIds = finalItems.map(it => it.id);
+      const realImagesRes = await query(
+        `SELECT id, item_id, watermarked_path as image_path FROM item_real_images WHERE item_id = ANY($1) ORDER BY id ASC`,
+        [itemIds]
+      );
+      const realImagesMap: Record<number, string[]> = {};
+      realImagesRes.rows.forEach(r => {
+        if (!realImagesMap[r.item_id]) realImagesMap[r.item_id] = [];
+        realImagesMap[r.item_id].push(r.image_path);
+      });
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_images: realImagesMap[it.id] || []
+      }));
+    } else {
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_image_count: 0,
+        real_images: []
+      }));
+    }
+
+    res.json(finalItems);
+  } catch (error) {
+    console.error('Get revised catalog items error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
 // GET /api/catalog/categories/:id/items - Retrieve SKU designs under a category (with pagination and age calculation)
 router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const categoryId = parseInt(req.params.id);
@@ -184,7 +297,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     if (role === 'sales') {
       // Sales user only sees available stock items
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
@@ -209,12 +322,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;
-        queryStr += ` AND i.rate >= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
         params.push(minRate);
       }
       if (maxRate !== null && !isNaN(maxRate)) {
         paramCount++;
-        queryStr += ` AND i.rate <= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
       queryStr += ` ORDER BY (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
@@ -230,7 +343,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     } else {
       // Stockists and Admins see all items to maintain stock
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
@@ -264,12 +377,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;
-        queryStr += ` AND i.rate >= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
         params.push(minRate);
       }
       if (maxRate !== null && !isNaN(maxRate)) {
         paramCount++;
-        queryStr += ` AND i.rate <= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
       queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
@@ -323,7 +436,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   const userId = req.user?.id || 0;
   const role = req.user?.role;
   const baseRole = req.user?.baseRole;
-  const { setsCount, isAvailable, rate } = req.body;
+  const { setsCount, isAvailable, rate, revisedRate } = req.body;
 
   if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager') {
     res.status(403).json({ error: 'Only stockists, managers or admins can modify stock levels or rates' });
@@ -333,7 +446,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   try {
     // Get current item and stock state
     const currentRes = await query(
-      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, s.sets_count, s.total_pieces, s.is_available 
+      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, s.sets_count, s.total_pieces, s.is_available 
        FROM items i
        JOIN stock s ON s.item_id = i.id
        WHERE i.id = $1`,
@@ -387,6 +500,33 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       }
     }
 
+    // Handle optional revised rate update
+    let updatedRevisedRate = item.revised_rate;
+    if (revisedRate !== undefined) {
+      const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
+      const userRecord = userCheck.rows[0];
+      const canUserEditRates = userRecord && (userRecord.role === 'superadmin' || userRecord.role === 'manager' || !!userRecord.can_edit_rates);
+      
+      if (!canUserEditRates) {
+        res.status(403).json({ error: 'You are not authorized to update pricing rates.' });
+        return;
+      }
+
+      const parsedRevised = (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) ? null : parseInt(revisedRate);
+      if (parsedRevised !== item.revised_rate) {
+        await query(
+          'UPDATE items SET revised_rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [parsedRevised, itemId]
+        );
+        await query(
+          'INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)',
+          [itemId, userId, item.revised_rate ?? item.rate, parsedRevised ?? item.rate]
+        );
+        updatedRevisedRate = parsedRevised;
+        console.log(`[Rate Log] Revised Rate for item ${itemId} changed to ${parsedRevised} by user ${userId} via mobile/catalog route`);
+      }
+    }
+
     // Determine updates
     const targetSets = setsCount !== undefined ? parseInt(setsCount) : item.sets_count;
     const targetAvailable = isAvailable !== undefined ? !!isAvailable : item.is_available;
@@ -436,6 +576,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       total_pieces: targetPieces,
       is_available: targetAvailable,
       rate: updatedRate,
+      revised_rate: updatedRevisedRate,
       updated_by: userId,
     });
   } catch (error) {
