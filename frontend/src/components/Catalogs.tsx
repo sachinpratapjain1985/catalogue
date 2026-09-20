@@ -83,6 +83,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [material, setMaterial] = useState('');
   const [work, setWork] = useState('');
   const [rate, setRate] = useState('');
+  const [revisedRate, setRevisedRate] = useState('');
   const [stockType, setStockType] = useState<'new' | 'old'>('new');
   const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -517,6 +518,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     formData.append('material', material.trim());
     formData.append('work', work.trim());
     formData.append('rate', rate.trim() || '0');
+    if (revisedRate.trim()) {
+      formData.append('revisedRate', revisedRate.trim());
+    }
     formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
 
@@ -547,6 +551,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setMaterial('');
         setWork('');
         setRate('');
+        setRevisedRate('');
         setStockType('new');
         setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
         setSelectedFile(null);
@@ -1139,13 +1144,24 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label>Rate / Price of Article (₹)</label>
+                <label>Base Rate / Price (₹)</label>
                 <input 
                   type="number" 
                   placeholder="e.g. 1495" 
                   value={rate}
                   onChange={e => setRate(e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="form-group" style={{ flex: 1 }}>
+                <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 New / Revised Rate (₹) (Optional)</label>
+                <input 
+                  type="number" 
+                  placeholder="e.g. 1250 (leave blank if normal)" 
+                  value={revisedRate}
+                  onChange={e => setRevisedRate(e.target.value)}
+                  style={{ borderColor: revisedRate ? '#fbbf24' : undefined }}
                 />
               </div>
             </div>

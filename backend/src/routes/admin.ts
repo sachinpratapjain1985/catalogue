@@ -832,7 +832,7 @@ router.get('/items', async (req: Request, res: Response) => {
 
 // POST /api/admin/items - Upload new SKU
 router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'real_images', maxCount: 5 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { skuId, categoryId, piecesPerSet, description, material, work, rate, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, rate, revisedRate, originalCreatedAt } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
   const primaryFile = files?.['image']?.[0];
   const realFiles = files?.['real_images'] || [];
@@ -846,6 +846,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
   const finalDescription = description && description.trim() !== '' ? description.trim() : '';
   const finalWork = work && work.trim() !== '' ? work.trim() : '';
   const finalRate = parseInt(rate || '0');
+  const finalRevisedRate = revisedRate && !isNaN(parseInt(revisedRate)) && parseInt(revisedRate) > 0 ? parseInt(revisedRate) : null;
   let originalDate = new Date();
   if (originalCreatedAt) {
     originalDate = new Date(originalCreatedAt);
@@ -898,10 +899,10 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     // Insert Item
     const itemRes = await query(
-      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, work, rate, original_created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, work, rate, revised_rate, original_created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalWork, finalRate, originalDate]
+      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalWork, finalRate, finalRevisedRate, originalDate]
     );
 
     const newItem = itemRes.rows[0];
