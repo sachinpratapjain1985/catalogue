@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -807,6 +808,7 @@ fun SalesDashboard(
                                     item = item,
                                     isSelected = isSelected,
                                     sessionManager = sessionManager,
+                                    apiService = apiService,
                                     onSelectToggle = {
                                         if (isSelected) {
                                             selectedItems.removeAll { it.id == item.id }
@@ -880,10 +882,15 @@ fun SalesItemCard(
     item: SKUItemDto,
     isSelected: Boolean,
     sessionManager: SessionManager,
+    apiService: CatalogApiService,
     onSelectToggle: () -> Unit
 ) {
     var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
     var showZoomDialog by remember { mutableStateOf(false) }
+    var showEditRateDialog by remember { mutableStateOf(false) }
+    var currentRate by remember { mutableStateOf(item.rate) }
+    var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1003,28 +1010,46 @@ fun SalesItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (item.isRevised()) {
-                    Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable(enabled = sessionManager.canEditRates()) {
+                        showEditRateDialog = true
+                    }
+                ) {
+                    if (currentRevisedRate != null && currentRevisedRate!! > 0) {
+                        Column {
+                            Text(
+                                text = "🔥 OFFER",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706)
+                            )
+                            Text(
+                                text = "₹$currentRevisedRate",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706)
+                            )
+                        }
+                    } else {
                         Text(
-                            text = "🔥 OFFER",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFD97706)
-                        )
-                        Text(
-                            text = "₹${item.revised_rate}",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFD97706)
+                            text = "₹$currentRate",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
-                } else {
-                    Text(
-                        text = "₹${item.rate}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+
+                    if (sessionManager.canEditRates()) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Price",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(12.dp)
+                        )
+                    }
                 }
 
                 val detailText = when {
@@ -1057,6 +1082,107 @@ fun SalesItemCard(
             serverUrl = sessionManager.getServerUrl(),
             sessionManager = sessionManager,
             onDismiss = { showZoomDialog = false }
+        )
+    }
+
+    if (showEditRateDialog) {
+        var editBaseRate by remember { mutableStateOf(currentRate.toString()) }
+        var editRevisedRate by remember { mutableStateOf(currentRevisedRate?.toString() ?: "") }
+        var isSaving by remember { mutableStateOf(false) }
+        var saveError by remember { mutableStateOf<String?>(null) }
+        val scope = rememberCoroutineScope()
+
+        AlertDialog(
+            onDismissRequest = { if (!isSaving) showEditRateDialog = false },
+            title = {
+                Text(
+                    text = "Edit Pricing: ${item.sku_id}",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editBaseRate,
+                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editBaseRate = it },
+                        label = { Text("Base Rate (₹)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editRevisedRate,
+                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editRevisedRate = it },
+                        label = { Text("🔥 Offer / Revised Rate (₹)") },
+                        placeholder = { Text("Leave blank to remove offer") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (saveError != null) {
+                        Text(
+                            text = saveError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSaving = true
+                        saveError = null
+                        scope.launch {
+                            try {
+                                val baseVal = editBaseRate.toIntOrNull() ?: currentRate
+                                val revVal = if (editRevisedRate.isBlank()) null else editRevisedRate.toIntOrNull()
+                                val response = apiService.updateStock(
+                                    item.id,
+                                    StockUpdateRequest(
+                                        setsCount = null,
+                                        isAvailable = null,
+                                        rate = baseVal,
+                                        revisedRate = revVal
+                                    )
+                                )
+                                currentRate = response.rate ?: baseVal
+                                currentRevisedRate = response.revised_rate
+                                showEditRateDialog = false
+                            } catch (e: Exception) {
+                                saveError = e.message ?: "Failed to update pricing"
+                            } finally {
+                                isSaving = false
+                            }
+                        }
+                    },
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Save Rates")
+                    }
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showEditRateDialog = false },
+                    enabled = !isSaving
+                ) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

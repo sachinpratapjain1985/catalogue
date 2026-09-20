@@ -544,6 +544,8 @@ fun StockItemCard(
     var sets by remember { mutableStateOf(item.sets_count) }
     var isAvailable by remember { mutableStateOf(item.is_available) }
     var rateText by remember { mutableStateOf(item.rate.toString()) }
+    var revisedRateText by remember { mutableStateOf(item.revised_rate?.toString() ?: "") }
+    var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
     var isUpdating by remember { mutableStateOf(false) }
     var isSuccess by remember { mutableStateOf(false) }
     var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
@@ -623,7 +625,7 @@ fun StockItemCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // SKU Details and stock selectors
             Column(
@@ -632,7 +634,7 @@ fun StockItemCard(
                 Text(
                     text = item.sku_id,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp
                 )
                 Text(
                     text = "Pack: ${item.pieces_per_set} pcs/set" + if (!item.work.isNullOrBlank()) " | ✨ ${item.work}" else "",
@@ -640,9 +642,9 @@ fun StockItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (item.isRevised()) {
+                if (currentRevisedRate != null && currentRevisedRate!! > 0) {
                     Text(
-                        text = "🔥 Offer Rate: ₹${item.revised_rate}",
+                        text = "🔥 Offer Rate: ₹$currentRevisedRate",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFD97706),
@@ -664,11 +666,11 @@ fun StockItemCard(
                 // Sets counter increment / decrement
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
                         onClick = { if (sets > 0) sets-- },
-                        modifier = Modifier.size(30.dp),
+                        modifier = Modifier.size(28.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -676,13 +678,13 @@ fun StockItemCard(
 
                     Text(
                         text = "$sets sets",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
                     IconButton(
                         onClick = { sets++ },
-                        modifier = Modifier.size(30.dp),
+                        modifier = Modifier.size(28.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(14.dp))
@@ -691,7 +693,7 @@ fun StockItemCard(
                 
                 Text(
                     text = "Total pieces: $totalQty",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 2.dp)
@@ -700,13 +702,13 @@ fun StockItemCard(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Right actions column (Rate Input, Switch Availability, Update button)
+            // Right actions column (Rate Input, Revised Rate Input, Switch Availability, Update button)
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.width(100.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.width(110.dp)
             ) {
-                // Inline Rate Field (Pricing adjustments)
+                // Inline Base Rate Field
                 OutlinedTextField(
                     value = rateText,
                     onValueChange = { newValue ->
@@ -714,14 +716,37 @@ fun StockItemCard(
                             rateText = newValue
                         }
                     },
-                    label = { Text("Rate (₹)", fontSize = 9.sp) },
+                    label = { Text("Base (₹)", fontSize = 8.sp) },
                     enabled = sessionManager.canEditRates(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        .height(48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold),
                     singleLine = true,
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(6.dp)
+                )
+
+                // Inline Revised / Offer Rate Field
+                OutlinedTextField(
+                    value = revisedRateText,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                            revisedRateText = newValue
+                        }
+                    },
+                    label = { Text("🔥 Offer (₹)", fontSize = 8.sp, color = Color(0xFFD97706)) },
+                    placeholder = { Text("None", fontSize = 8.sp) },
+                    enabled = sessionManager.canEditRates(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 11.sp, 
+                        fontWeight = FontWeight.Bold,
+                        color = if (revisedRateText.isNotEmpty()) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
+                    ),
+                    singleLine = true,
+                    shape = RoundedCornerShape(6.dp)
                 )
 
                 // Availability Toggle
@@ -730,9 +755,9 @@ fun StockItemCard(
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     val statusLabel = when {
-                        !isAvailable -> "Inactive (NA)"
-                        sets > 0 -> "Active (A)"
-                        else -> "Active (OS)"
+                        !isAvailable -> "Inactive"
+                        sets > 0 -> "Active"
+                        else -> "Out Stock"
                     }
                     val statusColor = when {
                         !isAvailable -> MaterialTheme.colorScheme.error
@@ -741,14 +766,14 @@ fun StockItemCard(
                     }
                     Text(
                         text = statusLabel,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         color = statusColor
                     )
                     Switch(
                         checked = isAvailable,
                         onCheckedChange = { isAvailable = it },
-                        modifier = Modifier.scale(0.65f)
+                        modifier = Modifier.scale(0.6f)
                     )
                 }
 
@@ -760,10 +785,17 @@ fun StockItemCard(
                         scope.launch {
                             try {
                                 val rateVal = rateText.toIntOrNull() ?: item.rate
-                                apiService.updateStock(
+                                val revisedVal = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
+                                val response = apiService.updateStock(
                                     item.id,
-                                    StockUpdateRequest(setsCount = sets, isAvailable = isAvailable, rate = rateVal)
+                                    StockUpdateRequest(
+                                        setsCount = sets, 
+                                        isAvailable = isAvailable, 
+                                        rate = rateVal,
+                                        revisedRate = revisedVal
+                                    )
                                 )
+                                currentRevisedRate = response.revised_rate
                                 isSuccess = true
                             } catch (e: Exception) {
                                 // silent catch or failure state
@@ -775,7 +807,7 @@ fun StockItemCard(
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(30.dp),
+                        .height(28.dp),
                     enabled = !isUpdating,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
