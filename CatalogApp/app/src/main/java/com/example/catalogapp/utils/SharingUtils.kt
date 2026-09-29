@@ -176,19 +176,51 @@ object SharingUtils {
     }
 
     /**
-     * Renders a small, sleek SKU-ID reference badge in the top-left corner for RAW images.
+     * Calculates the coded internal price number:
+     * - Takes first 2 digits of the price
+     * - Adds range-based offset:
+     *   - Below 2095: +2 (e.g. 1495 -> 14 + 2 = 16)
+     *   - 2095 to 3095: +3 (e.g. 2495 -> 24 + 3 = 27)
+     *   - 3095 to 4095: +4 (e.g. 4095 -> 40 + 4 = 44)
+     *   - Above 4095: +5
      */
-    fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String): Bitmap {
+    fun encodePriceCode(price: Int): String {
+        if (price <= 0) return ""
+        val priceStr = price.toString()
+        val firstTwoDigits = if (priceStr.length >= 2) {
+            priceStr.substring(0, 2).toIntOrNull() ?: 0
+        } else {
+            priceStr.toIntOrNull() ?: 0
+        }
+
+        val offset = when {
+            price <= 2095 -> 2
+            price <= 3095 -> 3
+            price <= 4095 -> 4
+            price <= 5095 -> 5
+            else -> 2 + ((price - 1000) / 1000).coerceAtLeast(0)
+        }
+
+        val coded = firstTwoDigits + offset
+        return coded.toString()
+    }
+
+    /**
+     * Renders a small, sleek SKU-ID and coded price reference badge in the top-left corner for RAW images.
+     */
+    fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String, priceCode: String = ""): Bitmap {
         val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(mutableBitmap)
         val width = mutableBitmap.width.toFloat()
         val height = mutableBitmap.height.toFloat()
 
-        // Small, sleek font size for clean reference
-        val fontSize = (width / 26f).coerceIn(20f, 48f)
-        val paddingHorizontal = fontSize * 0.5f
-        val paddingVertical = fontSize * 0.28f
-        val cornerRadius = fontSize * 0.3f
+        val displayText = if (priceCode.isNotBlank()) "$skuId - $priceCode" else skuId
+
+        // Small, sleek font size for discreet reference (not overly highlighted)
+        val fontSize = (width / 28f).coerceIn(18f, 44f)
+        val paddingHorizontal = fontSize * 0.45f
+        val paddingVertical = fontSize * 0.25f
+        val cornerRadius = fontSize * 0.28f
 
         val marginLeft = width * 0.035f
         val marginTop = width * 0.035f
@@ -198,12 +230,12 @@ object SharingUtils {
             textSize = fontSize
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
-            letterSpacing = 0.04f
+            letterSpacing = 0.03f
         }
 
         val textBounds = android.graphics.Rect()
-        textPaint.getTextBounds(skuId, 0, skuId.length, textBounds)
-        val textWidth = textPaint.measureText(skuId)
+        textPaint.getTextBounds(displayText, 0, displayText.length, textBounds)
+        val textWidth = textPaint.measureText(displayText)
         val textHeight = textBounds.height().toFloat()
 
         val badgeWidth = textWidth + (paddingHorizontal * 2f)
@@ -218,31 +250,31 @@ object SharingUtils {
 
         // Soft outer shadow
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(90, 0, 0, 0)
+            color = Color.argb(80, 0, 0, 0)
             style = Paint.Style.FILL
         }
         val shadowRect = android.graphics.RectF(left + 2f, top + 2f, right + 2f, bottom + 2f)
         canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
 
-        // Dark translucent background pill
+        // Subtle dark translucent background pill (low profile, not overly highlighted)
         val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(200, 18, 20, 28)
+            color = Color.argb(180, 15, 17, 24)
             style = Paint.Style.FILL
         }
         canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
 
         // Subtle clean border
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(160, 255, 255, 255)
+            color = Color.argb(120, 255, 255, 255)
             style = Paint.Style.STROKE
-            strokeWidth = (fontSize * 0.05f).coerceAtLeast(1.5f)
+            strokeWidth = (fontSize * 0.04f).coerceAtLeast(1.2f)
         }
         canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
 
-        // Draw SKU-ID text
+        // Draw SKU-ID and coded price text
         val textX = badgeRect.centerX()
         val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
-        canvas.drawText(skuId, textX, textY, textPaint)
+        canvas.drawText(displayText, textX, textY, textPaint)
 
         return mutableBitmap
     }
@@ -319,8 +351,10 @@ object SharingUtils {
                                     }
                                     processedBitmap = wmBitmap
 
-                                    // 2. Add SKU-ID in Left corner in small size for RAW images
-                                    val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, item.sku_id)
+                                    // 2. Add SKU-ID and coded price in Left corner in small size for RAW images
+                                    val activeRate = (if (item.revised_rate != null && item.revised_rate > 0) item.revised_rate else item.rate) ?: 0
+                                    val priceCode = encodePriceCode(activeRate)
+                                    val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, item.sku_id, priceCode)
                                     if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
                                         processedBitmap.recycle()
                                     }
