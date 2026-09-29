@@ -176,6 +176,78 @@ object SharingUtils {
     }
 
     /**
+     * Renders a small, sleek SKU-ID reference badge in the top-left corner for RAW images.
+     */
+    fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // Small, sleek font size for clean reference
+        val fontSize = (width / 26f).coerceIn(20f, 48f)
+        val paddingHorizontal = fontSize * 0.5f
+        val paddingVertical = fontSize * 0.28f
+        val cornerRadius = fontSize * 0.3f
+
+        val marginLeft = width * 0.035f
+        val marginTop = width * 0.035f
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.04f
+        }
+
+        val textBounds = android.graphics.Rect()
+        textPaint.getTextBounds(skuId, 0, skuId.length, textBounds)
+        val textWidth = textPaint.measureText(skuId)
+        val textHeight = textBounds.height().toFloat()
+
+        val badgeWidth = textWidth + (paddingHorizontal * 2f)
+        val badgeHeight = textHeight + (paddingVertical * 2f)
+
+        val left = marginLeft
+        val right = left + badgeWidth
+        val top = marginTop
+        val bottom = top + badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Soft outer shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(90, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val shadowRect = android.graphics.RectF(left + 2f, top + 2f, right + 2f, bottom + 2f)
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        // Dark translucent background pill
+        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(200, 18, 20, 28)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
+
+        // Subtle clean border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(160, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = (fontSize * 0.05f).coerceAtLeast(1.5f)
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
+
+        // Draw SKU-ID text
+        val textX = badgeRect.centerX()
+        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
+        canvas.drawText(skuId, textX, textY, textPaint)
+
+        return mutableBitmap
+    }
+
+    /**
      * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp.
      */
     suspend fun downloadAndShareImages(
@@ -233,7 +305,6 @@ object SharingUtils {
                             val decodeOptions = BitmapFactory.Options().apply {
                                 inPreferredConfig = Bitmap.Config.ARGB_8888
                                 inScaled = false
-                                inDither = false
                                 inPremultiplied = true
                             }
                             val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
@@ -247,9 +318,16 @@ object SharingUtils {
                                         processedBitmap.recycle()
                                     }
                                     processedBitmap = wmBitmap
+
+                                    // 2. Add SKU-ID in Left corner in small size for RAW images
+                                    val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, item.sku_id)
+                                    if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
+                                        processedBitmap.recycle()
+                                    }
+                                    processedBitmap = skuBadgeBitmap
                                 }
 
-                                // 2. Apply NEW OFFER PRICE top-right watermark badge if revised rate exists
+                                // 3. Apply NEW OFFER PRICE top-right watermark badge if revised rate exists
                                 if (hasRevisedRate) {
                                     val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${item.revised_rate}")
                                     if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
@@ -258,7 +336,7 @@ object SharingUtils {
                                     processedBitmap = rateBadgeBitmap
                                 }
 
-                                // 3. Save at 100% maximum uncompressed quality
+                                // 4. Save at 100% maximum uncompressed quality
                                 FileOutputStream(file).use { out ->
                                     if (suffix.equals(".png", ignoreCase = true)) {
                                         processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
