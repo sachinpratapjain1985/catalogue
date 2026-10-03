@@ -1364,6 +1364,7 @@ router.delete('/items/real-images/:imageId', async (req: Request, res: Response)
     if (fs.existsSync(rawDiskPath)) fs.unlinkSync(rawDiskPath);
     if (fs.existsSync(wmDiskPath)) fs.unlinkSync(wmDiskPath);
 
+    await query('DELETE FROM item_visual_features WHERE item_id = $1 AND image_path = $2', [img.item_id, img.watermarked_path]);
     await query('DELETE FROM item_real_images WHERE id = $1', [imageId]);
     res.json({ success: true, id: imageId });
   } catch (error) {
