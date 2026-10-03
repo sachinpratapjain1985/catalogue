@@ -64,7 +64,9 @@ fun SalesDashboard(
     sessionManager: SessionManager,
     onLogout: () -> Unit,
     onSwitchMode: () -> Unit,
-    onBackToSelection: () -> Unit
+    onBackToSelection: () -> Unit,
+    initialMatchedItem: SKUItemDto? = null,
+    onConsumedMatchedItem: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -169,6 +171,53 @@ fun SalesDashboard(
             } finally {
                 isLoading = false
             }
+        }
+    }
+
+    val openMatchedItemInCatalog: (SKUItemDto) -> Unit = { matchedItem ->
+        val targetCat = categories.find { it.id == matchedItem.category_id }
+            ?: CategoryDto(
+                id = matchedItem.category_id,
+                name = matchedItem.category_name ?: "Matched Folder",
+                sku_count = 1,
+                active_count = 1
+            )
+        selectedTab = 0
+        selectedCategory = targetCat
+        searchQuery = matchedItem.sku_id
+        selectedRateRange = null
+        selectedWork = null
+        isLoading = true
+        items = listOf(matchedItem)
+        selectedItems.clear()
+        selectedItems.add(matchedItem)
+        currentPage = 1
+        hasMoreItems = false
+        coroutineScope.launch {
+            try {
+                val fetched = apiService.getCategoryItems(
+                    categoryId = targetCat.id,
+                    page = 1,
+                    limit = 30,
+                    search = matchedItem.sku_id
+                )
+                if (fetched.isNotEmpty()) {
+                    items = fetched
+                    selectedItems.clear()
+                    selectedItems.add(fetched.first())
+                }
+            } catch (e: Exception) {
+                // Keep matchedItem displayed even if folder fetch fails
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(initialMatchedItem) {
+        if (initialMatchedItem != null) {
+            openMatchedItemInCatalog(initialMatchedItem)
+            onConsumedMatchedItem()
         }
     }
 
@@ -1043,10 +1092,8 @@ fun SalesDashboard(
                     onDismiss = { showVisualSearchDialog = false },
                     onSelectSKU = { matchedItem ->
                         showVisualSearchDialog = false
-                        if (!selectedItems.any { it.id == matchedItem.id }) {
-                            selectedItems.add(matchedItem)
-                        }
-                        Toast.makeText(context, "Matched: ${matchedItem.sku_id} (Added to selection)", Toast.LENGTH_SHORT).show()
+                        openMatchedItemInCatalog(matchedItem)
+                        Toast.makeText(context, "Opened ${matchedItem.sku_id} in Catalog", Toast.LENGTH_SHORT).show()
                     }
                 )
             }

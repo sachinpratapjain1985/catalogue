@@ -16,6 +16,7 @@ fun MainNavigation() {
     var token by remember { mutableStateOf(sessionManager.getToken()) }
     var role by remember { mutableStateOf(sessionManager.getUserRole()) }
     var activeRole by remember { mutableStateOf(sessionManager.getActiveRole()) }
+    var pendingMatchedItem by remember { mutableStateOf<com.example.catalogapp.data.SKUItemDto?>(null) }
 
     if (token == null) {
         LoginScreen(
@@ -40,6 +41,9 @@ fun MainNavigation() {
                     token = null
                     role = null
                     activeRole = null
+                },
+                onMatchedItemSelected = { matched ->
+                    pendingMatchedItem = matched
                 }
             )
         } else {
@@ -66,6 +70,10 @@ fun MainNavigation() {
                         onBackToSelection = {
                             sessionManager.saveActiveRole(null)
                             activeRole = null
+                        },
+                        initialMatchedItem = pendingMatchedItem,
+                        onConsumedMatchedItem = {
+                            pendingMatchedItem = null
                         }
                     )
                 }

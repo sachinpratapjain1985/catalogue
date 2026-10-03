@@ -698,16 +698,19 @@ fun StockistDashboard(
                     onSelectSKU = { matchedItem ->
                         showVisualSearchDialog = false
                         searchQuery = matchedItem.sku_id
-                        if (selectedCategory != null) {
-                            loadItems(selectedCategory!!, 1)
-                        } else {
-                            // Find and select the item's category if available
-                            val matchedCat = categories.find { it.id == matchedItem.category_id }
-                            if (matchedCat != null) {
-                                selectedCategory = matchedCat
-                                loadItems(matchedCat, 1)
-                            }
-                        }
+                        statusFilter = ""
+                        selectedRateRange = null
+                        selectedWork = null
+                        val matchedCat = categories.find { it.id == matchedItem.category_id }
+                            ?: CategoryDto(
+                                id = matchedItem.category_id,
+                                name = matchedItem.category_name ?: "Matched Catalog",
+                                sku_count = 1
+                            )
+                        selectedCategory = matchedCat
+                        items = listOf(matchedItem)
+                        hasMoreItems = false
+                        loadItems(matchedCat, 1)
                         Toast.makeText(context, "Matched: ${matchedItem.sku_id}", Toast.LENGTH_SHORT).show()
                     }
                 )

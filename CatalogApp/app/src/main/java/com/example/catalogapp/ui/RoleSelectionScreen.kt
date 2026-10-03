@@ -30,7 +30,8 @@ import android.widget.Toast
 fun RoleSelectionScreen(
     sessionManager: SessionManager,
     onRoleSelected: (String) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onMatchedItemSelected: ((com.example.catalogapp.data.SKUItemDto) -> Unit)? = null
 ) {
     val context = LocalContext.current
     // State to hold fetched stats
@@ -407,6 +408,7 @@ fun RoleSelectionScreen(
                 onSelectSKU = { matchedItem ->
                     showVisualSearchDialog = false
                     Toast.makeText(context, "Matched: ${matchedItem.sku_id} (Rate: ₹${matchedItem.getEffectiveRate()})", Toast.LENGTH_LONG).show()
+                    onMatchedItemSelected?.invoke(matchedItem)
                     // Open sales mode to inspect this item
                     onRoleSelected("sales")
                 }
