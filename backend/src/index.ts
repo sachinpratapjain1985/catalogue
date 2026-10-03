@@ -167,10 +167,10 @@ server.listen(PORT, async () => {
   // Run admin seed in background on startup
   seedAdmin();
 
-  // Run background visual index upgrade for color-agnostic HOG/LBP matching
+  // Run background visual index upgrade for Gemini v2 color-agnostic matching
   setTimeout(() => {
     import('./services/visualSearch').then(vs => {
-      vs.syncAllCatalogVisualFeatures(true).catch(err => {
+      vs.syncAllCatalogVisualFeatures(false).catch(err => {
         console.warn('[Visual Index] Startup sync notice:', err);
       });
     });

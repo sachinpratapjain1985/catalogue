@@ -37,6 +37,7 @@ services:
       - UPLOAD_DIR=/app/uploads
       - SSL_CERT_PATH=/etc/letsencrypt/live/lms.desukafashion.com/fullchain.pem
       - SSL_KEY_PATH=/etc/letsencrypt/live/lms.desukafashion.com/privkey.pem
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - TZ=Asia/Kolkata
     volumes:
       - uploads-data:/app/uploads

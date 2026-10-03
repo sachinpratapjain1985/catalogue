@@ -88,10 +88,31 @@ fun VisualSearchDialog(
         coroutineScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) {
-                    val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
                     val targetFile = File(context.cacheDir, "query_upload.jpg")
-                    FileOutputStream(targetFile).use { output ->
-                        inputStream?.copyTo(output)
+                    val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (rawBytes != null) {
+                        val decoded = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+                        if (decoded != null) {
+                            val maxDim = 1024
+                            val w = decoded.width
+                            val h = decoded.height
+                            val scaled = if (w > maxDim || h > maxDim) {
+                                val ratio = minOf(maxDim.toFloat() / w, maxDim.toFloat() / h)
+                                android.graphics.Bitmap.createScaledBitmap(
+                                    decoded,
+                                    (w * ratio).toInt().coerceAtLeast(1),
+                                    (h * ratio).toInt().coerceAtLeast(1),
+                                    true
+                                )
+                            } else {
+                                decoded
+                            }
+                            FileOutputStream(targetFile).use { out ->
+                                scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, out)
+                            }
+                        } else {
+                            FileOutputStream(targetFile).use { it.write(rawBytes) }
+                        }
                     }
                     targetFile
                 }
@@ -99,11 +120,11 @@ fun VisualSearchDialog(
                 val reqFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
                 val bodyPart = MultipartBody.Part.createFormData("image", file.name, reqFile)
 
-                val response = apiService.searchCatalogByImage(bodyPart, minConfidence = 25f, limit = 20)
+                val response = apiService.searchCatalogByImage(bodyPart, minConfidence = 45f, limit = 15)
                 searchResults = response.matches
 
                 if (searchResults.isEmpty()) {
-                    searchError = "No matching design found with high similarity. Try taking a photo with better lighting or from a flat angle."
+                    searchError = "No matching design found with high similarity. Try taking a clear photo of the front neck embroidery or bottom border."
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

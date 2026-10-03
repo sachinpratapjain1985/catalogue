@@ -203,10 +203,13 @@ object NetworkClient {
     fun getApiService(sessionManager: SessionManager): CatalogApiService {
         if (retrofitInstance == null) {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = HttpLoggingInterceptor.Level.BASIC
             }
 
             val okHttpClient = OkHttpClient.Builder()
+                .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
                 .addInterceptor(loggingInterceptor)
                 .addInterceptor { chain ->
                     val original = chain.request()
