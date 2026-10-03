@@ -285,11 +285,20 @@ export async function searchCatalogByImage(
 
   const params: any[] = [];
   let paramCount = 0;
+  const whereClauses: string[] = [];
 
   if (role !== 'superadmin' && userId) {
     paramCount++;
-    queryStr += ` WHERE i.category_id IN (SELECT category_id FROM user_categories WHERE user_id = $${paramCount})`;
+    whereClauses.push(`i.category_id IN (SELECT category_id FROM user_categories WHERE user_id = $${paramCount})`);
     params.push(userId);
+  }
+
+  if (role === 'sales') {
+    whereClauses.push(`s.is_available = TRUE`);
+  }
+
+  if (whereClauses.length > 0) {
+    queryStr += ` WHERE ` + whereClauses.join(' AND ');
   }
 
   const featuresRes = await query(queryStr, params);
