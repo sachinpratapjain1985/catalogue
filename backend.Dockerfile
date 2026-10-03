@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build the Express Backend
-FROM node:20-alpine AS backend-builder
+FROM node:20-bookworm-slim AS backend-builder
 WORKDIR /backend
 COPY backend/package*.json ./
 RUN npm ci
@@ -15,7 +15,7 @@ COPY backend/ ./
 RUN npm run build
 
 # Stage 3: Runner
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --only=production
