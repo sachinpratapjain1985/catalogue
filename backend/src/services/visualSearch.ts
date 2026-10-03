@@ -103,6 +103,25 @@ function l2Normalize(arr: number[]): number[] {
 }
 
 /**
+ * Resolves database image paths (both `/uploads/xyz.jpg` and `/uploads/real/real_xyz.jpg`)
+ * to their actual physical file path on disk.
+ */
+function resolveUploadFilePath(uploadDir: string, dbImagePath: string): string {
+  const cleanRel = dbImagePath.replace(/^\/?uploads\/?/, '');
+  const candidate1 = path.join(uploadDir, cleanRel);
+  if (fs.existsSync(candidate1)) return candidate1;
+
+  const base = path.basename(dbImagePath);
+  const candidate2 = path.join(uploadDir, base);
+  if (fs.existsSync(candidate2)) return candidate2;
+
+  const candidate3 = path.join(uploadDir, 'real', base);
+  if (fs.existsSync(candidate3)) return candidate3;
+
+  return candidate1;
+}
+
+/**
  * Extracts Color-Agnostic Structural Signature (HOG + LBP + Edge Projections + dHash) for one crop region
  */
 async function extractZoneSignature(regionSharp: sharp.Sharp): Promise<ZoneSignature> {
@@ -487,8 +506,7 @@ Return strictly valid JSON:
 
   for (let i = 0; i < candidates.length; i++) {
     const cand = candidates[i];
-    const filename = path.basename(cand.matchedImagePath);
-    const fullPath = path.join(uploadDir, filename);
+    const fullPath = resolveUploadFilePath(uploadDir, cand.matchedImagePath);
     if (!fs.existsSync(fullPath)) continue;
 
     try {
@@ -815,8 +833,7 @@ export async function indexItemImage(
   imageType: 'primary' | 'real' = 'primary'
 ): Promise<void> {
   const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
-  const filename = path.basename(imagePath);
-  const fullPath = path.join(uploadDir, filename);
+  const fullPath = resolveUploadFilePath(uploadDir, imagePath);
 
   if (!fs.existsSync(fullPath)) {
     console.warn(`[Visual Index] Cannot index image, file not found: ${fullPath}`);
@@ -884,8 +901,7 @@ export async function syncAllCatalogVisualFeatures(
 
     for (let i = 0; i < queue.length; i++) {
       const entry = queue[i];
-      const filename = path.basename(entry.image_path);
-      const fullPath = path.join(uploadDir, filename);
+      const fullPath = resolveUploadFilePath(uploadDir, entry.image_path);
 
       if (!fs.existsSync(fullPath)) {
         skipped++;
