@@ -99,6 +99,21 @@ export const runMigrations = async () => {
     await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS revised_rate INTEGER DEFAULT NULL');
     console.log('[Migration] items.revised_rate column verified.');
 
+    // 3f. Create item_image_features table for visual reverse image search
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS item_image_features (
+          id SERIAL PRIMARY KEY,
+          item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          image_type VARCHAR(20) NOT NULL DEFAULT 'primary',
+          image_path TEXT NOT NULL,
+          feature_vector JSONB NOT NULL,
+          dhash VARCHAR(64),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT unique_item_image UNIQUE(item_id, image_path)
+      )
+    `);
+    console.log('[Migration] item_image_features table verified.');
+
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
@@ -106,6 +121,7 @@ export const runMigrations = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_revised_rate ON items(revised_rate) WHERE revised_rate IS NOT NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_real_images_item ON item_real_images(item_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_image_features_item ON item_image_features(item_id)');
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_uuid ON devices (user_id, device_uuid)');
     console.log('[Migration] Performance indexes verified.');
 
@@ -140,6 +156,13 @@ export const runMigrations = async () => {
     generateMissingThumbnails().catch(err => {
       console.error('[Thumbnail Migration] Background thumbnail generation failed:', err);
     });
+
+    // Run background indexing of visual search features
+    import('./services/visualSearch').then(vs => {
+      vs.syncAllCatalogVisualFeatures().catch(err => {
+        console.error('[Visual Index] Background visual feature sync failed:', err);
+      });
+    }).catch(e => {});
   } catch (err) {
     console.error('[Migration] Error running database migrations:', err);
     throw err;

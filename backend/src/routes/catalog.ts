@@ -5,7 +5,15 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 
+import multer from 'multer';
+import { searchCatalogByImage, syncAllCatalogVisualFeatures } from '../services/visualSearch';
+
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+
+const memUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
 
 const router = Router();
 
@@ -617,6 +625,50 @@ router.delete('/real-images/:id', async (req: AuthenticatedRequest, res: Respons
   } catch (error) {
     console.error('Delete real image error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+// POST /api/catalog/search-by-image - Search catalog using an image captured via camera or gallery
+router.post('/search-by-image', memUpload.single('image'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    let imageBuffer: Buffer | null = null;
+
+    if (req.file && req.file.buffer) {
+      imageBuffer = req.file.buffer;
+    } else if (req.body.imageBase64) {
+      const cleanBase64 = req.body.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      imageBuffer = Buffer.from(cleanBase64, 'base64');
+    }
+
+    if (!imageBuffer) {
+      res.status(400).json({ error: 'Please provide an image file (multipart `image`) or `imageBase64` string.' });
+      return;
+    }
+
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    const minConfidence = req.query.minConfidence ? parseFloat(req.query.minConfidence as string) : 35;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+
+    const matches = await searchCatalogByImage(imageBuffer, userId, role, minConfidence, limit);
+    res.json({
+      total: matches.length,
+      matches
+    });
+  } catch (error) {
+    console.error('Search by image error:', error);
+    res.status(500).json({ error: (error as any).message || 'Failed to analyze image for catalog search' });
+  }
+});
+
+// POST /api/catalog/sync-features - Sync and index missing catalog visual features
+router.post('/sync-features', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const result = await syncAllCatalogVisualFeatures();
+    res.json(result);
+  } catch (error) {
+    console.error('Sync visual features error:', error);
+    res.status(500).json({ error: (error as any).message || 'Failed to sync visual features' });
   }
 });
 

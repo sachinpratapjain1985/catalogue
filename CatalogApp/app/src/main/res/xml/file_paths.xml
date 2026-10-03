@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Map the app cache directory where WhatsApp images are downloaded -->
+    <!-- Map the app cache directory for WhatsApp sharing and camera capture -->
     <cache-path name="shared_catalogs" path="shared_catalogs/" />
+    <cache-path name="camera_photos" path="camera_photos/" />
+    <cache-path name="cache" path="." />
 </paths>

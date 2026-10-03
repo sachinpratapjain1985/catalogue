@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,6 +86,8 @@ fun SalesDashboard(
     var isSharing by remember { mutableStateOf(false) }
     var shareProgressMsg by remember { mutableStateOf("") }
     var shareDescription by remember { mutableStateOf(false) }
+    // Visual AI Search state
+    var showVisualSearchDialog by remember { mutableStateOf(false) }
 
     val apiService = NetworkClient.getApiService(sessionManager)
 
@@ -259,6 +262,13 @@ fun SalesDashboard(
                         IconButton(onClick = onSwitchMode) {
                             Icon(Icons.Default.Build, contentDescription = "Switch to Stockist Mode")
                         }
+                    }
+                    IconButton(onClick = { showVisualSearchDialog = true }) {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = "Visual Photo Matcher",
+                            tint = Color(0xFFF59E0B)
+                        )
                     }
                     IconButton(onClick = { 
                         if (selectedCategory != null) {
@@ -518,6 +528,62 @@ fun SalesDashboard(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            // Camera Visual AI Search Trigger Card
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showVisualSearchDialog = true },
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .background(Color(0xFFF59E0B).copy(alpha = 0.2f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.CameraAlt,
+                                                    contentDescription = "Visual Search",
+                                                    tint = Color(0xFFF59E0B),
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(
+                                                    "Match Costume by Photo",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                    color = Color.White
+                                                )
+                                                Text(
+                                                    "Snap photo to find matching catalog SKU",
+                                                    fontSize = 12.sp,
+                                                    color = Color(0xFF94A3B8)
+                                                )
+                                            }
+                                        }
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF59E0B),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+
                             items(categories) { category ->
                                 Card(
                                     modifier = Modifier
@@ -646,6 +712,14 @@ fun SalesDashboard(
                                     }
                                 }) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                }
+                            } else {
+                                IconButton(onClick = { showVisualSearchDialog = true }) {
+                                    Icon(
+                                        Icons.Default.CameraAlt,
+                                        contentDescription = "Search by Photo",
+                                        tint = Color(0xFFF59E0B)
+                                    )
                                 }
                             }
                         },
@@ -870,6 +944,21 @@ fun SalesDashboard(
                                 textAlign = TextAlign.Center
                             )
                         }
+                    }
+                )
+            }
+
+            // Visual AI Search Dialog
+            if (showVisualSearchDialog) {
+                VisualSearchDialog(
+                    sessionManager = sessionManager,
+                    onDismiss = { showVisualSearchDialog = false },
+                    onSelectSKU = { matchedItem ->
+                        showVisualSearchDialog = false
+                        if (!selectedItems.any { it.id == matchedItem.id }) {
+                            selectedItems.add(matchedItem)
+                        }
+                        Toast.makeText(context, "Matched: ${matchedItem.sku_id} (Added to selection)", Toast.LENGTH_SHORT).show()
                     }
                 )
             }

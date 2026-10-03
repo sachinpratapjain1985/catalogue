@@ -1,5 +1,6 @@
 package com.example.catalogapp.data
 
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -66,7 +67,9 @@ data class SKUItemDto(
     val age_in_days: Int? = null,
     val real_image_count: Int = 0,
     val real_images: List<String> = emptyList(),
-    val category_name: String? = null
+    val category_name: String? = null,
+    val match_score: Float? = null,
+    val matched_image_url: String? = null
 ) {
     // Helper to get effective price for display and sharing
     fun getEffectiveRate(): Int {
@@ -130,6 +133,11 @@ data class StockUpdateResponse(
     val updated_by: Int
 )
 
+data class ImageSearchResponse(
+    val total: Int,
+    val matches: List<SKUItemDto>
+)
+
 // Retrofit API Service Interface
 interface CatalogApiService {
     @POST("api/auth/login")
@@ -171,6 +179,14 @@ interface CatalogApiService {
         @Path("id") itemId: Int,
         @Body request: StockUpdateRequest
     ): StockUpdateResponse
+
+    @Multipart
+    @POST("api/catalog/search-by-image")
+    suspend fun searchCatalogByImage(
+        @Part image: MultipartBody.Part,
+        @Query("minConfidence") minConfidence: Float? = null,
+        @Query("limit") limit: Int? = null
+    ): ImageSearchResponse
 }
 
 // Network Client Provider
@@ -195,7 +211,6 @@ object NetworkClient {
                 .addInterceptor { chain ->
                     val original = chain.request()
                     val requestBuilder = original.newBuilder()
-                        .header("Content-Type", "application/json")
                     
                     // Inject authorization token if present
                     sessionManager.getToken()?.let {

@@ -6,6 +6,7 @@ import fs from 'fs';
 import { query } from '../db';
 import sharp from 'sharp';
 import { authenticateToken, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import { indexItemImage } from '../services/visualSearch';
 
 // Limit sharp image processing to 1 concurrent thread to prevent CPU starvation
 sharp.concurrency(1);
@@ -907,10 +908,18 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     const newItem = itemRes.rows[0];
 
+    // Background index visual features for visual search
+    indexItemImage(newItem.id, newItem.image_path, 'primary').catch(err => {
+      console.error('[Visual Index] Failed to index new item on creation:', err);
+    });
+
     // Process optional raw real images uploaded during creation
     if (realFiles && realFiles.length > 0) {
       for (const rFile of realFiles) {
-        await processAndSaveRealImage(newItem.id, rFile);
+        const saved = await processAndSaveRealImage(newItem.id, rFile);
+        if (saved && saved.watermarked_path) {
+          indexItemImage(newItem.id, saved.watermarked_path, 'real').catch(e => {});
+        }
         if (fs.existsSync(rFile.path)) fs.unlinkSync(rFile.path);
       }
     }
@@ -1326,6 +1335,9 @@ router.post('/items/:id/real-images', upload.array('real_images', 5), async (req
     const savedImages: any[] = [];
     for (const file of files) {
       const savedImg = await processAndSaveRealImage(itemId, file);
+      if (savedImg && savedImg.watermarked_path) {
+        indexItemImage(itemId, savedImg.watermarked_path, 'real').catch(e => {});
+      }
       savedImages.push(savedImg);
       if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
     }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import android.widget.Toast
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +60,7 @@ fun StockistDashboard(
     onSwitchMode: () -> Unit,
     onBackToSelection: () -> Unit
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
     var works by remember { mutableStateOf<List<WorkDto>>(emptyList()) }
@@ -69,6 +72,8 @@ fun StockistDashboard(
     
     var currentPage by remember { mutableStateOf(1) }
     var hasMoreItems by remember { mutableStateOf(true) }
+    
+    var showVisualSearchDialog by remember { mutableStateOf(false) }
     
     val apiService = NetworkClient.getApiService(sessionManager)
 
@@ -181,6 +186,13 @@ fun StockistDashboard(
                             Icon(Icons.Default.ShoppingCart, contentDescription = "Switch to Sales Mode")
                         }
                     }
+                    IconButton(onClick = { showVisualSearchDialog = true }) {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = "Visual Photo Matcher",
+                            tint = Color(0xFFF59E0B)
+                        )
+                    }
                     IconButton(onClick = { 
                         if (selectedCategory != null) loadItems(selectedCategory!!, 1) else loadCategories()
                     }) {
@@ -231,6 +243,62 @@ fun StockistDashboard(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // Camera Visual AI Search Trigger Card
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showVisualSearchDialog = true },
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                                shape = RoundedCornerShape(14.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(Color(0xFFF59E0B).copy(alpha = 0.2f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.CameraAlt,
+                                                contentDescription = "Visual Search",
+                                                tint = Color(0xFFF59E0B),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                "Match Costume by Photo",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                "Snap photo to find matching catalog SKU",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF94A3B8)
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         items(categories) { category ->
                             Card(
                                 modifier = Modifier
@@ -310,6 +378,14 @@ fun StockistDashboard(
                                     loadItems(selectedCategory!!, 1)
                                 }) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                }
+                            } else {
+                                IconButton(onClick = { showVisualSearchDialog = true }) {
+                                    Icon(
+                                        Icons.Default.CameraAlt,
+                                        contentDescription = "Search by Photo",
+                                        tint = Color(0xFFF59E0B)
+                                    )
                                 }
                             }
                         },
@@ -529,6 +605,29 @@ fun StockistDashboard(
                         }
                     }
                 }
+            }
+
+            // Visual AI Search Dialog
+            if (showVisualSearchDialog) {
+                VisualSearchDialog(
+                    sessionManager = sessionManager,
+                    onDismiss = { showVisualSearchDialog = false },
+                    onSelectSKU = { matchedItem ->
+                        showVisualSearchDialog = false
+                        searchQuery = matchedItem.sku_id
+                        if (selectedCategory != null) {
+                            loadItems(selectedCategory!!, 1)
+                        } else {
+                            // Find and select the item's category if available
+                            val matchedCat = categories.find { it.id == matchedItem.category_id }
+                            if (matchedCat != null) {
+                                selectedCategory = matchedCat
+                                loadItems(matchedCat, 1)
+                            }
+                        }
+                        Toast.makeText(context, "Matched: ${matchedItem.sku_id}", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
         }
     }
