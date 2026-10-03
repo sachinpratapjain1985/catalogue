@@ -202,10 +202,10 @@ export async function extractVisualFeatures(
 ): Promise<DinoMultiZoneFeatures> {
   const { extractor, RawImage } = await getDinoPipeline();
 
-  const baseSharp = sharp(imageInput).rotate();
-  const metadata = await baseSharp.metadata();
-  const width = metadata.width || 600;
-  const height = metadata.height || 800;
+  const metadata = await sharp(imageInput).metadata();
+  const isRotated90 = (metadata.orientation || 0) >= 5;
+  const width = (isRotated90 ? metadata.height : metadata.width) || 600;
+  const height = (isRotated90 ? metadata.width : metadata.height) || 800;
 
   // For 3-in-1 catalog posters (2 small colorway panels on the left 25%, main Hero Model on the right 75%),
   // cropping [0.22 .. 0.96] isolates the main garment without the left-side collage frames while also
@@ -800,6 +800,18 @@ export async function searchCatalogByImage(
     .filter(m => m.score >= finalThreshold)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+
+  console.log(
+    `[Visual Search] OCR=${detectedSku || 'none'} crop=${cropType} | Stage1 Top5: ${topCandidatesForVision
+      .slice(0, 5)
+      .map(c => `${c.row.sku_id}(${Math.round(c.rawScore * 100)}%)`)
+      .join(', ')} | Verified Matches: ${
+      sortedMatches
+        .slice(0, 5)
+        .map(m => `${m.row.sku_id}(${m.score}%)`)
+        .join(', ') || 'none'
+    }`
+  );
 
   if (sortedMatches.length === 0) {
     return [];
