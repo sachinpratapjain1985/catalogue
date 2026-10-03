@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,6 +91,8 @@ fun SalesDashboard(
     var shareDescription by remember { mutableStateOf(false) }
     // Visual AI Search state
     var showVisualSearchDialog by remember { mutableStateOf(false) }
+    // Filter expandable state
+    var showFiltersExpanded by remember { mutableStateOf(false) }
 
     val apiService = NetworkClient.getApiService(sessionManager)
 
@@ -730,87 +735,116 @@ fun SalesDashboard(
                         shape = RoundedCornerShape(12.dp)
                     )
 
-                    // Price Filter Chips
-                    val rateOptions = listOf(
-                        "All Prices" to null,
-                        "Below ₹1k" to (null to 1000),
-                        "Below ₹1.5k" to (null to 1500),
-                        "Below ₹2k" to (null to 2000),
-                        "Below ₹2.5k" to (null to 2500),
-                        "₹1k - ₹1.5k" to (1000 to 1500),
-                        "₹1k - ₹2k" to (1000 to 2000),
-                        "₹1.5k - ₹2k" to (1500 to 2000),
-                        "₹2k - ₹3k" to (2000 to 3000),
-                        "Above ₹2k" to (2000 to null),
-                        "Above ₹2.5k" to (2500 to null),
-                        "Above ₹3k" to (3000 to null)
-                    )
-
-                    LazyRow(
+                    // Expandable Filter Toggle Bar (Price & Work)
+                    val activeFilterCount = (if (selectedRateRange != null) 1 else 0) + (if (selectedWork != null) 1 else 0)
+                    
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        items(rateOptions) { (label, range) ->
-                            val isSelected = selectedRateRange == range
-                            FilterChip(
-                                selected = isSelected,
+                        Surface(
+                            modifier = Modifier.clickable { showFiltersExpanded = !showFiltersExpanded },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (activeFilterCount > 0 || showFiltersExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (showFiltersExpanded) "Hide Filters (Price & Work)" else "Filter by Price & Work",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (activeFilterCount > 0) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$activeFilterCount",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    if (showFiltersExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (activeFilterCount > 0) {
+                            TextButton(
                                 onClick = {
-                                    selectedRateRange = if (isSelected) null else range
+                                    selectedRateRange = null
+                                    selectedWork = null
                                     if (selectedCategory != null) {
                                         loadItems(selectedCategory!!, 1)
                                     } else {
                                         loadRevisedItems(1)
                                     }
                                 },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            )
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Clear Filters", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
 
-                    // Work Filter Chips
-                    if (works.isNotEmpty()) {
+                    if (showFiltersExpanded) {
+                        // Price Filter Chips
+                        val rateOptions = listOf(
+                            "All Prices" to null,
+                            "Below ₹1k" to (null to 1000),
+                            "Below ₹1.5k" to (null to 1500),
+                            "Below ₹2k" to (null to 2000),
+                            "Below ₹2.5k" to (null to 2500),
+                            "₹1k - ₹1.5k" to (1000 to 1500),
+                            "₹1k - ₹2k" to (1000 to 2000),
+                            "₹1.5k - ₹2k" to (1500 to 2000),
+                            "₹2k - ₹3k" to (2000 to 3000),
+                            "Above ₹2k" to (2000 to null),
+                            "Above ₹2.5k" to (2500 to null),
+                            "Above ₹3k" to (3000 to null)
+                        )
+
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            item {
-                                FilterChip(
-                                    selected = selectedWork == null,
-                                    onClick = {
-                                        if (selectedWork != null) {
-                                            selectedWork = null
-                                            if (selectedCategory != null) {
-                                                loadItems(selectedCategory!!, 1)
-                                            } else {
-                                                loadRevisedItems(1)
-                                            }
-                                        }
-                                    },
-                                    label = {
-                                        Text(
-                                            text = "All Works",
-                                            fontSize = 12.sp,
-                                            fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                )
-                            }
-                            items(works) { w ->
-                                val isSelected = selectedWork == w.name
+                            items(rateOptions) { (label, range) ->
+                                val isSelected = selectedRateRange == range
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = {
-                                        selectedWork = if (isSelected) null else w.name
+                                        selectedRateRange = if (isSelected) null else range
                                         if (selectedCategory != null) {
                                             loadItems(selectedCategory!!, 1)
                                         } else {
@@ -819,12 +853,66 @@ fun SalesDashboard(
                                     },
                                     label = {
                                         Text(
-                                            text = w.name,
+                                            text = label,
                                             fontSize = 12.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                         )
                                     }
                                 )
+                            }
+                        }
+
+                        // Work Filter Chips
+                        if (works.isNotEmpty()) {
+                            LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedWork == null,
+                                        onClick = {
+                                            if (selectedWork != null) {
+                                                selectedWork = null
+                                                if (selectedCategory != null) {
+                                                    loadItems(selectedCategory!!, 1)
+                                                } else {
+                                                    loadRevisedItems(1)
+                                                }
+                                            }
+                                        },
+                                        label = {
+                                            Text(
+                                                text = "All Works",
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
+                                }
+                                items(works) { w ->
+                                    val isSelected = selectedWork == w.name
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedWork = if (isSelected) null else w.name
+                                            if (selectedCategory != null) {
+                                                loadItems(selectedCategory!!, 1)
+                                            } else {
+                                                loadRevisedItems(1)
+                                            }
+                                        },
+                                        label = {
+                                            Text(
+                                                text = w.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

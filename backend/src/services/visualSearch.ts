@@ -3,11 +3,18 @@ import fs from 'fs';
 import path from 'path';
 import { query } from '../db';
 
-export interface VisualFeatures {
+export interface RegionFeature {
   spatialGrid: number[];      // 16 cells * 6 features (RGB + HSV means)
   textureGrid: number[];      // 16 cells * 2 features (edge gradients & energy)
   colorHistogram: number[];   // 64 bins HSV histogram
   dhash: string;              // 64-bit difference hash
+}
+
+export interface MultiRegionVisualFeatures {
+  full: RegionFeature;
+  topNeck: RegionFeature;     // Top 55% where neckline / chest embroidery is located
+  bottomDaman: RegionFeature; // Bottom 55% where border / daman / ghair work is located
+  centerMotif: RegionFeature; // Center 60% fabric motif / print area
 }
 
 export interface ImageSearchResult {
@@ -31,6 +38,8 @@ export interface ImageSearchResult {
   real_images: string[];
   match_score: number;        // Percentage 0-100
   matched_image_url: string;
+  matched_type?: string;      // 'real_photo' or 'catalog'
+  matched_zone?: string;      // 'neck', 'bottom_border', 'motif', 'full'
 }
 
 // Convert RGB (0-255) to HSV (H: 0-1, S: 0-1, V: 0-1)
@@ -59,11 +68,10 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
 }
 
 /**
- * Extracts compact multi-feature visual descriptor from an image Buffer or Path
+ * Extracts single-region visual signature
  */
-export async function extractVisualFeatures(imageInput: string | Buffer): Promise<VisualFeatures> {
-  // 1. Resize to standardized 64x64 for spatial grid and texture analysis
-  const { data: pixels, info } = await sharp(imageInput)
+async function extractSingleRegionFeature(regionSharpObj: sharp.Sharp): Promise<RegionFeature> {
+  const { data: pixels, info } = await regionSharpObj
     .resize(64, 64, { fit: 'fill' })
     .removeAlpha()
     .raw()
@@ -71,9 +79,9 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
 
   const width = info.width;
   const height = info.height;
-  const channels = info.channels; // 3 (R, G, B)
+  const channels = info.channels;
 
-  // 2. Compute 4x4 spatial grid (16 cells)
+  // 1. Compute 4x4 spatial grid (16 cells)
   const gridSize = 4;
   const cellWidth = Math.floor(width / gridSize);
   const cellHeight = Math.floor(height / gridSize);
@@ -105,7 +113,7 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
           sSum += s;
           vSum += v;
 
-          // Simple horizontal + vertical edge gradient
+          // Horizontal + vertical edge gradient
           if (x < width - 1 && y < height - 1) {
             const rightIdx = (y * width + (x + 1)) * channels;
             const downIdx = ((y + 1) * width + x) * channels;
@@ -136,7 +144,7 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
     }
   }
 
-  // 3. Compute 64-bin HSV color histogram (4 H * 4 S * 4 V)
+  // 2. Compute 64-bin HSV color histogram
   const hist = new Array(64).fill(0);
   const totalPixels = width * height;
   for (let i = 0; i < pixels.length; i += channels) {
@@ -153,8 +161,9 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
   }
   const colorHistogram = hist.map(v => Math.round((v / totalPixels) * 10000) / 10000);
 
-  // 4. Compute 64-bit dHash (9x8 grayscale)
-  const { data: dhashPixels } = await sharp(imageInput)
+  // 3. Compute 64-bit dHash (9x8 grayscale)
+  const { data: dhashPixels } = await regionSharpObj
+    .clone()
     .resize(9, 8, { fit: 'fill' })
     .grayscale()
     .raw()
@@ -169,7 +178,6 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
     }
   }
 
-  // Convert 64 binary bits to 16 hex chars
   let dhash = '';
   for (let i = 0; i < hashBits.length; i += 4) {
     dhash += parseInt(hashBits.substr(i, 4), 2).toString(16);
@@ -183,9 +191,50 @@ export async function extractVisualFeatures(imageInput: string | Buffer): Promis
   };
 }
 
+/**
+ * Extracts Multi-Zone Visual Signatures (Full, Top Neck, Bottom Daman, Center Motif)
+ */
+export async function extractVisualFeatures(imageInput: string | Buffer): Promise<MultiRegionVisualFeatures> {
+  const metadata = await sharp(imageInput).metadata();
+  const width = metadata.width || 400;
+  const height = metadata.height || 600;
+
+  // 1. Full Image Feature
+  const fullFeature = await extractSingleRegionFeature(sharp(imageInput));
+
+  // 2. Top Neck / Gala Embroidery Area (Top 55% of height)
+  const topHeight = Math.floor(height * 0.55);
+  const topFeature = await extractSingleRegionFeature(
+    sharp(imageInput).extract({ left: 0, top: 0, width: width, height: topHeight })
+  );
+
+  // 3. Bottom Daman / Border Work Area (Bottom 55% of height)
+  const bottomTop = Math.floor(height * 0.45);
+  const bottomHeight = height - bottomTop;
+  const bottomFeature = await extractSingleRegionFeature(
+    sharp(imageInput).extract({ left: 0, top: bottomTop, width: width, height: bottomHeight })
+  );
+
+  // 4. Center Motif Pattern (Middle 60% area)
+  const centerLeft = Math.floor(width * 0.20);
+  const centerTop = Math.floor(height * 0.20);
+  const centerWidth = Math.floor(width * 0.60);
+  const centerHeight = Math.floor(height * 0.60);
+  const centerFeature = await extractSingleRegionFeature(
+    sharp(imageInput).extract({ left: centerLeft, top: centerTop, width: centerWidth, height: centerHeight })
+  );
+
+  return {
+    full: fullFeature,
+    topNeck: topFeature,
+    bottomDaman: bottomFeature,
+    centerMotif: centerFeature
+  };
+}
+
 // Calculate Cosine Similarity between two numeric vectors
 function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0;
+  if (!a || !b || a.length !== b.length || a.length === 0) return 0;
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
@@ -200,7 +249,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 // Calculate Histogram Intersection (0.0 to 1.0)
 function histogramIntersection(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0;
+  if (!a || !b || a.length !== b.length || a.length === 0) return 0;
   let intersection = 0;
   let totalA = 0;
   for (let i = 0; i < a.length; i++) {
@@ -216,51 +265,105 @@ function hammingDistance(hexA: string, hexB: string): number {
   let dist = 0;
   for (let i = 0; i < hexA.length; i++) {
     const xor = parseInt(hexA[i], 16) ^ parseInt(hexB[i], 16);
-    // Count bits set in xor (0-15)
     dist += (xor & 1) + ((xor >> 1) & 1) + ((xor >> 2) & 1) + ((xor >> 3) & 1);
   }
   return dist;
 }
 
 /**
- * Computes combined visual match score (0.0 to 100.0%)
+ * Computes similarity between two single region features
  */
-export function calculateMatchScore(queryFeat: VisualFeatures, targetFeat: VisualFeatures): number {
-  // 1. Spatial Grid Similarity (40% weight - keeps garment layout & color positioning)
-  const spatialSim = Math.max(0, cosineSimilarity(queryFeat.spatialGrid, targetFeat.spatialGrid));
+function compareRegions(regA: RegionFeature, regB: RegionFeature): number {
+  if (!regA || !regB) return 0;
 
-  // 2. Color Histogram Intersection (35% weight - overall color palette)
-  const colorSim = Math.max(0, histogramIntersection(queryFeat.colorHistogram, targetFeat.colorHistogram));
+  // 1. Spatial layout similarity
+  const spatialSim = Math.max(0, cosineSimilarity(regA.spatialGrid, regB.spatialGrid));
 
-  // 3. Texture / Embroidery Gradient Similarity (15% weight)
-  const textureSim = Math.max(0, cosineSimilarity(queryFeat.textureGrid, targetFeat.textureGrid));
+  // 2. Color palette intersection
+  const colorSim = Math.max(0, histogramIntersection(regA.colorHistogram, regB.colorHistogram));
 
-  // 4. Perceptual dHash Match (10% weight - high boost for near identical cuts)
-  const hashDist = hammingDistance(queryFeat.dhash, targetFeat.dhash);
+  // 3. Texture / Embroidery density
+  const textureSim = Math.max(0, cosineSimilarity(regA.textureGrid, regB.textureGrid));
+
+  // 4. Perceptual dHash
+  const hashDist = hammingDistance(regA.dhash, regB.dhash);
   const hashSim = Math.max(0, (64 - hashDist) / 64);
 
-  // Weighted combination
-  let rawScore = (spatialSim * 0.40) + (colorSim * 0.35) + (textureSim * 0.15) + (hashSim * 0.10);
+  let rawScore = (spatialSim * 0.35) + (colorSim * 0.40) + (textureSim * 0.15) + (hashSim * 0.10);
 
-  // Boost exact/near-exact hash matches
   if (hashDist <= 8) {
     rawScore = Math.max(rawScore, 0.90 + (8 - hashDist) * 0.0125);
   }
 
-  return Math.min(100, Math.max(0, Math.round(rawScore * 100 * 10) / 10));
+  return rawScore;
 }
 
 /**
- * Searches the catalog database for designs visually matching the given image
+ * Advanced Multi-Zone Match Scoring:
+ * Matches query against candidate's Full, Neck, Bottom Daman, and Center Motif
+ */
+export function calculateMultiZoneMatchScore(
+  queryFeatures: MultiRegionVisualFeatures,
+  targetFeatures: any,
+  isRealImage = false
+): { score: number; zone: string } {
+  // Support backward compatibility if target is old single feature
+  const target: MultiRegionVisualFeatures = targetFeatures.full ? targetFeatures : {
+    full: targetFeatures,
+    topNeck: targetFeatures,
+    bottomDaman: targetFeatures,
+    centerMotif: targetFeatures
+  };
+
+  const comparisons: { zone: string; score: number }[] = [
+    // 1. Full-to-Full
+    { zone: 'full', score: compareRegions(queryFeatures.full, target.full) },
+    // 2. Query Full to Target Neck (when user took full shot or close up of neck)
+    { zone: 'neck', score: compareRegions(queryFeatures.full, target.topNeck) },
+    // 3. Query Neck to Target Neck
+    { zone: 'neck', score: compareRegions(queryFeatures.topNeck, target.topNeck) },
+    // 4. Query Full to Target Bottom Daman / Border (when user took photo of border work)
+    { zone: 'bottom_border', score: compareRegions(queryFeatures.full, target.bottomDaman) },
+    // 5. Query Bottom to Target Bottom
+    { zone: 'bottom_border', score: compareRegions(queryFeatures.bottomDaman, target.bottomDaman) },
+    // 6. Query Full to Target Center Motif (fabric close-up)
+    { zone: 'motif', score: compareRegions(queryFeatures.full, target.centerMotif) },
+    // 7. Query Center to Target Center
+    { zone: 'motif', score: compareRegions(queryFeatures.centerMotif, target.centerMotif) },
+  ];
+
+  let best = comparisons[0];
+  for (const comp of comparisons) {
+    if (comp.score > best.score) {
+      best = comp;
+    }
+  }
+
+  // Priority boost for RAW real images (since phone camera shots align closer to real photos than studio catalog cuts)
+  let finalScore = best.score;
+  if (isRealImage) {
+    finalScore = Math.min(1.0, finalScore * 1.15); // +15% affinity boost for real photos
+  }
+
+  const scorePercentage = Math.min(100, Math.max(0, Math.round(finalScore * 100 * 10) / 10));
+
+  return {
+    score: scorePercentage,
+    zone: best.zone
+  };
+}
+
+/**
+ * Searches catalog designs matching the captured image with multi-zone & RAW-first accuracy
  */
 export async function searchCatalogByImage(
   queryImageBuffer: Buffer,
   userId?: number,
   role?: string,
-  minConfidence = 40,
-  limit = 20
+  minConfidence = 35,
+  limit = 25
 ): Promise<ImageSearchResult[]> {
-  // 1. Extract query image features
+  // 1. Extract query multi-zone features
   const queryFeat = await extractVisualFeatures(queryImageBuffer);
 
   // 2. Load all indexed catalog image features from database
@@ -303,17 +406,18 @@ export async function searchCatalogByImage(
 
   const featuresRes = await query(queryStr, params);
 
-  // 3. Compute match score for each indexed image
-  const itemBestMatch = new Map<number, { score: number; matchedImagePath: string; row: any }>();
+  // 3. Compute best match score per item across all its images (catalog & RAW photos)
+  const itemBestMatch = new Map<number, { score: number; matchedImagePath: string; matchedType: string; matchedZone: string; row: any }>();
 
   for (const row of featuresRes.rows) {
-    const targetFeat: VisualFeatures = typeof row.feature_vector === 'string' 
+    const targetFeat = typeof row.feature_vector === 'string' 
       ? JSON.parse(row.feature_vector) 
       : row.feature_vector;
 
-    if (!targetFeat || !targetFeat.spatialGrid) continue;
+    if (!targetFeat) continue;
 
-    const score = calculateMatchScore(queryFeat, targetFeat);
+    const isRealImage = row.image_type === 'real';
+    const { score, zone } = calculateMultiZoneMatchScore(queryFeat, targetFeat, isRealImage);
 
     if (score >= minConfidence) {
       const existing = itemBestMatch.get(row.item_id);
@@ -321,6 +425,8 @@ export async function searchCatalogByImage(
         itemBestMatch.set(row.item_id, {
           score,
           matchedImagePath: row.image_path,
+          matchedType: isRealImage ? 'real_photo' : 'catalog',
+          matchedZone: zone,
           row
         });
       }
@@ -336,7 +442,7 @@ export async function searchCatalogByImage(
     return [];
   }
 
-  // 5. Fetch real images if permitted
+  // 5. Fetch all real photos for top matches
   const itemIds = sortedMatches.map(m => m.row.item_id);
   const realImagesRes = await query(
     `SELECT id, item_id, watermarked_path as image_path FROM item_real_images WHERE item_id = ANY($1) ORDER BY id ASC`,
@@ -348,7 +454,7 @@ export async function searchCatalogByImage(
     realImagesMap[r.item_id].push(r.image_path);
   });
 
-  return sortedMatches.map(({ score, matchedImagePath, row }) => ({
+  return sortedMatches.map(({ score, matchedImagePath, matchedType, matchedZone, row }) => ({
     id: row.item_id,
     sku_id: row.sku_id,
     category_id: row.category_id,
@@ -368,12 +474,14 @@ export async function searchCatalogByImage(
     real_image_count: row.real_image_count,
     real_images: realImagesMap[row.item_id] || [],
     match_score: score,
-    matched_image_url: matchedImagePath
+    matched_image_url: matchedImagePath,
+    matched_type: matchedType,
+    matched_zone: matchedZone
   }));
 }
 
 /**
- * Indexes or updates the visual features of a specific item image
+ * Indexes or updates the multi-zone visual features of a specific item image
  */
 export async function indexItemImage(itemId: number, imagePath: string, imageType: 'primary' | 'real' = 'primary'): Promise<void> {
   const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
@@ -392,7 +500,7 @@ export async function indexItemImage(itemId: number, imagePath: string, imageTyp
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (item_id, image_path) 
        DO UPDATE SET feature_vector = EXCLUDED.feature_vector, dhash = EXCLUDED.dhash, created_at = CURRENT_TIMESTAMP`,
-      [itemId, imageType, imagePath, JSON.stringify(features), features.dhash]
+      [itemId, imageType, imagePath, JSON.stringify(features), features.full.dhash]
     );
   } catch (err) {
     console.error(`[Visual Index] Failed to index visual features for item ${itemId} (${imagePath}):`, err);
@@ -400,57 +508,25 @@ export async function indexItemImage(itemId: number, imagePath: string, imageTyp
 }
 
 /**
- * Background batch indexing of all missing items and real images in catalog
+ * Background batch indexing / upgrade of all items and real images in catalog
  */
-export async function syncAllCatalogVisualFeatures(): Promise<{ totalIndexed: number; skipped: number; errors: number }> {
+export async function syncAllCatalogVisualFeatures(forceReindex = false): Promise<{ totalIndexed: number; skipped: number; errors: number }> {
   const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
-  console.log('[Visual Index] Starting catalog visual search feature sync...');
+  console.log('[Visual Index] Starting multi-zone catalog visual feature sync...');
 
   let totalIndexed = 0;
   let skipped = 0;
   let errors = 0;
 
   try {
-    // 1. Index primary catalog images
-    const itemsRes = await query(`
-      SELECT i.id, i.sku_id, i.image_path 
-      FROM items i
-      LEFT JOIN item_image_features f ON f.item_id = i.id AND f.image_path = i.image_path
-      WHERE f.id IS NULL
-    `);
-
-    console.log(`[Visual Index] Found ${itemsRes.rows.length} unindexed primary images.`);
-
-    for (const item of itemsRes.rows) {
-      const filename = path.basename(item.image_path);
-      const fullPath = path.join(uploadDir, filename);
-      if (!fs.existsSync(fullPath)) {
-        skipped++;
-        continue;
-      }
-      try {
-        const features = await extractVisualFeatures(fullPath);
-        await query(
-          `INSERT INTO item_image_features (item_id, image_type, image_path, feature_vector, dhash)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (item_id, image_path) DO NOTHING`,
-          [item.id, 'primary', item.image_path, JSON.stringify(features), features.dhash]
-        );
-        totalIndexed++;
-      } catch (e) {
-        errors++;
-      }
-    }
-
-    // 2. Index real RAW images
+    // 1. Index / upgrade real RAW images first (High priority)
     const realRes = await query(`
       SELECT r.id, r.item_id, r.watermarked_path as image_path 
       FROM item_real_images r
-      LEFT JOIN item_image_features f ON f.item_id = r.item_id AND f.image_path = r.watermarked_path
-      WHERE f.id IS NULL
+      ${forceReindex ? '' : `LEFT JOIN item_image_features f ON f.item_id = r.item_id AND f.image_path = r.watermarked_path WHERE f.id IS NULL`}
     `);
 
-    console.log(`[Visual Index] Found ${realRes.rows.length} unindexed real images.`);
+    console.log(`[Visual Index] Processing ${realRes.rows.length} RAW real images...`);
 
     for (const r of realRes.rows) {
       const filename = path.basename(r.image_path);
@@ -464,8 +540,9 @@ export async function syncAllCatalogVisualFeatures(): Promise<{ totalIndexed: nu
         await query(
           `INSERT INTO item_image_features (item_id, image_type, image_path, feature_vector, dhash)
            VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (item_id, image_path) DO NOTHING`,
-          [r.item_id, 'real', r.image_path, JSON.stringify(features), features.dhash]
+           ON CONFLICT (item_id, image_path) 
+           DO UPDATE SET feature_vector = EXCLUDED.feature_vector, dhash = EXCLUDED.dhash, created_at = CURRENT_TIMESTAMP`,
+          [r.item_id, 'real', r.image_path, JSON.stringify(features), features.full.dhash]
         );
         totalIndexed++;
       } catch (e) {
@@ -473,7 +550,38 @@ export async function syncAllCatalogVisualFeatures(): Promise<{ totalIndexed: nu
       }
     }
 
-    console.log(`[Visual Index] Sync finished: ${totalIndexed} indexed, ${skipped} skipped, ${errors} errors.`);
+    // 2. Index primary catalog images
+    const itemsRes = await query(`
+      SELECT i.id, i.sku_id, i.image_path 
+      FROM items i
+      ${forceReindex ? '' : `LEFT JOIN item_image_features f ON f.item_id = i.id AND f.image_path = i.image_path WHERE f.id IS NULL`}
+    `);
+
+    console.log(`[Visual Index] Processing ${itemsRes.rows.length} primary catalog images...`);
+
+    for (const item of itemsRes.rows) {
+      const filename = path.basename(item.image_path);
+      const fullPath = path.join(uploadDir, filename);
+      if (!fs.existsSync(fullPath)) {
+        skipped++;
+        continue;
+      }
+      try {
+        const features = await extractVisualFeatures(fullPath);
+        await query(
+          `INSERT INTO item_image_features (item_id, image_type, image_path, feature_vector, dhash)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (item_id, image_path) 
+           DO UPDATE SET feature_vector = EXCLUDED.feature_vector, dhash = EXCLUDED.dhash, created_at = CURRENT_TIMESTAMP`,
+          [item.id, 'primary', item.image_path, JSON.stringify(features), features.full.dhash]
+        );
+        totalIndexed++;
+      } catch (e) {
+        errors++;
+      }
+    }
+
+    console.log(`[Visual Index] Multi-zone sync finished: ${totalIndexed} indexed, ${skipped} skipped, ${errors} errors.`);
   } catch (err) {
     console.error('[Visual Index] Catalog visual feature sync error:', err);
   }

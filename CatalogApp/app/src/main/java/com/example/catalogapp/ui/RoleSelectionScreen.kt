@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,9 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.example.catalogapp.data.SessionManager
 import com.example.catalogapp.data.NetworkClient
 import com.example.catalogapp.data.CatalogStatsResponse
+import android.widget.Toast
 
 @Composable
 fun RoleSelectionScreen(
@@ -29,9 +32,11 @@ fun RoleSelectionScreen(
     onRoleSelected: (String) -> Unit,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     // State to hold fetched stats
     var stats by remember { mutableStateOf<CatalogStatsResponse?>(null) }
     var isLoadingStats by remember { mutableStateOf(true) }
+    var showVisualSearchDialog by remember { mutableStateOf(false) }
 
     // Fetch stats on screen load
     LaunchedEffect(Unit) {
@@ -178,7 +183,79 @@ fun RoleSelectionScreen(
                     .fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // AI Camera Costume Matcher Card
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF1E293B)
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFF59E0B)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(105.dp)
+                    .clickable { showVisualSearchDialog = true }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFFF59E0B), Color(0xFFD97706))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Camera Search",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Scan Costume by Photo",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "AI MATCH",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFF59E0B),
+                                modifier = Modifier
+                                    .background(Color(0xFFF59E0B).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Capture front neck or bottom border to match catalog designs & check rates instantly.",
+                            fontSize = 11.sp,
+                            color = Color(0xFFCBD5E1),
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Option 1: Sales / Catalog Sharing Mode Card
             Card(
@@ -320,6 +397,20 @@ fun RoleSelectionScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+
+        // AI Visual Search Dialog
+        if (showVisualSearchDialog) {
+            VisualSearchDialog(
+                sessionManager = sessionManager,
+                onDismiss = { showVisualSearchDialog = false },
+                onSelectSKU = { matchedItem ->
+                    showVisualSearchDialog = false
+                    Toast.makeText(context, "Matched: ${matchedItem.sku_id} (Rate: ₹${matchedItem.getEffectiveRate()})", Toast.LENGTH_LONG).show()
+                    // Open sales mode to inspect this item
+                    onRoleSelected("sales")
+                }
+            )
         }
     }
 }
