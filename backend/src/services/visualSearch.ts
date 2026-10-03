@@ -3,11 +3,16 @@ import fs from 'fs';
 import path from 'path';
 import { query } from '../db';
 
+/**
+ * Color-Agnostic Region Feature Descriptor:
+ * Focuses purely on embroidery geometry, stitch textures, neckline/border contours,
+ * and work density layout. 100% immune to fabric color variations (e.g. Yellow vs Teal vs Wine).
+ */
 export interface RegionFeature {
-  spatialGrid: number[];      // 16 cells * 6 features (RGB + HSV means)
-  textureGrid: number[];      // 16 cells * 2 features (edge gradients & energy)
-  colorHistogram: number[];   // 64 bins HSV histogram
-  dhash: string;              // 64-bit difference hash
+  hog: number[];         // 128-dim Normalized HOG (16 cells * 8 angular orientation bins)
+  lbp: number[];         // 64-dim Normalized LBP (4 quadrants * 16 texture bins)
+  edgeDensity: number[]; // 16-dim Spatial Work/Embroidery Energy Grid
+  dhash: string;         // 64-bit Grayscale Structural Difference Hash
 }
 
 export interface MultiRegionVisualFeatures {
@@ -42,126 +47,116 @@ export interface ImageSearchResult {
   matched_zone?: string;      // 'neck', 'bottom_border', 'motif', 'full'
 }
 
-// Convert RGB (0-255) to HSV (H: 0-1, S: 0-1, V: 0-1)
-function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
-  const rf = r / 255;
-  const gf = g / 255;
-  const bf = b / 255;
-  const max = Math.max(rf, gf, bf);
-  const min = Math.min(rf, gf, bf);
-  const diff = max - min;
-  let h = 0;
-  if (diff !== 0) {
-    if (max === rf) {
-      h = ((gf - bf) / diff) % 6;
-    } else if (max === gf) {
-      h = (bf - rf) / diff + 2;
-    } else {
-      h = (rf - gf) / diff + 4;
-    }
-    h = h / 6;
-    if (h < 0) h += 1;
+/**
+ * Maps 8-bit LBP code (0-255) to 16 uniform texture bins
+ */
+function getUniformLbpBin(lbpCode: number): number {
+  // Count bit transitions (0->1 and 1->0) in circular 8-bit integer
+  let transitions = 0;
+  for (let i = 0; i < 8; i++) {
+    const bitA = (lbpCode >> i) & 1;
+    const bitB = (lbpCode >> ((i + 1) % 8)) & 1;
+    if (bitA !== bitB) transitions++;
   }
-  const s = max === 0 ? 0 : diff / max;
-  const v = max;
-  return [h, s, v];
+  // If uniform pattern (transitions <= 2), map to bins 0-14 by 1-bits count, else bin 15 (non-uniform/complex noise)
+  if (transitions <= 2) {
+    let ones = 0;
+    for (let i = 0; i < 8; i++) {
+      if ((lbpCode >> i) & 1) ones++;
+    }
+    return ones; // 0 to 8
+  }
+  return 9 + (lbpCode % 7); // 9 to 15
 }
 
 /**
- * Extracts single-region visual signature
+ * Extracts Color-Agnostic Structural Pattern Signature (HOG + LBP + Edge Energy + dHash)
  */
 async function extractSingleRegionFeature(regionSharpObj: sharp.Sharp): Promise<RegionFeature> {
+  // 1. Convert to normalized grayscale 64x64 buffer (1 channel, 4096 bytes)
   const { data: pixels, info } = await regionSharpObj
     .resize(64, 64, { fit: 'fill' })
-    .removeAlpha()
+    .grayscale()
+    .normalize() // Stretch luminance histogram for maximum contrast invariance
     .raw()
     .toBuffer({ resolveWithObject: true });
 
   const width = info.width;
   const height = info.height;
-  const channels = info.channels;
 
-  // 1. Compute 4x4 spatial grid (16 cells)
+  // Initialize feature containers
   const gridSize = 4;
-  const cellWidth = Math.floor(width / gridSize);
-  const cellHeight = Math.floor(height / gridSize);
-  const spatialGrid: number[] = [];
-  const textureGrid: number[] = [];
+  const cellWidth = Math.floor(width / gridSize);   // 16 px
+  const cellHeight = Math.floor(height / gridSize); // 16 px
+  const numBins = 8; // 8 angular bins (0 to PI, unsigned 0 to 180 degrees)
+  
+  const hogRaw = new Array(gridSize * gridSize * numBins).fill(0);
+  const edgeDensityRaw = new Array(gridSize * gridSize).fill(0);
+  const lbpRaw = new Array(4 * 16).fill(0); // 4 quadrants * 16 bins
 
-  for (let gy = 0; gy < gridSize; gy++) {
-    for (let gx = 0; gx < gridSize; gx++) {
-      let rSum = 0, gSum = 0, bSum = 0;
-      let hSum = 0, sSum = 0, vSum = 0;
-      let edgeSum = 0;
-      let count = 0;
+  // Process interior pixels (1 to width-2, 1 to height-2)
+  for (let y = 1; y < height - 1; y++) {
+    const gy = Math.min(gridSize - 1, Math.floor(y / cellHeight));
+    const quadY = y < height / 2 ? 0 : 1;
 
-      for (let cy = 0; cy < cellHeight; cy++) {
-        const y = gy * cellHeight + cy;
-        for (let cx = 0; cx < cellWidth; cx++) {
-          const x = gx * cellWidth + cx;
-          const idx = (y * width + x) * channels;
-          const r = pixels[idx];
-          const g = pixels[idx + 1];
-          const b = pixels[idx + 2];
+    for (let x = 1; x < width - 1; x++) {
+      const gx = Math.min(gridSize - 1, Math.floor(x / cellWidth));
+      const quadX = x < width / 2 ? 0 : 1;
+      const quadIdx = quadY * 2 + quadX;
+      const cellIdx = gy * gridSize + gx;
 
-          rSum += r;
-          gSum += g;
-          bSum += b;
+      const idx = y * width + x;
+      const center = pixels[idx];
 
-          const [h, s, v] = rgbToHsv(r, g, b);
-          hSum += h;
-          sSum += s;
-          vSum += v;
+      // 1. Sobel/Central Gradient calculation for HOG
+      const dx = pixels[idx + 1] - pixels[idx - 1];
+      const dy = pixels[(y + 1) * width + x] - pixels[(y - 1) * width + x];
+      const magnitude = Math.sqrt(dx * dx + dy * dy);
 
-          // Horizontal + vertical edge gradient
-          if (x < width - 1 && y < height - 1) {
-            const rightIdx = (y * width + (x + 1)) * channels;
-            const downIdx = ((y + 1) * width + x) * channels;
-            const lum = (r + g + b) / 3;
-            const lumRight = (pixels[rightIdx] + pixels[rightIdx + 1] + pixels[rightIdx + 2]) / 3;
-            const lumDown = (pixels[downIdx] + pixels[downIdx + 1] + pixels[downIdx + 2]) / 3;
-            const grad = Math.abs(lum - lumRight) + Math.abs(lum - lumDown);
-            edgeSum += grad;
-          }
-
-          count++;
-        }
+      if (magnitude > 0) {
+        // Angle in [0, PI) unsigned
+        let angle = Math.atan2(dy, dx);
+        if (angle < 0) angle += Math.PI;
+        const bin = Math.min(numBins - 1, Math.floor((angle / Math.PI) * numBins));
+        hogRaw[cellIdx * numBins + bin] += magnitude;
+        edgeDensityRaw[cellIdx] += magnitude;
       }
 
-      if (count > 0) {
-        spatialGrid.push(
-          Math.round((rSum / count) * 100) / 100 / 255,
-          Math.round((gSum / count) * 100) / 100 / 255,
-          Math.round((bSum / count) * 100) / 100 / 255,
-          Math.round((hSum / count) * 1000) / 1000,
-          Math.round((sSum / count) * 1000) / 1000,
-          Math.round((vSum / count) * 1000) / 1000
-        );
-        textureGrid.push(
-          Math.round((edgeSum / count) * 100) / 100 / 255
-        );
-      }
+      // 2. Local Binary Pattern (LBP) calculation
+      let lbpCode = 0;
+      if (pixels[(y - 1) * width + (x - 1)] >= center) lbpCode |= 1;
+      if (pixels[(y - 1) * width + x] >= center) lbpCode |= 2;
+      if (pixels[(y - 1) * width + (x + 1)] >= center) lbpCode |= 4;
+      if (pixels[y * width + (x + 1)] >= center) lbpCode |= 8;
+      if (pixels[(y + 1) * width + (x + 1)] >= center) lbpCode |= 16;
+      if (pixels[(y + 1) * width + x] >= center) lbpCode |= 32;
+      if (pixels[(y + 1) * width + (x - 1)] >= center) lbpCode |= 64;
+      if (pixels[y * width + (x - 1)] >= center) lbpCode |= 128;
+
+      const lbpBin = getUniformLbpBin(lbpCode);
+      lbpRaw[quadIdx * 16 + lbpBin]++;
     }
   }
 
-  // 2. Compute 64-bin HSV color histogram
-  const hist = new Array(64).fill(0);
-  const totalPixels = width * height;
-  for (let i = 0; i < pixels.length; i += channels) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-    const [h, s, v] = rgbToHsv(r, g, b);
+  // L2-Normalize HOG vector
+  let hogNorm = 0;
+  for (let i = 0; i < hogRaw.length; i++) hogNorm += hogRaw[i] * hogRaw[i];
+  const hogSqrt = Math.sqrt(hogNorm) || 1;
+  const hog = hogRaw.map(v => Math.round((v / hogSqrt) * 10000) / 10000);
 
-    const hBin = Math.min(3, Math.floor(h * 4));
-    const sBin = Math.min(3, Math.floor(s * 4));
-    const vBin = Math.min(3, Math.floor(v * 4));
-    const binIdx = hBin * 16 + sBin * 4 + vBin;
-    hist[binIdx]++;
-  }
-  const colorHistogram = hist.map(v => Math.round((v / totalPixels) * 10000) / 10000);
+  // L2-Normalize LBP vector
+  let lbpNorm = 0;
+  for (let i = 0; i < lbpRaw.length; i++) lbpNorm += lbpRaw[i] * lbpRaw[i];
+  const lbpSqrt = Math.sqrt(lbpNorm) || 1;
+  const lbp = lbpRaw.map(v => Math.round((v / lbpSqrt) * 10000) / 10000);
 
-  // 3. Compute 64-bit dHash (9x8 grayscale)
+  // L2-Normalize Edge Density vector
+  let edgeNorm = 0;
+  for (let i = 0; i < edgeDensityRaw.length; i++) edgeNorm += edgeDensityRaw[i] * edgeDensityRaw[i];
+  const edgeSqrt = Math.sqrt(edgeNorm) || 1;
+  const edgeDensity = edgeDensityRaw.map(v => Math.round((v / edgeSqrt) * 10000) / 10000);
+
+  // 3. 64-bit Grayscale Difference Hash (dHash on 9x8)
   const { data: dhashPixels } = await regionSharpObj
     .clone()
     .resize(9, 8, { fit: 'fill' })
@@ -170,10 +165,10 @@ async function extractSingleRegionFeature(regionSharpObj: sharp.Sharp): Promise<
     .toBuffer({ resolveWithObject: true });
 
   let hashBits = '';
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const left = dhashPixels[y * 9 + x];
-      const right = dhashPixels[y * 9 + (x + 1)];
+  for (let dy = 0; dy < 8; dy++) {
+    for (let dx = 0; dx < 8; dx++) {
+      const left = dhashPixels[dy * 9 + dx];
+      const right = dhashPixels[dy * 9 + (dx + 1)];
       hashBits += left > right ? '1' : '0';
     }
   }
@@ -184,9 +179,9 @@ async function extractSingleRegionFeature(regionSharpObj: sharp.Sharp): Promise<
   }
 
   return {
-    spatialGrid,
-    textureGrid,
-    colorHistogram,
+    hog,
+    lbp,
+    edgeDensity,
     dhash
   };
 }
@@ -247,18 +242,6 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// Calculate Histogram Intersection (0.0 to 1.0)
-function histogramIntersection(a: number[], b: number[]): number {
-  if (!a || !b || a.length !== b.length || a.length === 0) return 0;
-  let intersection = 0;
-  let totalA = 0;
-  for (let i = 0; i < a.length; i++) {
-    intersection += Math.min(a[i], b[i]);
-    totalA += a[i];
-  }
-  return totalA > 0 ? intersection / totalA : 0;
-}
-
 // Calculate Hamming Distance between two hex hashes (0 to 64)
 function hammingDistance(hexA: string, hexB: string): number {
   if (!hexA || !hexB || hexA.length !== hexB.length) return 64;
@@ -271,28 +254,42 @@ function hammingDistance(hexA: string, hexB: string): number {
 }
 
 /**
- * Computes similarity between two single region features
+ * Computes Color-Agnostic Similarity between two single region features:
+ * - 50% HOG Gradient Orientation (Embroidery lines, neckline arc, border curves)
+ * - 25% LBP Texture (Zari/Sequin/Thread stitch texture)
+ * - 15% Edge Density (Spatial distribution of work)
+ * - 10% Grayscale Structural Hash
  */
 function compareRegions(regA: RegionFeature, regB: RegionFeature): number {
   if (!regA || !regB) return 0;
 
-  // 1. Spatial layout similarity
-  const spatialSim = Math.max(0, cosineSimilarity(regA.spatialGrid, regB.spatialGrid));
+  // Support backward compatibility if candidate feature has legacy format
+  if (!regA.hog || !regB.hog) {
+    const legacyA: any = regA;
+    const legacyB: any = regB;
+    const spatialSim = Math.max(0, cosineSimilarity(legacyA.spatialGrid || [], legacyB.spatialGrid || []));
+    const textureSim = Math.max(0, cosineSimilarity(legacyA.textureGrid || [], legacyB.textureGrid || []));
+    return (spatialSim * 0.5) + (textureSim * 0.5);
+  }
 
-  // 2. Color palette intersection
-  const colorSim = Math.max(0, histogramIntersection(regA.colorHistogram, regB.colorHistogram));
+  // 1. HOG Orientation Similarity (Embroidery and outline geometry)
+  const hogSim = Math.max(0, cosineSimilarity(regA.hog, regB.hog));
 
-  // 3. Texture / Embroidery density
-  const textureSim = Math.max(0, cosineSimilarity(regA.textureGrid, regB.textureGrid));
+  // 2. LBP Texture Density (Stitch and fabric texture)
+  const lbpSim = Math.max(0, cosineSimilarity(regA.lbp, regB.lbp));
 
-  // 4. Perceptual dHash
+  // 3. Edge Spatial Energy (Work concentration)
+  const edgeSim = Math.max(0, cosineSimilarity(regA.edgeDensity, regB.edgeDensity));
+
+  // 4. Perceptual Grayscale Hash
   const hashDist = hammingDistance(regA.dhash, regB.dhash);
   const hashSim = Math.max(0, (64 - hashDist) / 64);
 
-  let rawScore = (spatialSim * 0.35) + (colorSim * 0.40) + (textureSim * 0.15) + (hashSim * 0.10);
+  let rawScore = (hogSim * 0.50) + (lbpSim * 0.25) + (edgeSim * 0.15) + (hashSim * 0.10);
 
-  if (hashDist <= 8) {
-    rawScore = Math.max(rawScore, 0.90 + (8 - hashDist) * 0.0125);
+  // Perceptual boost for tight structural hashes
+  if (hashDist <= 6) {
+    rawScore = Math.max(rawScore, 0.92 + (6 - hashDist) * 0.013);
   }
 
   return rawScore;
@@ -307,7 +304,6 @@ export function calculateMultiZoneMatchScore(
   targetFeatures: any,
   isRealImage = false
 ): { score: number; zone: string } {
-  // Support backward compatibility if target is old single feature
   const target: MultiRegionVisualFeatures = targetFeatures.full ? targetFeatures : {
     full: targetFeatures,
     topNeck: targetFeatures,
@@ -322,13 +318,17 @@ export function calculateMultiZoneMatchScore(
     { zone: 'neck', score: compareRegions(queryFeatures.full, target.topNeck) },
     // 3. Query Neck to Target Neck
     { zone: 'neck', score: compareRegions(queryFeatures.topNeck, target.topNeck) },
-    // 4. Query Full to Target Bottom Daman / Border (when user took photo of border work)
+    // 4. Query Neck to Target Full
+    { zone: 'neck', score: compareRegions(queryFeatures.topNeck, target.full) },
+    // 5. Query Full to Target Bottom Daman / Border (when user took photo of border work)
     { zone: 'bottom_border', score: compareRegions(queryFeatures.full, target.bottomDaman) },
-    // 5. Query Bottom to Target Bottom
+    // 6. Query Bottom to Target Bottom
     { zone: 'bottom_border', score: compareRegions(queryFeatures.bottomDaman, target.bottomDaman) },
-    // 6. Query Full to Target Center Motif (fabric close-up)
+    // 7. Query Bottom to Target Full
+    { zone: 'bottom_border', score: compareRegions(queryFeatures.bottomDaman, target.full) },
+    // 8. Query Full to Target Center Motif (fabric close-up)
     { zone: 'motif', score: compareRegions(queryFeatures.full, target.centerMotif) },
-    // 7. Query Center to Target Center
+    // 9. Query Center to Target Center
     { zone: 'motif', score: compareRegions(queryFeatures.centerMotif, target.centerMotif) },
   ];
 
@@ -339,7 +339,7 @@ export function calculateMultiZoneMatchScore(
     }
   }
 
-  // Priority boost for RAW real images (since phone camera shots align closer to real photos than studio catalog cuts)
+  // Priority boost for RAW real images (since showroom snaps align closer to warehouse RAW photos)
   let finalScore = best.score;
   if (isRealImage) {
     finalScore = Math.min(1.0, finalScore * 1.15); // +15% affinity boost for real photos
@@ -354,16 +354,16 @@ export function calculateMultiZoneMatchScore(
 }
 
 /**
- * Searches catalog designs matching the captured image with multi-zone & RAW-first accuracy
+ * Searches catalog designs matching the captured image with color-agnostic pattern matching
  */
 export async function searchCatalogByImage(
   queryImageBuffer: Buffer,
   userId?: number,
   role?: string,
-  minConfidence = 35,
+  minConfidence = 30,
   limit = 25
 ): Promise<ImageSearchResult[]> {
-  // 1. Extract query multi-zone features
+  // 1. Extract query color-agnostic multi-zone features
   const queryFeat = await extractVisualFeatures(queryImageBuffer);
 
   // 2. Load all indexed catalog image features from database
@@ -406,7 +406,7 @@ export async function searchCatalogByImage(
 
   const featuresRes = await query(queryStr, params);
 
-  // 3. Compute best match score per item across all its images (catalog & RAW photos)
+  // 3. Compute best match score per item across all its colorways (catalog & RAW photos)
   const itemBestMatch = new Map<number, { score: number; matchedImagePath: string; matchedType: string; matchedZone: string; row: any }>();
 
   for (const row of featuresRes.rows) {
@@ -481,7 +481,7 @@ export async function searchCatalogByImage(
 }
 
 /**
- * Indexes or updates the multi-zone visual features of a specific item image
+ * Indexes or updates the color-agnostic multi-zone visual features of a specific item image
  */
 export async function indexItemImage(itemId: number, imagePath: string, imageType: 'primary' | 'real' = 'primary'): Promise<void> {
   const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
@@ -512,14 +512,14 @@ export async function indexItemImage(itemId: number, imagePath: string, imageTyp
  */
 export async function syncAllCatalogVisualFeatures(forceReindex = false): Promise<{ totalIndexed: number; skipped: number; errors: number }> {
   const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
-  console.log('[Visual Index] Starting multi-zone catalog visual feature sync...');
+  console.log('[Visual Index] Starting Color-Agnostic HOG/LBP visual feature sync...');
 
   let totalIndexed = 0;
   let skipped = 0;
   let errors = 0;
 
   try {
-    // 1. Index / upgrade real RAW images first (High priority)
+    // 1. Index / upgrade real RAW images first (High priority for multi-colorways)
     const realRes = await query(`
       SELECT r.id, r.item_id, r.watermarked_path as image_path 
       FROM item_real_images r
@@ -581,7 +581,7 @@ export async function syncAllCatalogVisualFeatures(forceReindex = false): Promis
       }
     }
 
-    console.log(`[Visual Index] Multi-zone sync finished: ${totalIndexed} indexed, ${skipped} skipped, ${errors} errors.`);
+    console.log(`[Visual Index] Color-Agnostic HOG/LBP sync finished: ${totalIndexed} indexed, ${skipped} skipped, ${errors} errors.`);
   } catch (err) {
     console.error('[Visual Index] Catalog visual feature sync error:', err);
   }

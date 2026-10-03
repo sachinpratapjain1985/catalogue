@@ -166,5 +166,14 @@ server.listen(PORT, async () => {
   }
   // Run admin seed in background on startup
   seedAdmin();
+
+  // Run background visual index upgrade for color-agnostic HOG/LBP matching
+  setTimeout(() => {
+    import('./services/visualSearch').then(vs => {
+      vs.syncAllCatalogVisualFeatures(true).catch(err => {
+        console.warn('[Visual Index] Startup sync notice:', err);
+      });
+    });
+  }, 5000);
 });
 

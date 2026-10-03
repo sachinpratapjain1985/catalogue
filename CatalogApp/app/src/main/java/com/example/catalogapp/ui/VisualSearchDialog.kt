@@ -99,7 +99,7 @@ fun VisualSearchDialog(
                 val reqFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
                 val bodyPart = MultipartBody.Part.createFormData("image", file.name, reqFile)
 
-                val response = apiService.searchCatalogByImage(bodyPart, minConfidence = 35f, limit = 20)
+                val response = apiService.searchCatalogByImage(bodyPart, minConfidence = 25f, limit = 20)
                 searchResults = response.matches
 
                 if (searchResults.isEmpty()) {
