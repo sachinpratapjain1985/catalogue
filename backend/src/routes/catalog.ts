@@ -6,7 +6,7 @@ import fs from 'fs';
 import sharp from 'sharp';
 
 import multer from 'multer';
-import { searchCatalogByImage, syncAllCatalogVisualFeatures } from '../services/visualSearch';
+import { searchCatalogByImage, syncAllCatalogVisualFeatures, removeCachedVisualFeature } from '../services/visualSearch';
 
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 
@@ -620,6 +620,7 @@ router.delete('/real-images/:id', async (req: AuthenticatedRequest, res: Respons
       try { fs.unlinkSync(wmDiskPath); } catch (e) {}
     }
 
+    removeCachedVisualFeature(img.item_id, img.watermarked_path);
     await query('DELETE FROM item_image_features WHERE item_id = $1 AND image_path = $2', [img.item_id, img.watermarked_path]);
     await query('DELETE FROM item_real_images WHERE id = $1', [imageId]);
     res.json({ success: true, id: imageId, item_id: img.item_id });

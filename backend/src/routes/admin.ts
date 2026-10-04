@@ -6,7 +6,7 @@ import fs from 'fs';
 import { query } from '../db';
 import sharp from 'sharp';
 import { authenticateToken, requireRole, AuthenticatedRequest } from '../middleware/auth';
-import { indexItemImage } from '../services/visualSearch';
+import { indexItemImage, removeCachedVisualFeature } from '../services/visualSearch';
 
 // Limit sharp image processing to 1 concurrent thread to prevent CPU starvation
 sharp.concurrency(1);
@@ -1364,6 +1364,7 @@ router.delete('/items/real-images/:imageId', async (req: Request, res: Response)
     if (fs.existsSync(rawDiskPath)) fs.unlinkSync(rawDiskPath);
     if (fs.existsSync(wmDiskPath)) fs.unlinkSync(wmDiskPath);
 
+    removeCachedVisualFeature(img.item_id, img.watermarked_path);
     await query('DELETE FROM item_image_features WHERE item_id = $1 AND image_path = $2', [img.item_id, img.watermarked_path]);
     await query('DELETE FROM item_real_images WHERE id = $1', [imageId]);
     res.json({ success: true, id: imageId });
