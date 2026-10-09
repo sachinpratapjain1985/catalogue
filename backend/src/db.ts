@@ -114,6 +114,77 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] item_image_features table verified.');
 
+    // 3g. Add can_manage_proforma to users
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_proforma BOOLEAN NOT NULL DEFAULT FALSE');
+    console.log('[Migration] users.can_manage_proforma column verified.');
+
+    // 3h. Create proforma_invoices table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proforma_invoices (
+          id SERIAL PRIMARY KEY,
+          invoice_number VARCHAR(50) UNIQUE NOT NULL,
+          invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
+          valid_until DATE,
+          customer_name VARCHAR(255) NOT NULL,
+          business_name VARCHAR(255),
+          city VARCHAR(100),
+          address TEXT,
+          gst_number VARCHAR(50),
+          phone VARCHAR(50),
+          state VARCHAR(100) DEFAULT 'Delhi',
+          state_code VARCHAR(10) DEFAULT '07',
+          company_name VARCHAR(255) DEFAULT 'VS FASHION',
+          company_brand VARCHAR(255) DEFAULT 'DESUKA',
+          company_address TEXT DEFAULT 'IX/6344, Subhash Mohalla, Gandhi Nagar, Delhi - 110031',
+          company_gst VARCHAR(50) DEFAULT '',
+          company_phone VARCHAR(50) DEFAULT '+91 99992 49455',
+          company_email VARCHAR(100) DEFAULT 'sales@desukafashion.com',
+          bank_name VARCHAR(100) DEFAULT 'HDFC BANK',
+          bank_account_no VARCHAR(50) DEFAULT '',
+          bank_ifsc VARCHAR(50) DEFAULT '',
+          bank_branch VARCHAR(100) DEFAULT 'Gandhi Nagar, Delhi',
+          total_sets INTEGER NOT NULL DEFAULT 0,
+          total_pieces INTEGER NOT NULL DEFAULT 0,
+          subtotal_taxable NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          total_gst_5 NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          total_gst_18 NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          total_gst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          round_off NUMERIC(6, 2) NOT NULL DEFAULT 0,
+          grand_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          is_interstate BOOLEAN NOT NULL DEFAULT FALSE,
+          status VARCHAR(50) NOT NULL DEFAULT 'draft',
+          notes TEXT,
+          terms_conditions TEXT DEFAULT '1. Goods once sold will not be taken back or exchanged.\n2. Payment terms: 100% advance before dispatch.\n3. Subject to Delhi jurisdiction only.',
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('[Migration] proforma_invoices table verified.');
+
+    // 3i. Create proforma_invoice_items table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proforma_invoice_items (
+          id SERIAL PRIMARY KEY,
+          proforma_id INTEGER NOT NULL REFERENCES proforma_invoices(id) ON DELETE CASCADE,
+          item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+          article_number VARCHAR(100) NOT NULL,
+          description TEXT DEFAULT '',
+          pieces_per_set INTEGER NOT NULL DEFAULT 1,
+          sets INTEGER NOT NULL DEFAULT 1,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          rate NUMERIC(10, 2) NOT NULL DEFAULT 0,
+          taxable_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          gst_rate NUMERIC(5, 2) NOT NULL DEFAULT 5,
+          gst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          total_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('[Migration] proforma_invoice_items table verified.');
+
     // 4. Create performance indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC)');
@@ -123,6 +194,9 @@ export const runMigrations = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_real_images_item ON item_real_images(item_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_image_features_item ON item_image_features(item_id)');
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_uuid ON devices (user_id, device_uuid)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_proforma_created_by ON proforma_invoices(created_by)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_proforma_date ON proforma_invoices(invoice_date DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_proforma_items_proforma_id ON proforma_invoice_items(proforma_id)');
     console.log('[Migration] Performance indexes verified.');
 
     // 5. Auto-seed standard works if table is empty

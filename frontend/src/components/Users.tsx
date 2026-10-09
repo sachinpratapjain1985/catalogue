@@ -25,6 +25,7 @@ interface User {
   working_hours_end: string;
   can_edit_rates?: boolean;
   can_access_real_images?: boolean;
+  can_manage_proforma?: boolean;
   created_at: string;
   assignedCategories: Array<{ id: number; name: string }>;
 }
@@ -62,6 +63,7 @@ export default function Users({ token }: UsersProps) {
   const [selectedCatIds, setSelectedCatIds] = useState<number[]>([]);
   const [canEditRates, setCanEditRates] = useState(false);
   const [canAccessRealImages, setCanAccessRealImages] = useState(true);
+  const [canManageProforma, setCanManageProforma] = useState(false);
 
   // UI Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -131,6 +133,7 @@ export default function Users({ token }: UsersProps) {
       workingHoursEnd,
       canEditRates,
       canAccessRealImages,
+      canManageProforma,
       categoryIds: (role === 'stockist' || role === 'both' || role === 'manager') ? selectedCatIds : []
     };
 
@@ -173,6 +176,7 @@ export default function Users({ token }: UsersProps) {
     setSelectedCatIds(user.assignedCategories.map(c => c.id));
     setCanEditRates(!!user.can_edit_rates);
     setCanAccessRealImages(user.can_access_real_images !== false);
+    setCanManageProforma(!!user.can_manage_proforma);
   };
 
   const handleDeleteUser = async (userId: number, userName: string) => {
@@ -257,6 +261,7 @@ export default function Users({ token }: UsersProps) {
     setSelectedCatIds([]);
     setCanEditRates(false);
     setCanAccessRealImages(true);
+    setCanManageProforma(false);
   };
 
   const handleCatCheckboxChange = (catId: number) => {
@@ -452,6 +457,19 @@ export default function Users({ token }: UsersProps) {
                     Allow user to view & share RAW Real photos (watermarked)
                   </label>
                 </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                  <input 
+                    type="checkbox" 
+                    id="canManageProforma" 
+                    checked={canManageProforma} 
+                    onChange={e => setCanManageProforma(e.target.checked)}
+                    style={{ width: 'auto', margin: 0 }}
+                  />
+                  <label htmlFor="canManageProforma" style={{ margin: 0, fontWeight: 500, fontSize: '0.85rem', cursor: 'pointer' }}>
+                    Allow user to create & manage Proforma Invoices (P.I.)
+                  </label>
+                </div>
               </div>
             )}
 
@@ -634,7 +652,14 @@ export default function Users({ token }: UsersProps) {
                 <tr key={u.id}>
                   <td style={{ fontWeight: 700 }}>{u.username}</td>
                   <td>
-                    <span className="badge badge-info">{u.role}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                      <span className="badge badge-info">{u.role}</span>
+                      {u.can_manage_proforma && u.role !== 'superadmin' && (
+                        <span className="badge" style={{ background: 'rgba(194, 155, 56, 0.15)', color: '#d97706', border: '1px solid rgba(194, 155, 56, 0.3)', fontSize: '0.65rem' }}>
+                          P.I. Access
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <span className={`badge ${u.status === 'active' ? 'badge-success' : 'badge-danger'}`}>

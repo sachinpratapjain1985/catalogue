@@ -4,6 +4,7 @@ import {
   FolderOpen, 
   Users as UsersIcon, 
   FileSpreadsheet, 
+  FileText,
   LogOut,
   Sparkles,
   Lock
@@ -12,17 +13,21 @@ import Dashboard from './components/Dashboard';
 import Catalogs from './components/Catalogs';
 import Users from './components/Users';
 import Reports from './components/Reports';
+import ProformaInvoice from './components/ProformaInvoice';
 
 export interface UserProfile {
   id: number;
   username: string;
   role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
+  can_edit_rates?: boolean;
+  can_access_real_images?: boolean;
+  can_manage_proforma?: boolean;
 }
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalogs' | 'users' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalogs' | 'users' | 'reports' | 'proforma'>('dashboard');
   
   // Login form state
   const [usernameInput, setUsernameInput] = useState('');
@@ -246,6 +251,18 @@ function App() {
               </button>
             </li>
           )}
+          {(user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma) && (
+            <li>
+              <button 
+                className={`nav-link ${activeTab === 'proforma' ? 'active' : ''}`}
+                onClick={() => setActiveTab('proforma')}
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
+              >
+                <FileText size={20} />
+                Proforma Invoices
+              </button>
+            </li>
+          )}
         </ul>
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
@@ -271,6 +288,9 @@ function App() {
         {activeTab === 'catalogs' && <Catalogs token={token} user={user} />}
         {activeTab === 'users' && <Users token={token} />}
         {activeTab === 'reports' && <Reports token={token} />}
+        {activeTab === 'proforma' && (user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma) && (
+          <ProformaInvoice token={token} user={user} />
+        )}
       </main>
     </div>
   );

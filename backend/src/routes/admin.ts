@@ -311,7 +311,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
   try {
     // Get all users
     const usersRes = await query(
-      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, created_at 
+      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, created_at 
        FROM users 
        ORDER BY role ASC, username ASC`
     );
@@ -351,7 +351,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
 
 // POST /api/admin/users
 router.post('/users', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
-  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages } = req.body;
+  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma } = req.body;
 
   if (!username || !password || !role) {
     res.status(400).json({ error: 'Username, password, and role are required' });
@@ -370,9 +370,9 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     // Insert user
     const insertRes = await query(
-      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images`,
+      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma`,
       [
         username,
         hash,
@@ -382,6 +382,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
         workingHoursEnd || '23:59:59',
         canEditRates === undefined ? false : !!canEditRates,
         canAccessRealImages === undefined ? true : !!canAccessRealImages,
+        canManageProforma === undefined ? false : !!canManageProforma,
       ]
     );
 
@@ -410,7 +411,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 // PUT /api/admin/users/:id
 router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
-  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages } = req.body;
+  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma } = req.body;
 
   try {
     const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -423,7 +424,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
 
     let updateQuery = `
       UPDATE users 
-      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, can_access_real_images = $6, updated_at = CURRENT_TIMESTAMP
+      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, can_access_real_images = $6, can_manage_proforma = $7, updated_at = CURRENT_TIMESTAMP
     `;
     const params: any[] = [
       role || user.role,
@@ -432,8 +433,9 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       workingHoursEnd || user.working_hours_end,
       canEditRates !== undefined ? !!canEditRates : user.can_edit_rates,
       canAccessRealImages !== undefined ? !!canAccessRealImages : (user.can_access_real_images !== false),
+      canManageProforma !== undefined ? !!canManageProforma : (user.can_manage_proforma || false),
     ];
-    let paramIndex = 7;
+    let paramIndex = 8;
 
     if (password && password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
@@ -443,7 +445,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       paramIndex++;
     }
 
-    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images`;
+    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma`;
     params.push(userId);
 
     const updatedUserRes = await query(updateQuery, params);

@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import catalogRoutes from './routes/catalog';
+import proformaRoutes from './routes/proforma';
 
 dotenv.config();
 
@@ -45,6 +46,7 @@ app.use((req, res, next) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/proforma', proformaRoutes);
 app.use('/api/catalog', catalogRoutes);
 
 // Serve Static Frontend Assets in Production

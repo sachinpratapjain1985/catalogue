@@ -13,6 +13,7 @@ export interface AuthenticatedRequest extends Request {
     deviceUuid?: string;
     can_edit_rates?: boolean;
     can_access_real_images?: boolean;
+    can_manage_proforma?: boolean;
   };
 }
 
@@ -43,7 +44,7 @@ export const authenticateToken = async (
 
     // 1. Fetch user status, working hours, and permissions from database to ensure fresh state
     const userRes = await query(
-      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images FROM users WHERE id = $1',
+      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma FROM users WHERE id = $1',
       [decoded.userId]
     );
 
@@ -140,7 +141,8 @@ export const authenticateToken = async (
       baseRole: user.role,
       deviceUuid: decoded.deviceUuid,
       can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates,
-      can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false
+      can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false,
+      can_manage_proforma: user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma
     };
 
     next();
@@ -158,3 +160,20 @@ export const requireRole = (roles: Array<'superadmin' | 'manager' | 'both' | 'st
     next();
   };
 };
+
+export const requireProformaAccess = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  if (req.user.role === 'superadmin' || req.user.role === 'manager' || req.user.can_manage_proforma) {
+    next();
+  } else {
+    res.status(403).json({ error: 'You do not have permission to manage proforma invoices' });
+  }
+};
+
