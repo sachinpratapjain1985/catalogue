@@ -819,22 +819,20 @@ router.get('/:id/excel', async (req: AuthenticatedRequest, res: Response): Promi
     // Summary Split (Left: Bank Details, Right: Tax Breakdown)
     const summaryStartRow = currentRowNum;
 
-    // Left Side: Bank Details
+    // Left Side: Delivery Instructions & Notes (Replaced Bank Details)
     sheet.mergeCells(`A${summaryStartRow}:F${summaryStartRow}`);
-    sheet.getCell(`A${summaryStartRow}`).value = 'BANK ACCOUNT DETAILS FOR PAYMENT:';
-    sheet.getCell(`A${summaryStartRow}`).font = { bold: true, size: 10, color: { argb: darkNavy } };
+    sheet.getCell(`A${summaryStartRow}`).value = 'DELIVERY INSTRUCTIONS & SPECIAL NOTES:';
+    sheet.getCell(`A${summaryStartRow}`).font = { bold: true, size: 9.5, color: { argb: darkNavy } };
 
-    sheet.mergeCells(`A${summaryStartRow + 1}:F${summaryStartRow + 1}`);
-    sheet.getCell(`A${summaryStartRow + 1}`).value = `Bank Name: ${inv.bank_name || 'HDFC BANK'}`;
-    sheet.getCell(`A${summaryStartRow + 1}`).font = { size: 10, color: { argb: '334155' } };
-
-    sheet.mergeCells(`A${summaryStartRow + 2}:F${summaryStartRow + 2}`);
-    sheet.getCell(`A${summaryStartRow + 2}`).value = `Account No: ${inv.bank_account_no || 'Contact Admin for Details'}`;
-    sheet.getCell(`A${summaryStartRow + 2}`).font = { size: 10, color: { argb: '334155' }, bold: true };
-
-    sheet.mergeCells(`A${summaryStartRow + 3}:F${summaryStartRow + 3}`);
-    sheet.getCell(`A${summaryStartRow + 3}`).value = `IFSC Code: ${inv.bank_ifsc || ''} | Branch: ${inv.bank_branch || ''}`;
-    sheet.getCell(`A${summaryStartRow + 3}`).font = { size: 10, color: { argb: '334155' } };
+    const notesLines = (inv.notes || 'No special delivery instructions specified.').split('\n');
+    notesLines.forEach((nl: string, nIdx: number) => {
+      const nRow = summaryStartRow + 1 + nIdx;
+      if (nRow < summaryStartRow + 5) {
+        sheet.mergeCells(`A${nRow}:F${nRow}`);
+        sheet.getCell(`A${nRow}`).value = nl;
+        sheet.getCell(`A${nRow}`).font = { size: 9.5, italic: !inv.notes, color: { argb: '334155' } };
+      }
+    });
 
     // Right Side: Tax Summary
     const addSummaryLine = (r: number, label: string, val: number, isGrand = false) => {

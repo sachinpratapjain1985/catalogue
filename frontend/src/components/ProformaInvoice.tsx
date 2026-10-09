@@ -115,7 +115,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentInvoiceId, setCurrentInvoiceId] = useState<number | null>(null);
-  const formScrollRef = useRef<HTMLFormElement | null>(null);
+  const formScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Form Fields
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -850,33 +850,30 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
       {/* CREATE / EDIT PROFORMA MODAL */}
       {/* ======================================================== */}
       {isFormOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(6px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: '1.5rem',
-        }}>
+        <div 
+          className="proforma-modal-overlay"
+          style={{
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(6px)',
+          }}
+        >
           <div className="glass-card" style={{
             width: '100%',
             maxWidth: '1200px',
-            maxHeight: '94vh',
+            maxHeight: 'calc(100vh - 2.5rem)',
+            height: 'calc(100vh - 2.5rem)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             padding: 0,
-            border: '1px solid rgba(255, 255, 255, 0.1)'
+            margin: 'auto 0',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
           }}>
             {/* Modal Header */}
             <div style={{
-              padding: '1.25rem 1.75rem',
+              flexShrink: 0,
+              padding: '1.1rem 1.5rem',
               borderBottom: '1px solid var(--glass-border)',
               display: 'flex',
               justifyContent: 'space-between',
@@ -901,10 +898,13 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
 
             {/* Modal Body Form */}
             <form 
-              ref={formScrollRef}
               onSubmit={handleSaveInvoice} 
-              style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+              style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}
             >
+              <div 
+                ref={formScrollRef}
+                style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 auto', minHeight: 0 }}
+              >
               
               {/* Row 1: Invoice Meta */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
@@ -1306,22 +1306,45 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setIsFormOpen(false)} 
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary"
-                  style={{ padding: '0.75rem 1.75rem', fontWeight: 600 }}
-                >
-                  {isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}
-                </button>
+              </div>
+
+              {/* Sticky Action Footer */}
+              <div style={{ 
+                flexShrink: 0, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '0.85rem 1.5rem', 
+                borderTop: '1px solid var(--glass-border)', 
+                background: 'var(--bg-tertiary)',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.9rem', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Total: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pcs)</strong>
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.2rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsFormOpen(false)} 
+                    className="btn btn-secondary"
+                    style={{ padding: '0.6rem 1.25rem' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    style={{ padding: '0.6rem 1.75rem', fontWeight: 600 }}
+                  >
+                    {isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1332,35 +1355,31 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
       {/* PRINTABLE / EDITORIAL VIEW MODAL */}
       {/* ======================================================== */}
       {previewInvoice && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.85)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1100,
-          padding: '1rem',
-        }}>
+        <div 
+          className="proforma-modal-overlay"
+          style={{
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
           <div className="proforma-print-container" style={{
             width: '100%',
-            maxWidth: '900px',
-            maxHeight: '96vh',
+            maxWidth: '920px',
+            maxHeight: 'calc(100vh - 2.5rem)',
+            height: 'calc(100vh - 2.5rem)',
             background: '#ffffff',
             color: '#0f172a',
             borderRadius: '12px',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+            margin: 'auto 0'
           }}>
             {/* Top Toolbar (Hidden on Print) */}
             <div className="no-print" style={{
-              padding: '0.9rem 1.5rem',
+              flexShrink: 0,
+              padding: '0.85rem 1.5rem',
               background: '#0f172a',
               color: '#ffffff',
               display: 'flex',
@@ -1398,7 +1417,14 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
             </div>
 
             {/* Document Content */}
-            <div style={{ padding: '2rem', overflowY: 'auto', flex: 1, fontFamily: 'Calibri, Arial, sans-serif', color: '#1e293b' }}>
+            <div className="proforma-print-body" style={{ 
+              padding: '1.75rem', 
+              overflowY: 'auto', 
+              flex: '1 1 auto', 
+              minHeight: 0, 
+              fontFamily: 'Calibri, Arial, sans-serif', 
+              color: '#1e293b' 
+            }}>
               
               {/* Header: Company & Brand */}
               <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
@@ -1537,19 +1563,24 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 </tbody>
               </table>
 
-              {/* Bottom Split: Bank Info (Left) & Final Amounts (Right) */}
+              {/* Bottom Split: Instructions & Notes (Left) & Final Amounts (Right) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                 
-                {/* Bank Details */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc', fontSize: '0.85rem' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Bank Account Details for RTGS / NEFT:
+                {/* Delivery Instructions & Notes (Replaced Bank Details) */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc', fontSize: '0.85rem', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Delivery Instructions & Notes:
                   </div>
-                  <div>Account Name: <strong>{previewInvoice.company_name || 'VS FASHION'}</strong></div>
-                  <div>Bank Name: <strong>{previewInvoice.bank_name || 'HDFC BANK'}</strong></div>
-                  <div>Account No: <strong style={{ fontFamily: 'monospace', fontSize: '0.95rem' }}>{previewInvoice.bank_account_no || '05432000001234'}</strong></div>
-                  <div>IFSC Code: <strong style={{ fontFamily: 'monospace' }}>{previewInvoice.bank_ifsc || 'HDFC0000543'}</strong></div>
-                  <div>Branch: {previewInvoice.bank_branch || 'Gandhi Nagar, Delhi'}</div>
+                  <div style={{ 
+                    whiteSpace: 'pre-line', 
+                    color: previewInvoice.notes ? '#0f172a' : '#64748b', 
+                    fontSize: '0.85rem',
+                    lineHeight: 1.5,
+                    fontStyle: previewInvoice.notes ? 'normal' : 'italic',
+                    flex: 1
+                  }}>
+                    {previewInvoice.notes || 'No special delivery instructions specified.'}
+                  </div>
                 </div>
 
                 {/* Amount Summary */}
