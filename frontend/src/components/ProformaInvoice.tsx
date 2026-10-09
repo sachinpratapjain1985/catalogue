@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -13,7 +13,11 @@ import {
   CheckCircle2, 
   AlertCircle, 
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Phone,
+  MapPin,
+  Hash,
+  User
 } from 'lucide-react';
 
 interface CatalogItem {
@@ -111,6 +115,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentInvoiceId, setCurrentInvoiceId] = useState<number | null>(null);
+  const formScrollRef = useRef<HTMLFormElement | null>(null);
 
   // Form Fields
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -153,6 +158,13 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
   useEffect(() => {
     fetchInvoices();
   }, [page, search, statusFilter]);
+
+  // Auto-scroll modal to top whenever opened
+  useEffect(() => {
+    if (isFormOpen && formScrollRef.current) {
+      formScrollRef.current.scrollTop = 0;
+    }
+  }, [isFormOpen]);
 
   // Load catalog items once for SKU autocomplete
   useEffect(() => {
@@ -888,108 +900,183 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
             </div>
 
             {/* Modal Body Form */}
-            <form onSubmit={handleSaveInvoice} style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <form 
+              ref={formScrollRef}
+              onSubmit={handleSaveInvoice} 
+              style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+            >
               
               {/* Row 1: Invoice Meta */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Invoice Number *</label>
                   <input 
                     type="text" 
                     value={invoiceNumber} 
                     onChange={e => setInvoiceNumber(e.target.value)} 
                     required 
-                    style={{ fontFamily: 'Outfit', fontWeight: 600 }}
+                    style={{ fontFamily: 'Outfit', fontWeight: 600, padding: '0.65rem 0.9rem' }}
                   />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Invoice Date *</label>
                   <input 
                     type="date" 
                     value={invoiceDate} 
                     onChange={e => setInvoiceDate(e.target.value)} 
                     required 
+                    style={{ padding: '0.65rem 0.9rem' }}
                   />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Status</label>
-                  <select value={status} onChange={e => setStatus(e.target.value as any)}>
+                  <select 
+                    value={status} 
+                    onChange={e => setStatus(e.target.value as any)}
+                    style={{ padding: '0.65rem 0.9rem' }}
+                  >
                     <option value="draft">Draft</option>
                     <option value="sent">Sent to Buyer</option>
                     <option value="confirmed">Confirmed</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Tax Application</label>
-                  <select value={isInterstate ? 'interstate' : 'intrastate'} onChange={e => setIsInterstate(e.target.value === 'interstate')}>
+                  <select 
+                    value={isInterstate ? 'interstate' : 'intrastate'} 
+                    onChange={e => setIsInterstate(e.target.value === 'interstate')}
+                    style={{ padding: '0.65rem 0.9rem' }}
+                  >
                     <option value="intrastate">Delhi Intra-state (CGST + SGST)</option>
                     <option value="interstate">Out of Delhi Inter-state (IGST)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Row 2: Buyer Details */}
-              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: 'var(--color-primary)' }}>
-                  <Building2 size={18} />
-                  Buyer / Customer Information
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label>Customer Contact Name *</label>
+              {/* Row 2: Buyer & Customer Information (Prominent, High-Visibility Card) */}
+              <div style={{ 
+                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%)', 
+                padding: '1.35rem 1.5rem', 
+                borderRadius: 'var(--radius-lg)', 
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0, color: 'var(--color-primary)', fontSize: '1.05rem', fontWeight: 600 }}>
+                    <Building2 size={20} />
+                    Buyer & Customer Information
+                  </h4>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    All fields printed on Proforma Invoice & Export Excel
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                  
+                  {/* Customer Name */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                      <User size={15} color="#818cf8" /> Customer Name *
+                    </label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Ramesh Kumar" 
+                      placeholder="e.g. Ramesh Kumar / Boutique Owner" 
                       value={customerName} 
                       onChange={e => setCustomerName(e.target.value)} 
                       required 
+                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem', fontWeight: 500 }}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Business / Boutique Name</label>
+
+                  {/* Customer Phone / Mobile Number */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                      <Phone size={15} color="#34d399" /> Customer Phone / WhatsApp Number *
+                    </label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ 
+                        position: 'absolute', 
+                        left: '0.9rem', 
+                        fontSize: '0.9rem', 
+                        fontWeight: 600, 
+                        color: 'var(--text-secondary)',
+                        pointerEvents: 'none' 
+                      }}>
+                        +91
+                      </span>
+                      <input 
+                        type="tel" 
+                        placeholder="98765 43210" 
+                        value={phone.startsWith('+91 ') ? phone.slice(4) : phone.startsWith('+91') ? phone.slice(3) : phone} 
+                        onChange={e => {
+                          const val = e.target.value.trim();
+                          setPhone(val ? (val.startsWith('+') ? val : `+91 ${val}`) : '');
+                        }} 
+                        style={{ 
+                          width: '100%', 
+                          padding: '0.75rem 1rem 0.75rem 3.4rem', 
+                          fontSize: '0.95rem', 
+                          fontWeight: 500,
+                          letterSpacing: '0.02em'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Business / Boutique Name */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Building2 size={15} color="#cbd5e1" /> Business / Firm / Boutique Name
+                    </label>
                     <input 
                       type="text" 
                       placeholder="e.g. Raj Garments & Co." 
                       value={businessName} 
                       onChange={e => setBusinessName(e.target.value)} 
+                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Phone / WhatsApp</label>
-                    <input 
-                      type="text" 
-                      placeholder="+91 98765 43210" 
-                      value={phone} 
-                      onChange={e => setPhone(e.target.value)} 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>GST Number (GSTIN)</label>
+
+                  {/* GSTIN */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Hash size={15} color="#cbd5e1" /> GST Number (GSTIN)
+                    </label>
                     <input 
                       type="text" 
                       placeholder="e.g. 07AAAAA0000A1Z5" 
                       value={gstNumber} 
                       onChange={e => setGstNumber(e.target.value.toUpperCase())} 
-                      style={{ textTransform: 'uppercase', fontFamily: 'monospace' }}
+                      style={{ textTransform: 'uppercase', fontFamily: 'monospace', padding: '0.75rem 1rem', fontSize: '0.95rem', letterSpacing: '0.05em' }}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>City</label>
+
+                  {/* City */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <MapPin size={15} color="#cbd5e1" /> City / Destination
+                    </label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Surat, Jaipur, Delhi" 
+                      placeholder="e.g. Surat, Jaipur, Mumbai, Delhi" 
                       value={city} 
                       onChange={e => setCity(e.target.value)} 
+                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Full Billing / Shipping Address</label>
+
+                  {/* Full Billing / Shipping Address */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <MapPin size={15} color="#cbd5e1" /> Full Billing / Shipping Address
+                    </label>
                     <input 
                       type="text" 
-                      placeholder="Shop No, Street, Market" 
+                      placeholder="Shop / Unit No, Road, Market / Complex, Pin Code" 
                       value={address} 
                       onChange={e => setAddress(e.target.value)} 
+                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
                     />
                   </div>
                 </div>
