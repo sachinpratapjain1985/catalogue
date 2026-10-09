@@ -8,6 +8,7 @@ import {
   Clock, 
   FolderOpen,
   Edit2,
+  Copy,
   X
 } from 'lucide-react';
 
@@ -177,6 +178,23 @@ export default function Users({ token }: UsersProps) {
     setCanEditRates(!!user.can_edit_rates);
     setCanAccessRealImages(user.can_access_real_images !== false);
     setCanManageProforma(!!user.can_manage_proforma);
+  };
+
+  const handleDuplicateUser = (user: User) => {
+    setIsEditing(false); // Mode is creating new user
+    setEditUserId(null);
+    setUsername(`${user.username}_copy`);
+    setPassword('');
+    setRole(user.role);
+    setStatus('active');
+    setWorkingHoursStart(user.working_hours_start || '08:00:00');
+    setWorkingHoursEnd(user.working_hours_end || '20:00:00');
+    setSelectedCatIds(user.assignedCategories ? user.assignedCategories.map(c => c.id) : []);
+    setCanEditRates(!!user.can_edit_rates);
+    setCanAccessRealImages(user.can_access_real_images !== false);
+    setCanManageProforma(!!user.can_manage_proforma);
+    showSuccess(`Cloned role & permissions from "${user.username}". Enter a new username & password and save.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteUser = async (userId: number, userName: string) => {
@@ -697,6 +715,13 @@ export default function Users({ token }: UsersProps) {
                         title="Edit user profile"
                       >
                         <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDuplicateUser(u)} 
+                        style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer' }}
+                        title="Duplicate user permissions"
+                      >
+                        <Copy size={16} />
                       </button>
                       {u.username !== 'admin' && (
                         <button 

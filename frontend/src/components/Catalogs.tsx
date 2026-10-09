@@ -16,7 +16,10 @@ import {
   Copy,
   Download,
   Camera,
-  Sparkles
+  Sparkles,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw
 } from 'lucide-react';
 
 interface Category {
@@ -113,6 +116,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [webShareRealImages, setWebShareRealImages] = useState(false);
   const [shareImagesPerItem, setShareImagesPerItem] = useState<number>(1);
   const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
+  const [previewLightboxTitle, setPreviewLightboxTitle] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [copiedText, setCopiedText] = useState(false);
   const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
 
@@ -1461,9 +1466,21 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   <div key={item.id} className="catalog-card fade-in" style={{
                     border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
                   }}>
-                    <div className="catalog-image-wrapper">
+                    <div 
+                      className="catalog-image-wrapper"
+                      style={{ cursor: 'pointer', position: 'relative' }}
+                      onClick={() => {
+                        setPreviewLightboxUrl(item.image_path);
+                        setPreviewLightboxTitle(`${item.sku_id} • ${item.category_name || ''} ${item.work ? '• ' + item.work : ''}`);
+                        setZoomLevel(1);
+                      }}
+                      title="Click photo to inspect fabric & zoom in full-resolution"
+                    >
                       {/* Selection Checkbox */}
-                      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
+                      <div 
+                        style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input 
                           type="checkbox"
                           checked={selectedItems.includes(item.id)}
@@ -1490,6 +1507,26 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                           }
                         }}
                       />
+                      {/* Click to Zoom Overlay Pill */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '8px',
+                        left: '8px',
+                        background: 'rgba(0, 0, 0, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        color: '#ffffff',
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        pointerEvents: 'none',
+                        border: '1px solid rgba(255, 255, 255, 0.15)'
+                      }}>
+                        <ZoomIn size={12} color="#60a5fa" /> Zoom
+                      </div>
                       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
                         {!item.is_available ? (
                           <span className="badge badge-danger" title="Inactive (Not Available)">
@@ -2463,54 +2500,248 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         </div>
       )}
 
-      {/* Full-Resolution Lightbox Zoom Modal */}
+      {/* Full-Resolution Interactive Lightbox Zoom Modal */}
       {previewLightboxUrl && (
         <div 
-          onClick={() => setPreviewLightboxUrl(null)}
+          onClick={() => {
+            setPreviewLightboxUrl(null);
+            setZoomLevel(1);
+            setPreviewLightboxTitle(null);
+          }}
           style={{
             position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.9)',
-            backdropFilter: 'blur(8px)',
+            background: 'rgba(0, 0, 0, 0.92)',
+            backdropFilter: 'blur(10px)',
             display: 'flex',
+            flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 11000,
-            cursor: 'zoom-out',
-            padding: '1rem'
+            padding: '1rem',
+            userSelect: 'none'
           }}
         >
-          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center' }}>
-            <img 
-              src={previewLightboxUrl} 
-              alt="Zoomed preview" 
-              style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} 
-            />
-            <button 
-              onClick={() => setPreviewLightboxUrl(null)}
+          {/* Top Floating Control Bar */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 11005,
+              background: 'rgba(18, 24, 38, 0.85)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '9999px',
+              padding: '6px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
+              maxWidth: '90vw'
+            }}
+          >
+            {/* Title */}
+            {previewLightboxTitle && (
+              <span style={{ 
+                fontSize: '0.85rem', 
+                fontWeight: 700, 
+                color: '#ffffff',
+                fontFamily: 'Outfit',
+                maxWidth: '240px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                borderRight: '1px solid rgba(255, 255, 255, 0.15)',
+                paddingRight: '12px'
+              }}>
+                {previewLightboxTitle}
+              </span>
+            )}
+
+            {/* Zoom Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button 
+                onClick={() => setZoomLevel(z => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
+                disabled={zoomLevel <= 1}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: zoomLevel <= 1 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
+                  cursor: zoomLevel <= 1 ? 'not-allowed' : 'pointer'
+                }}
+                title="Zoom Out"
+              >
+                <ZoomOut size={15} />
+              </button>
+
+              <span style={{ 
+                fontSize: '0.8rem', 
+                fontWeight: 700, 
+                fontFamily: 'Outfit', 
+                color: zoomLevel > 1 ? '#60a5fa' : '#ffffff',
+                minWidth: '42px',
+                textAlign: 'center'
+              }}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+
+              <button 
+                onClick={() => setZoomLevel(z => Math.min(3.5, Math.round((z + 0.25) * 100) / 100))}
+                disabled={zoomLevel >= 3.5}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: zoomLevel >= 3.5 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
+                  cursor: zoomLevel >= 3.5 ? 'not-allowed' : 'pointer'
+                }}
+                title="Zoom In"
+              >
+                <ZoomIn size={15} />
+              </button>
+
+              {zoomLevel > 1 && (
+                <button 
+                  onClick={() => setZoomLevel(1)}
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.2)',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    borderRadius: '12px',
+                    padding: '3px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: '#c7d2fe',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  title="Reset to 100%"
+                >
+                  <RotateCcw size={12} /> Reset
+                </button>
+              )}
+            </div>
+
+            <div style={{ height: '18px', width: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
+
+            {/* Download Button */}
+            <a 
+              href={previewLightboxUrl}
+              download="catalog-image.jpg"
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
-                position: 'absolute',
-                top: '-15px',
-                right: '-15px',
-                background: 'rgba(255,255,255,0.9)',
-                color: '#000',
-                border: 'none',
+                background: 'rgba(16, 185, 129, 0.2)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
                 borderRadius: '50%',
-                width: '32px',
-                height: '32px',
+                width: '30px',
+                height: '30px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.5)'
+                color: '#10b981',
+                textDecoration: 'none'
               }}
-              title="Close Preview"
+              title="Download Full-Res Image"
             >
-              <X size={20} />
+              <Download size={15} />
+            </a>
+
+            {/* Close Button */}
+            <button 
+              onClick={() => {
+                setPreviewLightboxUrl(null);
+                setZoomLevel(1);
+                setPreviewLightboxTitle(null);
+              }}
+              style={{
+                background: 'rgba(244, 63, 94, 0.2)',
+                border: '1px solid rgba(244, 63, 94, 0.4)',
+                borderRadius: '50%',
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#f43f5e',
+                cursor: 'pointer'
+              }}
+              title="Close Preview (Esc)"
+            >
+              <X size={16} />
             </button>
+          </div>
+
+          {/* Interactive Image Display Container */}
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              // Click image to toggle between 1x and 2x zoom
+              setZoomLevel(prev => prev > 1 ? 1 : 2);
+            }}
+            style={{
+              position: 'relative',
+              maxWidth: '92vw',
+              maxHeight: '82vh',
+              overflow: 'auto',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in',
+              padding: '1rem',
+              borderRadius: '8px'
+            }}
+          >
+            <img 
+              src={previewLightboxUrl} 
+              alt="Zoomed catalog preview" 
+              style={{ 
+                maxWidth: zoomLevel === 1 ? '100%' : 'none',
+                maxHeight: zoomLevel === 1 ? '80vh' : 'none',
+                objectFit: 'contain', 
+                borderRadius: '8px', 
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9)',
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: 'center center',
+                transition: 'transform 0.22s cubic-bezier(0.2, 0, 0, 1)'
+              }} 
+            />
+          </div>
+
+          {/* Bottom Helpful Hint Badge */}
+          <div style={{
+            position: 'fixed',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            color: 'rgba(255, 255, 255, 0.7)',
+            padding: '5px 14px',
+            borderRadius: '9999px',
+            fontSize: '0.75rem',
+            pointerEvents: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            💡 Click photo to toggle 2x zoom • Use buttons to zoom up to 350% • Scroll to pan
           </div>
         </div>
       )}
