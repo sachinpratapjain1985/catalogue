@@ -8,7 +8,6 @@ import {
   Trash2, 
   Edit3, 
   Copy, 
-  X, 
   Building2, 
   CheckCircle2, 
   AlertCircle, 
@@ -160,12 +159,12 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
     fetchInvoices();
   }, [page, search, statusFilter]);
 
-  // Auto-scroll window to top whenever form is opened
+  // Auto-scroll window to top whenever form or preview is opened
   useEffect(() => {
-    if (isFormOpen) {
+    if (isFormOpen || previewInvoice) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [isFormOpen]);
+  }, [isFormOpen, previewInvoice]);
 
   // Load catalog items once for SKU autocomplete
   useEffect(() => {
@@ -1147,6 +1146,303 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
     );
   }
 
+  if (previewInvoice) {
+    return (
+      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', paddingBottom: '3rem' }}>
+        {/* Full Page Header & Actions (Hidden on Print) */}
+        <div className="no-print flex-between" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button 
+              type="button" 
+              onClick={() => setPreviewInvoice(null)} 
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem' }}
+            >
+              <ArrowLeft size={18} />
+              <span>Back to Invoices</span>
+            </button>
+            <div>
+              <h1 style={{ fontSize: '1.6rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <FileText size={24} color="#c29b38" />
+                Proforma Invoice Preview: {previewInvoice.invoice_number}
+              </h1>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                Full-page editorial view. Ready to print, save to PDF, or export to Excel.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button 
+              onClick={() => window.print()} 
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.5rem', fontWeight: 600, fontSize: '0.95rem' }}
+            >
+              <Printer size={18} />
+              Print / Save as PDF
+            </button>
+            <button 
+              onClick={() => handleDownloadExcel(previewInvoice.id, previewInvoice.invoice_number)} 
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem', color: '#10b981', fontWeight: 600 }}
+            >
+              <FileSpreadsheet size={18} />
+              Download Excel
+            </button>
+            <button 
+              onClick={() => {
+                const invToEdit = previewInvoice;
+                setPreviewInvoice(null);
+                handleOpenEditModal(invToEdit);
+              }} 
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem' }}
+            >
+              <Edit3 size={16} />
+              Edit Invoice
+            </button>
+          </div>
+        </div>
+
+        {/* Full-Page Document Sheet */}
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <div className="proforma-print-container" style={{
+            width: '100%',
+            maxWidth: '960px',
+            background: '#ffffff',
+            color: '#0f172a',
+            borderRadius: '12px',
+            boxShadow: '0 20px 45px rgba(0, 0, 0, 0.4)',
+            overflow: 'hidden',
+            border: '1px solid #cbd5e1'
+          }}>
+            <div className="proforma-print-body" style={{ 
+              padding: '2.5rem', 
+              fontFamily: 'Calibri, Arial, sans-serif', 
+              color: '#1e293b' 
+            }}>
+              
+              {/* Header: Company & Brand */}
+              <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, letterSpacing: '2px', color: '#0f172a', margin: 0 }}>
+                  {previewInvoice.company_brand || 'DESUKA'}
+                </h1>
+                <div style={{ fontSize: '1.05rem', fontWeight: 600, color: '#c29b38', letterSpacing: '1px', marginTop: '2px' }}>
+                  by {previewInvoice.company_name || 'VS FASHION'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+                  {previewInvoice.company_address || 'IX/6344, Subhash Mohalla, Gandhi Nagar, Delhi - 110031'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '2px' }}>
+                  Phone: <strong>{previewInvoice.company_phone || '+91 99992 49455'}</strong> | Email: {previewInvoice.company_email || 'sales@desukafashion.com'}
+                </div>
+              </div>
+
+              {/* Title Banner */}
+              <div style={{ background: '#0f172a', color: '#ffffff', textAlign: 'center', padding: '0.45rem', fontWeight: 700, fontSize: '1.15rem', letterSpacing: '1px', marginBottom: '1.25rem' }}>
+                PROFORMA INVOICE
+              </div>
+
+              {/* Buyer & Invoice Meta Split */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                
+                {/* Left: Buyer Details */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', background: '#f8fafc' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Billed To (Buyer):
+                  </div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                    {previewInvoice.business_name ? `${previewInvoice.business_name} (${previewInvoice.customer_name})` : previewInvoice.customer_name}
+                  </div>
+                  {previewInvoice.address && (
+                    <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '2px' }}>
+                      {previewInvoice.address}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '0.85rem', color: '#334155' }}>
+                    {previewInvoice.city ? `${previewInvoice.city}, ` : ''}{previewInvoice.state} ({previewInvoice.state_code})
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '4px' }}>
+                    Phone: <strong>{previewInvoice.phone || 'N/A'}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#0f172a', marginTop: '2px' }}>
+                    GSTIN: <strong style={{ fontFamily: 'monospace' }}>{previewInvoice.gst_number || 'URP / Not Provided'}</strong>
+                  </div>
+                </div>
+
+                {/* Right: Meta Details */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
+                    <span style={{ color: '#64748b' }}>Invoice No:</span>
+                    <strong style={{ color: '#0f172a', fontFamily: 'Outfit' }}>{previewInvoice.invoice_number}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
+                    <span style={{ color: '#64748b' }}>Invoice Date:</span>
+                    <strong>{new Date(previewInvoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
+                    <span style={{ color: '#64748b' }}>Place of Supply:</span>
+                    <strong>{previewInvoice.state} ({previewInvoice.state_code})</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
+                    <span style={{ color: '#64748b' }}>Tax Mode:</span>
+                    <strong>{previewInvoice.is_interstate ? 'Interstate (IGST)' : 'Intra-state (CGST + SGST)'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b' }}>Prepared By:</span>
+                    <span>{previewInvoice.created_by_username || 'Admin'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Line Items Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: '#0f172a', color: '#ffffff' }}>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '30px' }}>#</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'left' }}>Article No</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'left' }}>Description</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '45px' }}>Sets</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '55px' }}>Pcs/Set</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '50px' }}>Qty</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '70px' }}>Rate (₹)</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '85px' }}>Taxable (₹)</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '55px' }}>GST %</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '80px' }}>GST (₹)</th>
+                    <th style={{ padding: '7px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '90px' }}>Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(previewInvoice.items || []).map((it, idx) => (
+                    <tr key={idx} style={{ background: idx % 2 === 1 ? '#f8fafc' : '#ffffff' }}>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>{idx + 1}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', fontWeight: 700 }}>{it.article_number}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', color: '#475569' }}>{it.description || '-'}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>{it.sets}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>{it.pieces_per_set}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700 }}>{it.quantity}</td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
+                        {parseFloat(it.rate as any).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
+                        {parseFloat(it.taxable_amount as any).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>
+                        {it.gst_rate}%
+                      </td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
+                        {parseFloat(it.gst_amount as any).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>
+                        {parseFloat(it.total_amount as any).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Totals Line */}
+                  <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
+                    <td colSpan={3} style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'right' }}>TOTALS:</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>{previewInvoice.total_sets}</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>{previewInvoice.total_pieces}</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace' }}>
+                      ₹{parseFloat(previewInvoice.subtotal_taxable as string).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace' }}>
+                      ₹{parseFloat(previewInvoice.total_gst_amount as string).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '7px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
+                      ₹{parseFloat(previewInvoice.grand_total as string).toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Bottom Split: Instructions & Notes (Left) & Final Amounts (Right) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                
+                {/* Delivery Instructions & Notes (Replaced Bank Details) */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', background: '#f8fafc', fontSize: '0.85rem', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Delivery Instructions & Notes:
+                  </div>
+                  <div style={{ 
+                    whiteSpace: 'pre-line', 
+                    color: previewInvoice.notes ? '#0f172a' : '#64748b', 
+                    fontSize: '0.9rem',
+                    lineHeight: 1.5,
+                    fontStyle: previewInvoice.notes ? 'normal' : 'italic',
+                    flex: 1
+                  }}>
+                    {previewInvoice.notes || 'No special delivery instructions specified.'}
+                  </div>
+                </div>
+
+                {/* Amount Summary */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', background: '#f8fafc', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#475569' }}>Taxable Amount:</span>
+                    <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.subtotal_taxable as string).toFixed(2)}</span>
+                  </div>
+
+                  {previewInvoice.is_interstate ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
+                      <span>IGST:</span>
+                      <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.total_gst_amount as string).toFixed(2)}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
+                        <span>CGST:</span>
+                        <span style={{ fontFamily: 'monospace' }}>₹{(parseFloat(previewInvoice.total_gst_amount as string) / 2).toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
+                        <span>SGST:</span>
+                        <span style={{ fontFamily: 'monospace' }}>₹{(parseFloat(previewInvoice.total_gst_amount as string) / 2).toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {parseFloat(previewInvoice.round_off as string) !== 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>Round Off:</span>
+                      <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.round_off as string).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #0f172a', paddingTop: '8px', marginTop: '4px' }}>
+                    <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>GRAND TOTAL:</span>
+                    <strong style={{ fontWeight: 800, fontSize: '1.3rem', fontFamily: 'Outfit', color: '#0f172a' }}>
+                      ₹{parseFloat(previewInvoice.grand_total as string).toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms and Signatory */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>TERMS & CONDITIONS:</div>
+                  <div style={{ whiteSpace: 'pre-line' }}>{previewInvoice.terms_conditions || '1. Goods once sold will not be taken back.\n2. 100% advance payment required before dispatch.'}</div>
+                </div>
+
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <div style={{ height: '40px' }}></div>
+                  <div style={{ borderTop: '1px solid #475569', width: '180px', paddingTop: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                    For VS FASHION
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Authorized Signatory</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Top Banner & Header */}
@@ -1388,299 +1684,6 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
         )}
       </div>
 
-      {/* ======================================================== */}
-      {/* PRINTABLE / EDITORIAL VIEW MODAL */}
-      {/* ======================================================== */}
-      {previewInvoice && (
-        <div 
-          className="proforma-modal-overlay"
-          style={{
-            background: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          <div className="proforma-print-container" style={{
-            width: '100%',
-            maxWidth: '920px',
-            maxHeight: 'calc(100vh - 2.5rem)',
-            height: 'calc(100vh - 2.5rem)',
-            background: '#ffffff',
-            color: '#0f172a',
-            borderRadius: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-            margin: 'auto 0'
-          }}>
-            {/* Top Toolbar (Hidden on Print) */}
-            <div className="no-print" style={{
-              flexShrink: 0,
-              padding: '0.85rem 1.5rem',
-              background: '#0f172a',
-              color: '#ffffff',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <FileText size={20} color="#c29b38" />
-                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Proforma Invoice Preview: {previewInvoice.invoice_number}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button 
-                  onClick={() => window.print()} 
-                  className="btn btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-                >
-                  <Printer size={16} />
-                  Print / Save as PDF
-                </button>
-                <button 
-                  onClick={() => handleDownloadExcel(previewInvoice.id, previewInvoice.invoice_number)} 
-                  className="btn btn-secondary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 1rem', fontSize: '0.85rem', color: '#10b981' }}
-                >
-                  <FileSpreadsheet size={16} />
-                  Download Excel
-                </button>
-                <button 
-                  onClick={() => setPreviewInvoice(null)} 
-                  style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', marginLeft: '0.5rem' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Document Content */}
-            <div className="proforma-print-body" style={{ 
-              padding: '1.75rem', 
-              overflowY: 'auto', 
-              flex: '1 1 auto', 
-              minHeight: 0, 
-              fontFamily: 'Calibri, Arial, sans-serif', 
-              color: '#1e293b' 
-            }}>
-              
-              {/* Header: Company & Brand */}
-              <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '2px', color: '#0f172a', margin: 0 }}>
-                  {previewInvoice.company_brand || 'DESUKA'}
-                </h1>
-                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#c29b38', letterSpacing: '1px', marginTop: '2px' }}>
-                  by {previewInvoice.company_name || 'VS FASHION'}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
-                  {previewInvoice.company_address || 'IX/6344, Subhash Mohalla, Gandhi Nagar, Delhi - 110031'}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '2px' }}>
-                  Phone: <strong>{previewInvoice.company_phone || '+91 99992 49455'}</strong> | Email: {previewInvoice.company_email || 'sales@desukafashion.com'}
-                </div>
-              </div>
-
-              {/* Title Banner */}
-              <div style={{ background: '#0f172a', color: '#ffffff', textAlign: 'center', padding: '0.4rem', fontWeight: 700, fontSize: '1.1rem', letterSpacing: '1px', marginBottom: '1.25rem' }}>
-                PROFORMA INVOICE
-              </div>
-
-              {/* Buyer & Invoice Meta Split */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                
-                {/* Left: Buyer Details */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Billed To (Buyer):
-                  </div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
-                    {previewInvoice.business_name ? `${previewInvoice.business_name} (${previewInvoice.customer_name})` : previewInvoice.customer_name}
-                  </div>
-                  {previewInvoice.address && (
-                    <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '2px' }}>
-                      {previewInvoice.address}
-                    </div>
-                  )}
-                  <div style={{ fontSize: '0.85rem', color: '#334155' }}>
-                    {previewInvoice.city ? `${previewInvoice.city}, ` : ''}{previewInvoice.state} ({previewInvoice.state_code})
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '4px' }}>
-                    Phone: <strong>{previewInvoice.phone || 'N/A'}</strong>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#0f172a', marginTop: '2px' }}>
-                    GSTIN: <strong style={{ fontFamily: 'monospace' }}>{previewInvoice.gst_number || 'URP / Not Provided'}</strong>
-                  </div>
-                </div>
-
-                {/* Right: Meta Details */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-                    <span style={{ color: '#64748b' }}>Invoice No:</span>
-                    <strong style={{ color: '#0f172a', fontFamily: 'Outfit' }}>{previewInvoice.invoice_number}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-                    <span style={{ color: '#64748b' }}>Invoice Date:</span>
-                    <strong>{new Date(previewInvoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-                    <span style={{ color: '#64748b' }}>Place of Supply:</span>
-                    <strong>{previewInvoice.state} ({previewInvoice.state_code})</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-                    <span style={{ color: '#64748b' }}>Tax Mode:</span>
-                    <strong>{previewInvoice.is_interstate ? 'Interstate (IGST)' : 'Intra-state (CGST + SGST)'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Prepared By:</span>
-                    <span>{previewInvoice.created_by_username || 'Admin'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Line Items Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ background: '#0f172a', color: '#ffffff' }}>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '30px' }}>#</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'left' }}>Article No</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'left' }}>Description</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '45px' }}>Sets</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '55px' }}>Pcs/Set</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '50px' }}>Qty</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '70px' }}>Rate (₹)</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '80px' }}>Taxable (₹)</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'center', width: '55px' }}>GST %</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '75px' }}>GST (₹)</th>
-                    <th style={{ padding: '6px 8px', border: '1px solid #0f172a', textAlign: 'right', width: '85px' }}>Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(previewInvoice.items || []).map((it, idx) => (
-                    <tr key={idx} style={{ background: idx % 2 === 1 ? '#f8fafc' : '#ffffff' }}>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>{idx + 1}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', fontWeight: 700 }}>{it.article_number}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', color: '#475569' }}>{it.description || '-'}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>{it.sets}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>{it.pieces_per_set}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700 }}>{it.quantity}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
-                        {parseFloat(it.rate as any).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
-                        {parseFloat(it.taxable_amount as any).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>
-                        {it.gst_rate}%
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontFamily: 'monospace' }}>
-                        {parseFloat(it.gst_amount as any).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>
-                        {parseFloat(it.total_amount as any).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Totals Line */}
-                  <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
-                    <td colSpan={3} style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'right' }}>TOTALS:</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>{previewInvoice.total_sets}</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>{previewInvoice.total_pieces}</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace' }}>
-                      ₹{parseFloat(previewInvoice.subtotal_taxable as string).toFixed(2)}
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center' }}>-</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace' }}>
-                      ₹{parseFloat(previewInvoice.total_gst_amount as string).toFixed(2)}
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
-                      ₹{parseFloat(previewInvoice.grand_total as string).toFixed(2)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Bottom Split: Instructions & Notes (Left) & Final Amounts (Right) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                
-                {/* Delivery Instructions & Notes (Replaced Bank Details) */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc', fontSize: '0.85rem', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
-                    Delivery Instructions & Notes:
-                  </div>
-                  <div style={{ 
-                    whiteSpace: 'pre-line', 
-                    color: previewInvoice.notes ? '#0f172a' : '#64748b', 
-                    fontSize: '0.85rem',
-                    lineHeight: 1.5,
-                    fontStyle: previewInvoice.notes ? 'normal' : 'italic',
-                    flex: 1
-                  }}>
-                    {previewInvoice.notes || 'No special delivery instructions specified.'}
-                  </div>
-                </div>
-
-                {/* Amount Summary */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.9rem', background: '#f8fafc', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#475569' }}>Taxable Amount:</span>
-                    <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.subtotal_taxable as string).toFixed(2)}</span>
-                  </div>
-
-                  {previewInvoice.is_interstate ? (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
-                      <span>IGST:</span>
-                      <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.total_gst_amount as string).toFixed(2)}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
-                        <span>CGST:</span>
-                        <span style={{ fontFamily: 'monospace' }}>₹{(parseFloat(previewInvoice.total_gst_amount as string) / 2).toFixed(2)}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
-                        <span>SGST:</span>
-                        <span style={{ fontFamily: 'monospace' }}>₹{(parseFloat(previewInvoice.total_gst_amount as string) / 2).toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
-
-                  {parseFloat(previewInvoice.round_off as string) !== 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                      <span>Round Off:</span>
-                      <span style={{ fontFamily: 'monospace' }}>₹{parseFloat(previewInvoice.round_off as string).toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #0f172a', paddingTop: '6px', marginTop: '4px' }}>
-                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>GRAND TOTAL:</span>
-                    <strong style={{ fontWeight: 800, fontSize: '1.2rem', fontFamily: 'Outfit', color: '#0f172a' }}>
-                      ₹{parseFloat(previewInvoice.grand_total as string).toLocaleString('en-IN')}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Terms and Signatory */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>TERMS & CONDITIONS:</div>
-                  <div style={{ whiteSpace: 'pre-line' }}>{previewInvoice.terms_conditions || '1. Goods once sold will not be taken back.\n2. 100% advance payment required before dispatch.'}</div>
-                </div>
-
-                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <div style={{ height: '40px' }}></div>
-                  <div style={{ borderTop: '1px solid #475569', width: '180px', paddingTop: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
-                    For VS FASHION
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Authorized Signatory</div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
