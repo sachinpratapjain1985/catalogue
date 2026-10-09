@@ -190,7 +190,12 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
         setInvoices(data.invoices || []);
         setTotalCount(data.total || 0);
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          localStorage.removeItem('admin_token');
+          window.location.reload();
+          return;
+        }
         setErrorMsg(err.error || 'Failed to fetch proforma invoices');
       }
     } catch (e) {

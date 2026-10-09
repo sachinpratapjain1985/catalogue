@@ -45,8 +45,8 @@ app.use((req, res, next) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
 app.use('/api/admin/proforma', proformaRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/catalog', catalogRoutes);
 
 // Serve Static Frontend Assets in Production

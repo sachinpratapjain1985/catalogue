@@ -251,7 +251,7 @@ function App() {
               </button>
             </li>
           )}
-          {(user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma) && (
+          {(user.role === 'superadmin' || user.role === 'manager' || user.can_manage_proforma !== false) && (
             <li>
               <button 
                 className={`nav-link ${activeTab === 'proforma' ? 'active' : ''}`}
@@ -288,7 +288,7 @@ function App() {
         {activeTab === 'catalogs' && <Catalogs token={token} user={user} />}
         {activeTab === 'users' && <Users token={token} />}
         {activeTab === 'reports' && <Reports token={token} />}
-        {activeTab === 'proforma' && (user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma) && (
+        {activeTab === 'proforma' && (user.role === 'superadmin' || user.role === 'manager' || user.can_manage_proforma !== false) && (
           <ProformaInvoice token={token} user={user} />
         )}
       </main>

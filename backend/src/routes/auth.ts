@@ -37,8 +37,9 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check device authorization for users (stockist, sales, both, and manager with device context)
-    const requiresDeviceCheck = user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || (user.role === 'manager' && deviceUuid);
+    // Check device authorization for mobile users (stockist, sales, both, and manager with device context)
+    const isWebLogin = deviceUuid && deviceUuid.startsWith('web-');
+    const requiresDeviceCheck = !isWebLogin && (user.role === 'stockist' || user.role === 'sales' || user.role === 'both' || (user.role === 'manager' && deviceUuid));
     if (requiresDeviceCheck) {
       if (!deviceUuid) {
         res.status(400).json({ error: 'Device UUID is required for login' });
@@ -52,8 +53,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       );
 
       if (deviceRes.rows.length === 0) {
-        const dName = deviceName || 'Unknown Device';
-        // Register new device strictly by device_uuid as pending
+        const dName = deviceName || 'Mobile Device';
+        // Register new mobile hardware device as pending
         try {
           await query(
             'INSERT INTO devices (user_id, device_uuid, device_name, status) VALUES ($1, $2, $3, $4)',
@@ -86,6 +87,18 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
           deviceUuid,
         });
         return;
+      }
+    } else if (isWebLogin) {
+      // Record web browser device as approved
+      try {
+        await query(
+          `INSERT INTO devices (user_id, device_uuid, device_name, status) 
+           VALUES ($1, $2, $3, 'approved') 
+           ON CONFLICT (user_id, device_uuid) DO UPDATE SET status = 'approved', updated_at = CURRENT_TIMESTAMP`,
+          [user.id, deviceUuid, deviceName || 'Web Browser']
+        );
+      } catch (e) {
+        // Ignore conflict errors
       }
     }
 

@@ -114,8 +114,9 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] item_image_features table verified.');
 
-    // 3g. Add can_manage_proforma to users
-    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_proforma BOOLEAN NOT NULL DEFAULT FALSE');
+    // 3g. Add can_manage_proforma to users (Default TRUE so authorized staff can use it immediately)
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_proforma BOOLEAN NOT NULL DEFAULT TRUE');
+    await pool.query('UPDATE users SET can_manage_proforma = TRUE WHERE can_manage_proforma IS NULL');
     console.log('[Migration] users.can_manage_proforma column verified.');
 
     // 3h. Create proforma_invoices table
