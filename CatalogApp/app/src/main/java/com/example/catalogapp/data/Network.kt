@@ -199,17 +199,19 @@ object NetworkClient {
         }
 
     private var retrofitInstance: Retrofit? = null
+    private var okHttpClientInstance: OkHttpClient? = null
 
-    fun getApiService(sessionManager: SessionManager): CatalogApiService {
-        if (retrofitInstance == null) {
+    fun getOkHttpClient(sessionManager: SessionManager): OkHttpClient {
+        if (okHttpClientInstance == null) {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BASIC
             }
 
-            val okHttpClient = OkHttpClient.Builder()
+            okHttpClientInstance = OkHttpClient.Builder()
                 .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
                 .readTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
                 .writeTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                .connectionPool(okhttp3.ConnectionPool(10, 5, java.util.concurrent.TimeUnit.MINUTES))
                 .addInterceptor(loggingInterceptor)
                 .addInterceptor { chain ->
                     val original = chain.request()
@@ -232,6 +234,13 @@ object NetworkClient {
                     chain.proceed(request)
                 }
                 .build()
+        }
+        return okHttpClientInstance!!
+    }
+
+    fun getApiService(sessionManager: SessionManager): CatalogApiService {
+        if (retrofitInstance == null) {
+            val okHttpClient = getOkHttpClient(sessionManager)
 
             retrofitInstance = Retrofit.Builder()
                 .baseUrl(baseUrl)
