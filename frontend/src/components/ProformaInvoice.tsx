@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -17,7 +17,9 @@ import {
   Phone,
   MapPin,
   Hash,
-  User
+  User,
+  ArrowLeft,
+  Save
 } from 'lucide-react';
 
 interface CatalogItem {
@@ -115,7 +117,6 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentInvoiceId, setCurrentInvoiceId] = useState<number | null>(null);
-  const formScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Form Fields
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -159,10 +160,10 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
     fetchInvoices();
   }, [page, search, statusFilter]);
 
-  // Auto-scroll modal to top whenever opened
+  // Auto-scroll window to top whenever form is opened
   useEffect(() => {
-    if (isFormOpen && formScrollRef.current) {
-      formScrollRef.current.scrollTop = 0;
+    if (isFormOpen) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [isFormOpen]);
 
@@ -605,6 +606,547 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
+  if (isFormOpen) {
+    return (
+      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', paddingBottom: '3rem' }}>
+        {/* Full Page Header & Top Quick Actions */}
+        <div className="flex-between" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button 
+              type="button" 
+              onClick={() => setIsFormOpen(false)} 
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem' }}
+            >
+              <ArrowLeft size={18} />
+              <span>Back to Invoices</span>
+            </button>
+            <div>
+              <h1 style={{ fontSize: '1.6rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <FileText size={24} color="var(--color-primary)" />
+                {isEditing ? `Edit Proforma Invoice: ${invoiceNumber}` : 'Create New Proforma Invoice'}
+              </h1>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                Enter buyer details and catalog article numbers. Rate and GST are calculated automatically.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.75rem', 
+              background: 'var(--bg-secondary)', 
+              padding: '0.5rem 1rem', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid var(--glass-border)' 
+            }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Total: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pcs)</strong>
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>|</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.15rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
+              </span>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={() => setIsFormOpen(false)} 
+              className="btn btn-secondary"
+              style={{ padding: '0.65rem 1.25rem' }}
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              onClick={handleSaveInvoice} 
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.6rem', fontWeight: 600 }}
+            >
+              <Save size={18} />
+              <span>{isEditing ? 'Update Invoice' : 'Generate Invoice'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        {errorMsg && (
+          <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', padding: '0.9rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(244, 63, 94, 0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertCircle size={18} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* The Full Page Form */}
+        <form onSubmit={handleSaveInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+          
+          {/* Row 1: Invoice Meta */}
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 1rem 0', color: 'var(--color-primary)', fontSize: '1rem', fontWeight: 600 }}>
+              <FileText size={18} />
+              Invoice Configuration & Tax Mode
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Invoice Number *</label>
+                <input 
+                  type="text" 
+                  value={invoiceNumber} 
+                  onChange={e => setInvoiceNumber(e.target.value)} 
+                  required 
+                  style={{ fontFamily: 'Outfit', fontWeight: 600, padding: '0.75rem 1rem', fontSize: '1rem' }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Invoice Date *</label>
+                <input 
+                  type="date" 
+                  value={invoiceDate} 
+                  onChange={e => setInvoiceDate(e.target.value)} 
+                  required 
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Status</label>
+                <select 
+                  value={status} 
+                  onChange={e => setStatus(e.target.value as any)}
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent to Buyer</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Tax Application</label>
+                <select 
+                  value={isInterstate ? 'interstate' : 'intrastate'} 
+                  onChange={e => setIsInterstate(e.target.value === 'interstate')}
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                >
+                  <option value="intrastate">Delhi Intra-state (CGST + SGST)</option>
+                  <option value="interstate">Out of Delhi Inter-state (IGST)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Buyer & Customer Information */}
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+              <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0, color: 'var(--color-primary)', fontSize: '1.05rem', fontWeight: 600 }}>
+                <Building2 size={20} />
+                Buyer & Customer Information
+              </h4>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                All fields printed on Proforma Invoice & Export Excel
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+              {/* Customer Name */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                  <User size={15} color="#818cf8" /> Customer Name *
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Ramesh Kumar / Boutique Owner" 
+                  value={customerName} 
+                  onChange={e => setCustomerName(e.target.value)} 
+                  required 
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem', fontWeight: 500 }}
+                />
+              </div>
+
+              {/* Customer Phone / WhatsApp */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                  <Phone size={15} color="#34d399" /> Customer Phone / WhatsApp Number *
+                </label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ 
+                    position: 'absolute', 
+                    left: '0.9rem', 
+                    fontSize: '0.9rem', 
+                    fontWeight: 600, 
+                    color: 'var(--text-secondary)',
+                    pointerEvents: 'none' 
+                  }}>
+                    +91
+                  </span>
+                  <input 
+                    type="tel" 
+                    placeholder="98765 43210" 
+                    value={phone.startsWith('+91 ') ? phone.slice(4) : phone.startsWith('+91') ? phone.slice(3) : phone} 
+                    onChange={e => {
+                      const val = e.target.value.trim();
+                      setPhone(val ? (val.startsWith('+') ? val : `+91 ${val}`) : '');
+                    }} 
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.75rem 1rem 0.75rem 3.4rem', 
+                      fontSize: '0.95rem', 
+                      fontWeight: 500,
+                      letterSpacing: '0.02em'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Business Name */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Building2 size={15} color="#cbd5e1" /> Business / Firm / Boutique Name
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Raj Garments & Co." 
+                  value={businessName} 
+                  onChange={e => setBusinessName(e.target.value)} 
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                />
+              </div>
+
+              {/* GSTIN */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Hash size={15} color="#cbd5e1" /> GST Number (GSTIN)
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. 07AAAAA0000A1Z5" 
+                  value={gstNumber} 
+                  onChange={e => setGstNumber(e.target.value.toUpperCase())} 
+                  style={{ textTransform: 'uppercase', fontFamily: 'monospace', padding: '0.75rem 1rem', fontSize: '0.95rem', letterSpacing: '0.05em' }}
+                />
+              </div>
+
+              {/* City */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <MapPin size={15} color="#cbd5e1" /> City / Destination
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Surat, Jaipur, Mumbai, Delhi" 
+                  value={city} 
+                  onChange={e => setCity(e.target.value)} 
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                />
+              </div>
+
+              {/* Full Address */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <MapPin size={15} color="#cbd5e1" /> Full Billing / Shipping Address
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Shop / Unit No, Road, Market / Complex, Pin Code" 
+                  value={address} 
+                  onChange={e => setAddress(e.target.value)} 
+                  style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Items Grid (Spacious full page table!) */}
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div className="flex-between" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>
+                  <Sparkles size={18} color="#d97706" />
+                  Quotation Line Items & Garments
+                </h4>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Add catalog SKUs or custom manual articles. Rate and 5% / 18% GST are calculated automatically.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button 
+                  type="button" 
+                  onClick={() => addLineItem(true)} 
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                >
+                  <Plus size={15} /> Add Catalog SKU
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => addLineItem(false)} 
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                >
+                  <Plus size={15} /> Add Manual Item (Palazzo / Suit)
+                </button>
+              </div>
+            </div>
+
+            <div className="table-container" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}>#</th>
+                    <th style={{ minWidth: '180px' }}>Article / SKU No *</th>
+                    <th style={{ minWidth: '180px' }}>Description / Work</th>
+                    <th style={{ width: '90px' }}>Sets</th>
+                    <th style={{ width: '90px' }}>Pcs/Set</th>
+                    <th style={{ width: '90px' }}>Total Qty</th>
+                    <th style={{ width: '120px' }}>Rate (₹/pc)</th>
+                    <th style={{ width: '130px' }}>Taxable (₹)</th>
+                    <th style={{ width: '100px' }}>GST %</th>
+                    <th style={{ width: '120px' }}>GST Amt (₹)</th>
+                    <th style={{ width: '130px' }}>Total (₹)</th>
+                    <th style={{ width: '50px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItems.map((item, index) => (
+                    <tr key={index}>
+                      <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{index + 1}</td>
+                      <td>
+                        <div style={{ position: 'relative' }}>
+                          <input 
+                            type="text" 
+                            list={`sku-list-${index}`}
+                            placeholder="Type or pick SKU..." 
+                            value={item.article_number} 
+                            onChange={e => updateLineItem(index, 'article_number', e.target.value)}
+                            style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.9rem', fontFamily: 'Outfit', fontWeight: 600 }}
+                            required
+                          />
+                          <datalist id={`sku-list-${index}`}>
+                            {catalogItems.map(c => (
+                              <option key={c.id} value={c.sku_id}>
+                                {c.sku_id} - {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.revised_rate || c.rate})
+                              </option>
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Mirror Work, Palazzo" 
+                          value={item.description} 
+                          onChange={e => updateLineItem(index, 'description', e.target.value)}
+                          style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={item.sets} 
+                          onChange={e => updateLineItem(index, 'sets', parseInt(e.target.value) || 1)}
+                          style={{ width: '100%', padding: '0.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 600 }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={item.pieces_per_set} 
+                          onChange={e => updateLineItem(index, 'pieces_per_set', parseInt(e.target.value) || 1)}
+                          style={{ width: '100%', padding: '0.5rem', textAlign: 'center', fontSize: '0.9rem' }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center', fontWeight: 700, fontFamily: 'Outfit', fontSize: '0.95rem' }}>
+                        {item.quantity}
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          min="0" 
+                          step="any"
+                          value={item.rate || ''} 
+                          placeholder="0"
+                          onChange={e => updateLineItem(index, 'rate', parseFloat(e.target.value) || 0)}
+                          style={{ width: '100%', padding: '0.5rem', textAlign: 'right', fontSize: '0.9rem', fontWeight: 600 }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                        ₹{item.taxable_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td>
+                        <select 
+                          value={item.gst_rate} 
+                          onChange={e => updateLineItem(index, 'gst_rate', parseFloat(e.target.value))}
+                          style={{ width: '100%', padding: '0.45rem', fontSize: '0.85rem', textAlign: 'center' }}
+                        >
+                          <option value="5">5%</option>
+                          <option value="18">18%</option>
+                          <option value="12">12%</option>
+                          <option value="0">0%</option>
+                        </select>
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.9rem', color: '#f59e0b' }}>
+                        ₹{item.gst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'Outfit', fontWeight: 700, fontSize: '0.95rem' }}>
+                        ₹{item.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => removeLineItem(index)} 
+                          style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '4px' }}
+                          title="Remove item"
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem' }}>
+              <button 
+                type="button" 
+                onClick={() => addLineItem(true)} 
+                className="btn btn-secondary"
+                style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+              >
+                <Plus size={15} /> Add Another Article
+              </button>
+            </div>
+          </div>
+
+          {/* Row 4: 2-Column Split: Notes/Terms & Financial Breakdown */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+            <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontWeight: 600 }}>Delivery Instructions & Special Notes</label>
+                <textarea 
+                  rows={3} 
+                  placeholder="e.g. Transport through V-Trans, packing in plastic sacks, dispatch by Friday..." 
+                  value={notes} 
+                  onChange={e => setNotes(e.target.value)} 
+                  style={{ width: '100%', fontSize: '0.9rem' }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Printed prominently on the final Proforma Invoice and exported Excel.
+                </span>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontWeight: 600 }}>Terms & Conditions</label>
+                <textarea 
+                  rows={4} 
+                  value={termsConditions} 
+                  onChange={e => setTermsConditions(e.target.value)} 
+                  style={{ width: '100%', fontSize: '0.85rem' }}
+                />
+              </div>
+            </div>
+
+            {/* Calculation Summary Card */}
+            <div className="glass-card" style={{ padding: '1.5rem', background: 'var(--bg-tertiary)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <h4 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.6rem', margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>
+                Invoice Summary Breakdown
+              </h4>
+              
+              <div className="flex-between" style={{ fontSize: '0.95rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total Sets:</span>
+                <strong>{summary.totalSets} Sets</strong>
+              </div>
+              <div className="flex-between" style={{ fontSize: '0.95rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total Garment Pieces:</span>
+                <strong>{summary.totalPieces} Pieces</strong>
+              </div>
+              <div className="flex-between" style={{ fontSize: '0.95rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Subtotal (Taxable Value):</span>
+                <span style={{ fontFamily: 'monospace' }}>₹{summary.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              {summary.gst5 > 0 && (
+                <div className="flex-between" style={{ fontSize: '0.9rem', color: '#f59e0b' }}>
+                  <span>GST @ 5% (Items &le; ₹2,500):</span>
+                  <span style={{ fontFamily: 'monospace' }}>₹{summary.gst5.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+
+              {summary.gst18 > 0 && (
+                <div className="flex-between" style={{ fontSize: '0.9rem', color: '#f59e0b' }}>
+                  <span>GST @ 18% (Items &gt; ₹2,500):</span>
+                  <span style={{ fontFamily: 'monospace' }}>₹{summary.gst18.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+
+              <div className="flex-between" style={{ fontSize: '0.95rem', color: 'var(--color-primary)' }}>
+                <span>{isInterstate ? 'Total IGST (Interstate):' : 'Total CGST + SGST (Delhi):'}</span>
+                <strong style={{ fontFamily: 'monospace' }}>₹{summary.totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+              </div>
+
+              {summary.roundOff !== 0 && (
+                <div className="flex-between" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  <span>Round Off:</span>
+                  <span style={{ fontFamily: 'monospace' }}>{summary.roundOff > 0 ? `+₹${summary.roundOff}` : `-₹${Math.abs(summary.roundOff)}`}</span>
+                </div>
+              )}
+
+              <div className="flex-between" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '0.85rem', marginTop: '0.25rem' }}>
+                <span style={{ fontSize: '1.15rem', fontWeight: 700 }}>GRAND TOTAL:</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit', color: 'var(--color-success)' }}>
+                  ₹{summary.grandTotal.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 5: Full Page Sticky Footer / Action Bar */}
+          <div className="glass-card" style={{ 
+            padding: '1.25rem 2rem', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            flexWrap: 'wrap', 
+            gap: '1rem',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--glass-border)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '0.95rem' }}>
+              <span>
+                Total Items: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pieces)</strong>
+              </span>
+              <span style={{ color: 'var(--glass-border)' }}>|</span>
+              <span>
+                Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.35rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                type="button" 
+                onClick={() => setIsFormOpen(false)} 
+                className="btn btn-secondary"
+                style={{ padding: '0.75rem 1.5rem', fontSize: '0.95rem' }}
+              >
+                Cancel / Back
+              </button>
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 2rem', fontWeight: 600, fontSize: '1rem' }}
+              >
+                <Save size={18} />
+                <span>{isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Top Banner & Header */}
@@ -845,511 +1387,6 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
           </div>
         )}
       </div>
-
-      {/* ======================================================== */}
-      {/* CREATE / EDIT PROFORMA MODAL */}
-      {/* ======================================================== */}
-      {isFormOpen && (
-        <div 
-          className="proforma-modal-overlay"
-          style={{
-            background: 'rgba(0, 0, 0, 0.82)',
-            backdropFilter: 'blur(6px)',
-          }}
-        >
-          <div className="glass-card" style={{
-            width: '100%',
-            maxWidth: '1200px',
-            maxHeight: 'calc(100vh - 2.5rem)',
-            height: 'calc(100vh - 2.5rem)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            padding: 0,
-            margin: 'auto 0',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              flexShrink: 0,
-              padding: '1.1rem 1.5rem',
-              borderBottom: '1px solid var(--glass-border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'var(--bg-tertiary)'
-            }}>
-              <div>
-                <h2 style={{ fontSize: '1.4rem' }}>
-                  {isEditing ? `Edit Proforma Invoice: ${invoiceNumber}` : 'Create New Proforma Invoice'}
-                </h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Enter buyer details and catalog article numbers. Rate and GST are calculated automatically.
-                </p>
-              </div>
-              <button 
-                onClick={() => setIsFormOpen(false)} 
-                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-              >
-                <X size={22} />
-              </button>
-            </div>
-
-            {/* Modal Body Form */}
-            <form 
-              onSubmit={handleSaveInvoice} 
-              style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}
-            >
-              <div 
-                ref={formScrollRef}
-                style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 auto', minHeight: 0 }}
-              >
-              
-              {/* Row 1: Invoice Meta */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Invoice Number *</label>
-                  <input 
-                    type="text" 
-                    value={invoiceNumber} 
-                    onChange={e => setInvoiceNumber(e.target.value)} 
-                    required 
-                    style={{ fontFamily: 'Outfit', fontWeight: 600, padding: '0.65rem 0.9rem' }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Invoice Date *</label>
-                  <input 
-                    type="date" 
-                    value={invoiceDate} 
-                    onChange={e => setInvoiceDate(e.target.value)} 
-                    required 
-                    style={{ padding: '0.65rem 0.9rem' }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Status</label>
-                  <select 
-                    value={status} 
-                    onChange={e => setStatus(e.target.value as any)}
-                    style={{ padding: '0.65rem 0.9rem' }}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="sent">Sent to Buyer</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Tax Application</label>
-                  <select 
-                    value={isInterstate ? 'interstate' : 'intrastate'} 
-                    onChange={e => setIsInterstate(e.target.value === 'interstate')}
-                    style={{ padding: '0.65rem 0.9rem' }}
-                  >
-                    <option value="intrastate">Delhi Intra-state (CGST + SGST)</option>
-                    <option value="interstate">Out of Delhi Inter-state (IGST)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 2: Buyer & Customer Information (Prominent, High-Visibility Card) */}
-              <div style={{ 
-                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%)', 
-                padding: '1.35rem 1.5rem', 
-                borderRadius: 'var(--radius-lg)', 
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0, color: 'var(--color-primary)', fontSize: '1.05rem', fontWeight: 600 }}>
-                    <Building2 size={20} />
-                    Buyer & Customer Information
-                  </h4>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    All fields printed on Proforma Invoice & Export Excel
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-                  
-                  {/* Customer Name */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
-                      <User size={15} color="#818cf8" /> Customer Name *
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Ramesh Kumar / Boutique Owner" 
-                      value={customerName} 
-                      onChange={e => setCustomerName(e.target.value)} 
-                      required 
-                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem', fontWeight: 500 }}
-                    />
-                  </div>
-
-                  {/* Customer Phone / Mobile Number */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
-                      <Phone size={15} color="#34d399" /> Customer Phone / WhatsApp Number *
-                    </label>
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ 
-                        position: 'absolute', 
-                        left: '0.9rem', 
-                        fontSize: '0.9rem', 
-                        fontWeight: 600, 
-                        color: 'var(--text-secondary)',
-                        pointerEvents: 'none' 
-                      }}>
-                        +91
-                      </span>
-                      <input 
-                        type="tel" 
-                        placeholder="98765 43210" 
-                        value={phone.startsWith('+91 ') ? phone.slice(4) : phone.startsWith('+91') ? phone.slice(3) : phone} 
-                        onChange={e => {
-                          const val = e.target.value.trim();
-                          setPhone(val ? (val.startsWith('+') ? val : `+91 ${val}`) : '');
-                        }} 
-                        style={{ 
-                          width: '100%', 
-                          padding: '0.75rem 1rem 0.75rem 3.4rem', 
-                          fontSize: '0.95rem', 
-                          fontWeight: 500,
-                          letterSpacing: '0.02em'
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Business / Boutique Name */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Building2 size={15} color="#cbd5e1" /> Business / Firm / Boutique Name
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Raj Garments & Co." 
-                      value={businessName} 
-                      onChange={e => setBusinessName(e.target.value)} 
-                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
-                    />
-                  </div>
-
-                  {/* GSTIN */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Hash size={15} color="#cbd5e1" /> GST Number (GSTIN)
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. 07AAAAA0000A1Z5" 
-                      value={gstNumber} 
-                      onChange={e => setGstNumber(e.target.value.toUpperCase())} 
-                      style={{ textTransform: 'uppercase', fontFamily: 'monospace', padding: '0.75rem 1rem', fontSize: '0.95rem', letterSpacing: '0.05em' }}
-                    />
-                  </div>
-
-                  {/* City */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <MapPin size={15} color="#cbd5e1" /> City / Destination
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Surat, Jaipur, Mumbai, Delhi" 
-                      value={city} 
-                      onChange={e => setCity(e.target.value)} 
-                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
-                    />
-                  </div>
-
-                  {/* Full Billing / Shipping Address */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <MapPin size={15} color="#cbd5e1" /> Full Billing / Shipping Address
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="Shop / Unit No, Road, Market / Complex, Pin Code" 
-                      value={address} 
-                      onChange={e => setAddress(e.target.value)} 
-                      style={{ padding: '0.75rem 1rem', fontSize: '0.95rem' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Items Grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div className="flex-between">
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Sparkles size={18} color="#d97706" />
-                    Quotation Line Items & Sets
-                  </h4>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button 
-                      type="button" 
-                      onClick={() => addLineItem(true)} 
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
-                    >
-                      <Plus size={14} /> Add Catalog SKU
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => addLineItem(false)} 
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
-                    >
-                      <Plus size={14} /> Add Manual Item (Palazzo / Suit)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="table-container" style={{ maxHeight: '360px', overflowY: 'auto' }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th style={{ width: '40px' }}>#</th>
-                        <th style={{ minWidth: '180px' }}>Article / SKU No *</th>
-                        <th style={{ minWidth: '160px' }}>Description / Work</th>
-                        <th style={{ width: '90px' }}>Sets</th>
-                        <th style={{ width: '90px' }}>Pcs/Set</th>
-                        <th style={{ width: '90px' }}>Total Qty</th>
-                        <th style={{ width: '110px' }}>Rate (₹/pc)</th>
-                        <th style={{ width: '120px' }}>Taxable (₹)</th>
-                        <th style={{ width: '90px' }}>GST %</th>
-                        <th style={{ width: '110px' }}>GST Amt (₹)</th>
-                        <th style={{ width: '120px' }}>Total (₹)</th>
-                        <th style={{ width: '40px' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lineItems.map((item, index) => (
-                        <tr key={index}>
-                          <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{index + 1}</td>
-                          <td>
-                            <div style={{ position: 'relative' }}>
-                              <input 
-                                type="text" 
-                                list={`sku-list-${index}`}
-                                placeholder="Type or pick SKU..." 
-                                value={item.article_number} 
-                                onChange={e => updateLineItem(index, 'article_number', e.target.value)}
-                                style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.85rem', fontFamily: 'Outfit', fontWeight: 600 }}
-                                required
-                              />
-                              <datalist id={`sku-list-${index}`}>
-                                {catalogItems.map(c => (
-                                  <option key={c.id} value={c.sku_id}>
-                                    {c.sku_id} - {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.revised_rate || c.rate})
-                                  </option>
-                                ))}
-                              </datalist>
-                            </div>
-                          </td>
-                          <td>
-                            <input 
-                              type="text" 
-                              placeholder="e.g. Mirror Work, Palazzo" 
-                              value={item.description} 
-                              onChange={e => updateLineItem(index, 'description', e.target.value)}
-                              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                            />
-                          </td>
-                          <td>
-                            <input 
-                              type="number" 
-                              min="1" 
-                              value={item.sets} 
-                              onChange={e => updateLineItem(index, 'sets', parseInt(e.target.value) || 1)}
-                              style={{ width: '100%', padding: '0.4rem', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600 }}
-                            />
-                          </td>
-                          <td>
-                            <input 
-                              type="number" 
-                              min="1" 
-                              value={item.pieces_per_set} 
-                              onChange={e => updateLineItem(index, 'pieces_per_set', parseInt(e.target.value) || 1)}
-                              style={{ width: '100%', padding: '0.4rem', textAlign: 'center', fontSize: '0.85rem' }}
-                            />
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, fontFamily: 'Outfit' }}>
-                            {item.quantity}
-                          </td>
-                          <td>
-                            <input 
-                              type="number" 
-                              min="0" 
-                              step="any"
-                              value={item.rate || ''} 
-                              placeholder="0"
-                              onChange={e => updateLineItem(index, 'rate', parseFloat(e.target.value) || 0)}
-                              style={{ width: '100%', padding: '0.4rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: 600 }}
-                            />
-                          </td>
-                          <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                            ₹{item.taxable_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td>
-                            <select 
-                              value={item.gst_rate} 
-                              onChange={e => updateLineItem(index, 'gst_rate', parseFloat(e.target.value))}
-                              style={{ width: '100%', padding: '0.35rem', fontSize: '0.8rem', textAlign: 'center' }}
-                            >
-                              <option value="5">5%</option>
-                              <option value="18">18%</option>
-                              <option value="12">12%</option>
-                              <option value="0">0%</option>
-                            </select>
-                          </td>
-                          <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.85rem', color: '#f59e0b' }}>
-                            ₹{item.gst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ textAlign: 'right', fontFamily: 'Outfit', fontWeight: 700 }}>
-                            ₹{item.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <button 
-                              type="button" 
-                              onClick={() => removeLineItem(index)} 
-                              style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Row 4: Financial Summary & Notes */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginTop: '0.5rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label>Notes / Delivery Instructions</label>
-                    <textarea 
-                      rows={2} 
-                      placeholder="e.g. Transport through V-Trans, packing in plastic sacks..." 
-                      value={notes} 
-                      onChange={e => setNotes(e.target.value)} 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Terms & Conditions</label>
-                    <textarea 
-                      rows={3} 
-                      value={termsConditions} 
-                      onChange={e => setTermsConditions(e.target.value)} 
-                      style={{ fontSize: '0.8rem' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Calculation Summary Card */}
-                <div style={{ background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <h4 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>
-                    Invoice Summary Breakdown
-                  </h4>
-                  
-                  <div className="flex-between" style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Total Sets:</span>
-                    <strong>{summary.totalSets} Sets</strong>
-                  </div>
-                  <div className="flex-between" style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Total Garment Pieces:</span>
-                    <strong>{summary.totalPieces} Pieces</strong>
-                  </div>
-                  <div className="flex-between" style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Subtotal (Taxable Value):</span>
-                    <span style={{ fontFamily: 'monospace' }}>₹{summary.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-
-                  {summary.gst5 > 0 && (
-                    <div className="flex-between" style={{ fontSize: '0.85rem', color: '#f59e0b' }}>
-                      <span>GST @ 5% (Items &le; ₹2,500):</span>
-                      <span style={{ fontFamily: 'monospace' }}>₹{summary.gst5.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  )}
-
-                  {summary.gst18 > 0 && (
-                    <div className="flex-between" style={{ fontSize: '0.85rem', color: '#f59e0b' }}>
-                      <span>GST @ 18% (Items &gt; ₹2,500):</span>
-                      <span style={{ fontFamily: 'monospace' }}>₹{summary.gst18.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  )}
-
-                  <div className="flex-between" style={{ fontSize: '0.9rem', color: 'var(--color-primary)' }}>
-                    <span>{isInterstate ? 'Total IGST (Interstate):' : 'Total CGST + SGST (Delhi):'}</span>
-                    <strong style={{ fontFamily: 'monospace' }}>₹{summary.totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                  </div>
-
-                  {summary.roundOff !== 0 && (
-                    <div className="flex-between" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      <span>Round Off:</span>
-                      <span style={{ fontFamily: 'monospace' }}>{summary.roundOff > 0 ? `+₹${summary.roundOff}` : `-₹${Math.abs(summary.roundOff)}`}</span>
-                    </div>
-                  )}
-
-                  <div className="flex-between" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
-                    <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>GRAND TOTAL:</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'Outfit', color: 'var(--color-success)' }}>
-                      ₹{summary.grandTotal.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              </div>
-
-              {/* Sticky Action Footer */}
-              <div style={{ 
-                flexShrink: 0, 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                padding: '0.85rem 1.5rem', 
-                borderTop: '1px solid var(--glass-border)', 
-                background: 'var(--bg-tertiary)',
-                flexWrap: 'wrap',
-                gap: '0.75rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.9rem', flexWrap: 'wrap' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    Total: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pcs)</strong>
-                  </span>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.2rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsFormOpen(false)} 
-                    className="btn btn-secondary"
-                    style={{ padding: '0.6rem 1.25rem' }}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="btn btn-primary"
-                    style={{ padding: '0.6rem 1.75rem', fontWeight: 600 }}
-                  >
-                    {isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* PRINTABLE / EDITORIAL VIEW MODAL */}
