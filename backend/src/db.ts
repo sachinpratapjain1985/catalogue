@@ -136,10 +136,10 @@ export const runMigrations = async () => {
           state_code VARCHAR(10) DEFAULT '07',
           company_name VARCHAR(255) DEFAULT 'VS FASHION',
           company_brand VARCHAR(255) DEFAULT 'DESUKA',
-          company_address TEXT DEFAULT 'IX/6344, Subhash Mohalla, Gandhi Nagar, Delhi - 110031',
+          company_address TEXT DEFAULT 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031',
           company_gst VARCHAR(50) DEFAULT '',
-          company_phone VARCHAR(50) DEFAULT '+91 99992 49455',
-          company_email VARCHAR(100) DEFAULT 'sales@desukafashion.com',
+          company_phone VARCHAR(50) DEFAULT '9718503340',
+          company_email VARCHAR(100) DEFAULT 'wholesale@desukafashion.com',
           bank_name VARCHAR(100) DEFAULT 'HDFC BANK',
           bank_account_no VARCHAR(50) DEFAULT '',
           bank_ifsc VARCHAR(50) DEFAULT '',
@@ -163,6 +163,23 @@ export const runMigrations = async () => {
       )
     `);
     console.log('[Migration] proforma_invoices table verified.');
+
+    // Update company contact details to new accurate information if old defaults exist
+    await pool.query(`
+      UPDATE proforma_invoices 
+      SET company_address = 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031' 
+      WHERE company_address LIKE '%6344%' OR company_address LIKE '%Subhash Mohalla%' OR company_address IS NULL;
+    `).catch(() => {});
+    await pool.query(`
+      UPDATE proforma_invoices 
+      SET company_phone = '9718503340' 
+      WHERE company_phone LIKE '%99992%' OR company_phone LIKE '%49455%' OR company_phone IS NULL;
+    `).catch(() => {});
+    await pool.query(`
+      UPDATE proforma_invoices 
+      SET company_email = 'wholesale@desukafashion.com' 
+      WHERE company_email LIKE '%sales@desukafashion.com%' OR company_email IS NULL;
+    `).catch(() => {});
 
     // 3i. Create proforma_invoice_items table
     await pool.query(`

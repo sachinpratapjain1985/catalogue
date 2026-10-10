@@ -1307,10 +1307,10 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                   by {previewInvoice.company_name || 'VS FASHION'}
                 </div>
                 <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
-                  {previewInvoice.company_address || 'IX/6344, Subhash Mohalla, Gandhi Nagar, Delhi - 110031'}
+                  {previewInvoice.company_address || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031'}
                 </div>
                 <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '2px' }}>
-                  Phone: <strong>{previewInvoice.company_phone || '+91 99992 49455'}</strong> | Email: {previewInvoice.company_email || 'sales@desukafashion.com'}
+                  Phone: <strong>{previewInvoice.company_phone || '9718503340'}</strong> | Email: {previewInvoice.company_email || 'wholesale@desukafashion.com'}
                 </div>
               </div>
 
