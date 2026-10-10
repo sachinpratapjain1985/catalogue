@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, 
   Plus, 
@@ -11,14 +12,15 @@ import {
   Building2, 
   CheckCircle2, 
   AlertCircle, 
-  RefreshCw,
-  Sparkles,
-  Phone,
-  MapPin,
-  Hash,
-  User,
-  ArrowLeft,
-  Save
+  RefreshCw, 
+  Sparkles, 
+  Phone, 
+  MapPin, 
+  Hash, 
+  User, 
+  ArrowLeft, 
+  Save,
+  X
 } from 'lucide-react';
 
 interface CatalogItem {
@@ -605,81 +607,129 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
-  if (isFormOpen) {
-    return (
-      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', paddingBottom: '3rem' }}>
-        {/* Full Page Header & Top Quick Actions */}
-        <div className="flex-between" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button 
-              type="button" 
-              onClick={() => setIsFormOpen(false)} 
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem' }}
-            >
-              <ArrowLeft size={18} />
-              <span>Back to Invoices</span>
-            </button>
-            <div>
-              <h1 style={{ fontSize: '1.6rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <FileText size={24} color="var(--color-primary)" />
-                {isEditing ? `Edit Proforma Invoice: ${invoiceNumber}` : 'Create New Proforma Invoice'}
-              </h1>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-                Enter buyer details and catalog article numbers. Rate and GST are calculated automatically.
-              </p>
+  // Prevent background scrolling when either modal is open
+  useEffect(() => {
+    if (isFormOpen || previewInvoice) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFormOpen, previewInvoice]);
+
+  // Support closing modals with Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (previewInvoice) {
+          setPreviewInvoice(null);
+        } else if (isFormOpen) {
+          setIsFormOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewInvoice, isFormOpen]);
+
+  const renderCreateEditModal = () => {
+    if (!isFormOpen) return null;
+
+    return createPortal(
+      <div 
+        className="proforma-modal-overlay"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(0, 0, 0, 0.82)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem',
+          overflow: 'hidden'
+        }}
+      >
+        <div 
+          className="fade-in"
+          style={{
+            width: '95vw',
+            maxWidth: '1380px',
+            height: '92vh',
+            maxHeight: '92vh',
+            background: 'var(--bg-card, #131722)',
+            border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.12))',
+            borderRadius: '16px',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Pinned Modal Header */}
+          <div style={{
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid var(--glass-border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'var(--bg-secondary)',
+            flexShrink: 0
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <FileText size={22} color="var(--color-primary)" />
+              <div>
+                <h2 style={{ fontSize: '1.25rem', margin: 0, color: 'var(--text-primary)' }}>
+                  {isEditing ? `Edit Proforma Invoice: ${invoiceNumber}` : 'Create New Proforma Invoice'}
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Enter buyer details & article numbers. Rate and GST are calculated automatically.
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                background: 'var(--bg-card)',
+                padding: '0.4rem 0.9rem',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--glass-border)',
+                fontSize: '0.85rem'
+              }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pcs)</strong></span>
+                <span style={{ color: 'var(--glass-border)' }}>|</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Grand Total: <strong style={{ color: 'var(--color-success)', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong></span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Close (Esc)"
+              >
+                <X size={20} />
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.75rem', 
-              background: 'var(--bg-secondary)', 
-              padding: '0.5rem 1rem', 
-              borderRadius: 'var(--radius-md)', 
-              border: '1px solid var(--glass-border)' 
-            }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Total: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pcs)</strong>
-              </span>
-              <span style={{ color: 'var(--text-secondary)' }}>|</span>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.15rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
-              </span>
-            </div>
-
-            <button 
-              type="button" 
-              onClick={() => setIsFormOpen(false)} 
-              className="btn btn-secondary"
-              style={{ padding: '0.65rem 1.25rem' }}
-            >
-              Cancel
-            </button>
-            <button 
-              type="button" 
-              onClick={handleSaveInvoice} 
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.6rem', fontWeight: 600 }}
-            >
-              <Save size={18} />
-              <span>{isEditing ? 'Update Invoice' : 'Generate Invoice'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        {errorMsg && (
-          <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', padding: '0.9rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(244, 63, 94, 0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <AlertCircle size={18} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        {/* The Full Page Form */}
-        <form onSubmit={handleSaveInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+          {/* Form with Scrollable Body and Pinned Footer */}
+          <form onSubmit={handleSaveInvoice} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Notifications */}
+              {errorMsg && (
+                <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', padding: '0.9rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(244, 63, 94, 0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertCircle size={18} />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
           
           {/* Row 1: Invoice Meta */}
           <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -1101,92 +1151,110 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
             </div>
           </div>
 
-          {/* Row 5: Full Page Sticky Footer / Action Bar */}
-          <div className="glass-card" style={{ 
-            padding: '1.25rem 2rem', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            flexWrap: 'wrap', 
-            gap: '1rem',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--glass-border)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '0.95rem' }}>
-              <span>
-                Total Items: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pieces)</strong>
-              </span>
-              <span style={{ color: 'var(--glass-border)' }}>|</span>
-              <span>
-                Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.35rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
-              </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button 
-                type="button" 
-                onClick={() => setIsFormOpen(false)} 
-                className="btn btn-secondary"
-                style={{ padding: '0.75rem 1.5rem', fontSize: '0.95rem' }}
-              >
-                Cancel / Back
-              </button>
-              <button 
-                type="submit" 
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 2rem', fontWeight: 600, fontSize: '1rem' }}
-              >
-                <Save size={18} />
-                <span>{isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}</span>
-              </button>
+            {/* Modal Pinned Sticky Footer */}
+            <div style={{
+              padding: '0.9rem 1.5rem',
+              borderTop: '1px solid var(--glass-border)',
+              background: 'var(--bg-secondary)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '0.95rem' }}>
+                <span>
+                  Total Items: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pieces)</strong>
+                </span>
+                <span style={{ color: 'var(--glass-border)' }}>|</span>
+                <span>
+                  Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.35rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsFormOpen(false)} 
+                  className="btn btn-secondary"
+                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.95rem' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 2rem', fontWeight: 600, fontSize: '1rem' }}
+                >
+                  <Save size={18} />
+                  <span>{isEditing ? 'Update Proforma Invoice' : 'Generate Proforma Invoice'}</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      </div>,
+      document.body
     );
-  }
+  };
 
-  if (previewInvoice) {
-    return (
-      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', paddingBottom: '3rem' }}>
+  const renderPreviewModal = () => {
+    if (!previewInvoice) return null;
+
+    return createPortal(
+      <div 
+        className="proforma-modal-overlay"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          overflowY: 'auto',
+          padding: '2rem 1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setPreviewInvoice(null);
+          }
+        }}
+      >
         {/* Full Page Header & Actions (Hidden on Print) */}
-        <div className="no-print flex-between" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="no-print" style={{ width: '100%', maxWidth: '880px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button 
               type="button" 
               onClick={() => setPreviewInvoice(null)} 
               className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem' }}
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={16} />
               <span>Back to Invoices</span>
             </button>
-            <div>
-              <h1 style={{ fontSize: '1.6rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <FileText size={24} color="#c29b38" />
-                Proforma Invoice Preview: {previewInvoice.invoice_number}
-              </h1>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-                Full-page editorial view. Ready to print, save to PDF, or export to Excel.
-              </p>
-            </div>
+            <span style={{ color: '#ffffff', fontWeight: 600, fontSize: '1.1rem' }}>
+              {previewInvoice.invoice_number}
+            </span>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <button 
               onClick={() => window.print()} 
               className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.5rem', fontWeight: 600, fontSize: '0.95rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem', fontWeight: 600, fontSize: '0.95rem' }}
             >
-              <Printer size={18} />
+              <Printer size={16} />
               Print / Save as PDF
             </button>
             <button 
               onClick={() => handleDownloadExcel(previewInvoice.id, previewInvoice.invoice_number)} 
               className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem', color: '#10b981', fontWeight: 600 }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.1rem', color: '#10b981', fontWeight: 600 }}
             >
-              <FileSpreadsheet size={18} />
+              <FileSpreadsheet size={16} />
               Download Excel
             </button>
             <button 
@@ -1196,31 +1264,39 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 handleOpenEditModal(invToEdit);
               }} 
               className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.1rem' }}
             >
               <Edit3 size={16} />
-              Edit Invoice
+              Edit
+            </button>
+            <button 
+              onClick={() => setPreviewInvoice(null)} 
+              className="btn btn-secondary"
+              style={{ padding: '0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Close (Esc)"
+            >
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* Full-Page Document Sheet */}
-        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-          <div className="proforma-print-container" style={{
-            width: '100%',
-            maxWidth: '960px',
-            background: '#ffffff',
-            color: '#0f172a',
-            borderRadius: '12px',
-            boxShadow: '0 20px 45px rgba(0, 0, 0, 0.4)',
-            overflow: 'hidden',
-            border: '1px solid #cbd5e1'
-          }}>
-            <div className="proforma-print-body" style={{ 
-              padding: '2.5rem', 
-              fontFamily: 'Calibri, Arial, sans-serif', 
-              color: '#1e293b' 
-            }}>
+        {/* Printable & Screenshot-Ready A4 Invoice Card Container */}
+        <div 
+          id="printable-proforma"
+          className="proforma-print-container"
+          style={{ 
+            width: '100%', 
+            maxWidth: '880px', 
+            background: '#ffffff', 
+            borderRadius: '8px', 
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.65)', 
+            padding: '2.5rem', 
+            fontFamily: 'Calibri, Arial, sans-serif', 
+            color: '#1e293b',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
               
               {/* Header: Company & Brand */}
               <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
@@ -1436,12 +1512,11 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 </div>
               </div>
 
-            </div>
-          </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
-  }
+  };
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -1683,6 +1758,10 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
           </div>
         )}
       </div>
+
+      {/* Render Create / Edit and Preview Modals via React Portal */}
+      {renderCreateEditModal()}
+      {renderPreviewModal()}
 
     </div>
   );
