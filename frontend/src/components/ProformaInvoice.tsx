@@ -42,9 +42,13 @@ interface ProformaLineItem {
   article_number: string;
   description: string;
   pieces_per_set: number;
+  original_pieces_per_set?: number;
+  is_manual_pcs?: boolean;
   sets: number;
   quantity: number;
   rate: number;
+  original_rate?: number;
+  is_manual_rate?: boolean;
   taxable_amount: number;
   gst_rate: number;
   gst_amount: number;
@@ -155,6 +159,23 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
 
   // View / Print Modal state
   const [previewInvoice, setPreviewInvoice] = useState<ProformaInvoiceData | null>(null);
+
+  // Manual edit popup alert state
+  const [manualEditNotice, setManualEditNotice] = useState<{
+    article: string;
+    field: string;
+    oldVal: number;
+    newVal: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (manualEditNotice) {
+      const timer = setTimeout(() => {
+        setManualEditNotice(null);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [manualEditNotice]);
 
   // Load invoices on mount or filter change
   useEffect(() => {
@@ -297,20 +318,31 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
 
         if (fullInv.items && fullInv.items.length > 0) {
           setLineItems(
-            fullInv.items.map((it: any) => ({
-              id: it.id,
-              item_id: it.item_id,
-              article_number: it.article_number,
-              description: it.description || '',
-              pieces_per_set: parseInt(it.pieces_per_set) || 1,
-              sets: parseInt(it.sets) || 1,
-              quantity: parseInt(it.quantity) || 1,
-              rate: parseFloat(it.rate) || 0,
-              taxable_amount: parseFloat(it.taxable_amount) || 0,
-              gst_rate: parseFloat(it.gst_rate) || 5,
-              gst_amount: parseFloat(it.gst_amount) || 0,
-              total_amount: parseFloat(it.total_amount) || 0,
-            }))
+            fullInv.items.map((it: any) => {
+              const matchedCatalog = catalogItems.find(c => c.sku_id.toLowerCase() === (it.article_number || '').trim().toLowerCase());
+              const defaultPcs = matchedCatalog ? (matchedCatalog.pieces_per_set || 3) : 3;
+              const pcs = parseInt(it.pieces_per_set) || 1;
+              const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
+              const rt = parseFloat(it.rate) || 0;
+              return {
+                id: it.id,
+                item_id: it.item_id,
+                article_number: it.article_number,
+                description: it.description || '',
+                pieces_per_set: pcs,
+                original_pieces_per_set: defaultPcs,
+                is_manual_pcs: pcs !== defaultPcs,
+                sets: parseInt(it.sets) || 1,
+                quantity: parseInt(it.quantity) || 1,
+                rate: rt,
+                original_rate: defaultRate,
+                is_manual_rate: defaultRate > 0 && rt !== defaultRate,
+                taxable_amount: parseFloat(it.taxable_amount) || 0,
+                gst_rate: parseFloat(it.gst_rate) || 5,
+                gst_amount: parseFloat(it.gst_amount) || 0,
+                total_amount: parseFloat(it.total_amount) || 0,
+              };
+            })
           );
         } else {
           setLineItems([]);
@@ -349,19 +381,30 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
 
         if (fullInv.items && fullInv.items.length > 0) {
           setLineItems(
-            fullInv.items.map((it: any) => ({
-              item_id: it.item_id,
-              article_number: it.article_number,
-              description: it.description || '',
-              pieces_per_set: parseInt(it.pieces_per_set) || 1,
-              sets: parseInt(it.sets) || 1,
-              quantity: parseInt(it.quantity) || 1,
-              rate: parseFloat(it.rate) || 0,
-              taxable_amount: parseFloat(it.taxable_amount) || 0,
-              gst_rate: parseFloat(it.gst_rate) || 5,
-              gst_amount: parseFloat(it.gst_amount) || 0,
-              total_amount: parseFloat(it.total_amount) || 0,
-            }))
+            fullInv.items.map((it: any) => {
+              const matchedCatalog = catalogItems.find(c => c.sku_id.toLowerCase() === (it.article_number || '').trim().toLowerCase());
+              const defaultPcs = matchedCatalog ? (matchedCatalog.pieces_per_set || 3) : 3;
+              const pcs = parseInt(it.pieces_per_set) || 1;
+              const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
+              const rt = parseFloat(it.rate) || 0;
+              return {
+                item_id: it.item_id,
+                article_number: it.article_number,
+                description: it.description || '',
+                pieces_per_set: pcs,
+                original_pieces_per_set: defaultPcs,
+                is_manual_pcs: pcs !== defaultPcs,
+                sets: parseInt(it.sets) || 1,
+                quantity: parseInt(it.quantity) || 1,
+                rate: rt,
+                original_rate: defaultRate,
+                is_manual_rate: defaultRate > 0 && rt !== defaultRate,
+                taxable_amount: parseFloat(it.taxable_amount) || 0,
+                gst_rate: parseFloat(it.gst_rate) || 5,
+                gst_amount: parseFloat(it.gst_amount) || 0,
+                total_amount: parseFloat(it.total_amount) || 0,
+              };
+            })
           );
         }
         setIsFormOpen(true);
@@ -418,12 +461,37 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
         const found = catalogItems.find(c => c.sku_id.toLowerCase() === val.toString().trim().toLowerCase());
         if (found) {
           item.item_id = found.id;
-          item.pieces_per_set = found.pieces_per_set || 3;
+          const defaultPcs = found.pieces_per_set || 3;
+          item.pieces_per_set = defaultPcs;
+          item.original_pieces_per_set = defaultPcs;
+          item.is_manual_pcs = false;
+
           const chosenRate = found.revised_rate && found.revised_rate > 0 ? found.revised_rate : found.rate;
           item.rate = chosenRate || 0;
+          item.original_rate = chosenRate || 0;
+          item.is_manual_rate = false;
+
           item.description = found.work ? `${found.work} ${found.material ? '• ' + found.material : ''}` : (found.description || '');
           // Garment GST Rule: <= 2500 is 5%, > 2500 is 18%
           item.gst_rate = item.rate <= 2500 ? 5 : 18;
+        }
+      }
+
+      // If user edits pieces_per_set manually
+      if (field === 'pieces_per_set') {
+        const newPcs = Math.max(1, parseInt(val) || 1);
+        item.pieces_per_set = newPcs;
+        const origPcs = item.original_pieces_per_set !== undefined ? item.original_pieces_per_set : 3;
+        if (newPcs !== origPcs) {
+          item.is_manual_pcs = true;
+          setManualEditNotice({
+            article: item.article_number || `Item #${index + 1}`,
+            field: 'Pieces per Set',
+            oldVal: origPcs,
+            newVal: newPcs
+          });
+        } else {
+          item.is_manual_pcs = false;
         }
       }
 
@@ -432,6 +500,17 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
         const numRate = parseFloat(val) || 0;
         item.rate = numRate;
         item.gst_rate = numRate <= 2500 ? 5 : 18;
+        if (item.original_rate !== undefined && item.original_rate > 0 && numRate !== item.original_rate) {
+          item.is_manual_rate = true;
+          setManualEditNotice({
+            article: item.article_number || `Item #${index + 1}`,
+            field: 'Rate (₹/pc)',
+            oldVal: item.original_rate,
+            newVal: numRate
+          });
+        } else if (item.original_rate !== undefined && numRate === item.original_rate) {
+          item.is_manual_rate = false;
+        }
       }
 
       // Quantity calculation: sets * pieces_per_set
@@ -666,10 +745,67 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
             boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            position: 'relative'
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Manual Edit Floating Alert Popup */}
+          {manualEditNotice && (
+            <div 
+              className="fade-in"
+              style={{
+                position: 'absolute',
+                top: '75px',
+                right: '30px',
+                zIndex: 100005,
+                background: '#1e2433',
+                border: '2px solid #f59e0b',
+                borderRadius: '12px',
+                padding: '1.2rem 1.4rem',
+                boxShadow: '0 20px 45px rgba(0, 0, 0, 0.75)',
+                maxWidth: '430px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f59e0b', fontWeight: 700, fontSize: '1rem' }}>
+                  <AlertCircle size={20} />
+                  <span>Manual Editing Notice</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setManualEditNotice(null)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                You are manually editing <strong>{manualEditNotice.field}</strong> for article <strong style={{ color: '#38bdf8' }}>{manualEditNotice.article}</strong>:
+                <div style={{ margin: '0.5rem 0', padding: '0.5rem 0.8rem', background: 'rgba(245, 158, 11, 0.12)', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Original: <strong>{manualEditNotice.oldVal}</strong></span>
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>➔ Manual: {manualEditNotice.newVal}</span>
+                </div>
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                  Total quantity & line amounts recalculated automatically.
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setManualEditNotice(null)} 
+                  className="btn btn-primary"
+                  style={{ padding: '0.4rem 1.1rem', fontSize: '0.85rem', fontWeight: 600 }}
+                >
+                  Confirm / OK
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Pinned Modal Header */}
           <div style={{
             padding: '1rem 1.5rem',
@@ -938,29 +1074,39 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               </div>
             </div>
 
-            <div className="table-container" style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>#</th>
-                    <th style={{ minWidth: '180px' }}>Article / SKU No *</th>
-                    <th style={{ minWidth: '180px' }}>Description / Work</th>
-                    <th style={{ width: '90px' }}>Sets</th>
-                    <th style={{ width: '90px' }}>Pcs/Set</th>
-                    <th style={{ width: '90px' }}>Total Qty</th>
-                    <th style={{ width: '120px' }}>Rate (₹/pc)</th>
-                    <th style={{ width: '130px' }}>Taxable (₹)</th>
-                    <th style={{ width: '100px' }}>GST %</th>
-                    <th style={{ width: '120px' }}>GST Amt (₹)</th>
-                    <th style={{ width: '130px' }}>Total (₹)</th>
-                    <th style={{ width: '50px' }}></th>
+            <div 
+              className="table-container proforma-table" 
+              style={{ 
+                overflowX: 'auto', 
+                maxHeight: '480px', 
+                overflowY: 'auto',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '10px',
+                background: 'rgba(15, 23, 42, 0.4)'
+              }}
+            >
+              <table style={{ width: '100%', minWidth: '1320px', borderCollapse: 'separate', borderSpacing: 0 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                  <tr style={{ background: '#181f2f', borderBottom: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                    <th style={{ width: '45px', textAlign: 'center', padding: '12px 8px', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>#</th>
+                    <th style={{ width: '190px', minWidth: '180px', textAlign: 'left', padding: '12px 10px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Article / SKU No *</th>
+                    <th style={{ width: '200px', minWidth: '180px', textAlign: 'left', padding: '12px 10px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Description / Work</th>
+                    <th style={{ width: '100px', minWidth: '95px', textAlign: 'center', padding: '12px 8px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Sets</th>
+                    <th style={{ width: '120px', minWidth: '110px', textAlign: 'center', padding: '12px 8px', color: '#f59e0b', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Pcs / Set</th>
+                    <th style={{ width: '110px', minWidth: '100px', textAlign: 'center', padding: '12px 8px', color: '#38bdf8', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Total Qty</th>
+                    <th style={{ width: '140px', minWidth: '130px', textAlign: 'right', padding: '12px 10px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Rate (₹/pc)</th>
+                    <th style={{ width: '135px', minWidth: '125px', textAlign: 'right', padding: '12px 10px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>Taxable (₹)</th>
+                    <th style={{ width: '100px', minWidth: '95px', textAlign: 'center', padding: '12px 8px', color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>GST %</th>
+                    <th style={{ width: '120px', minWidth: '110px', textAlign: 'right', padding: '12px 10px', color: '#f59e0b', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', background: '#181f2f' }}>GST Amt (₹)</th>
+                    <th style={{ width: '140px', minWidth: '130px', textAlign: 'right', padding: '12px 10px', color: 'var(--color-success)', fontSize: '0.82rem', fontWeight: 800, textTransform: 'uppercase', background: '#181f2f' }}>Total (₹)</th>
+                    <th style={{ width: '50px', textAlign: 'center', padding: '12px 6px', background: '#181f2f' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map((item, index) => (
-                    <tr key={index}>
-                      <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{index + 1}</td>
-                      <td>
+                    <tr key={index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: index % 2 === 1 ? 'rgba(255, 255, 255, 0.02)' : 'transparent' }}>
+                      <td style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 600, padding: '10px 6px' }}>{index + 1}</td>
+                      <td style={{ padding: '10px 8px' }}>
                         <div style={{ position: 'relative' }}>
                           <input 
                             type="text" 
@@ -968,7 +1114,17 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                             placeholder="Type or pick SKU..." 
                             value={item.article_number} 
                             onChange={e => updateLineItem(index, 'article_number', e.target.value)}
-                            style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.9rem', fontFamily: 'Outfit', fontWeight: 600 }}
+                            style={{ 
+                              width: '100%', 
+                              padding: '0.65rem 0.8rem', 
+                              fontSize: '0.95rem', 
+                              fontFamily: 'Outfit', 
+                              fontWeight: 600,
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              border: '1.5px solid rgba(255, 255, 255, 0.2)',
+                              borderRadius: '6px',
+                              color: '#ffffff'
+                            }}
                             required
                           />
                           <datalist id={`sku-list-${index}`}>
@@ -980,55 +1136,143 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                           </datalist>
                         </div>
                       </td>
-                      <td>
+                      <td style={{ padding: '10px 8px' }}>
                         <input 
                           type="text" 
                           placeholder="e.g. Mirror Work, Palazzo" 
                           value={item.description} 
                           onChange={e => updateLineItem(index, 'description', e.target.value)}
-                          style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.65rem 0.8rem', 
+                            fontSize: '0.9rem',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1.5px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '6px',
+                            color: '#ffffff'
+                          }}
                         />
                       </td>
-                      <td>
+                      <td style={{ padding: '10px 8px' }}>
                         <input 
                           type="number" 
                           min="1" 
                           value={item.sets} 
+                          title="Enter number of sets"
                           onChange={e => updateLineItem(index, 'sets', parseInt(e.target.value) || 1)}
-                          style={{ width: '100%', padding: '0.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 600 }}
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.65rem 0.5rem', 
+                            textAlign: 'center', 
+                            fontSize: '1.05rem', 
+                            fontWeight: 700, 
+                            fontFamily: 'Outfit',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1.5px solid rgba(255, 255, 255, 0.25)',
+                            borderRadius: '6px',
+                            color: '#ffffff'
+                          }}
                         />
                       </td>
-                      <td>
-                        <input 
-                          type="number" 
-                          min="1" 
-                          value={item.pieces_per_set} 
-                          onChange={e => updateLineItem(index, 'pieces_per_set', parseInt(e.target.value) || 1)}
-                          style={{ width: '100%', padding: '0.5rem', textAlign: 'center', fontSize: '0.9rem' }}
-                        />
+                      <td style={{ padding: '10px 8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            value={item.pieces_per_set} 
+                            title="Pieces per set (can be modified manually)"
+                            onChange={e => updateLineItem(index, 'pieces_per_set', parseInt(e.target.value) || 1)}
+                            style={{ 
+                              width: '100%', 
+                              padding: '0.65rem 0.5rem', 
+                              textAlign: 'center', 
+                              fontSize: '1.05rem', 
+                              fontWeight: 700, 
+                              fontFamily: 'Outfit',
+                              background: item.is_manual_pcs ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                              border: item.is_manual_pcs ? '2px solid #f59e0b' : '1.5px solid rgba(255, 255, 255, 0.25)',
+                              borderRadius: '6px',
+                              color: item.is_manual_pcs ? '#fcd34d' : '#ffffff'
+                            }}
+                          />
+                          {item.is_manual_pcs && (
+                            <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              ✏️ Manual Set
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td style={{ textAlign: 'center', fontWeight: 700, fontFamily: 'Outfit', fontSize: '0.95rem' }}>
-                        {item.quantity}
+                      <td style={{ padding: '10px 8px' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          padding: '0.45rem 0.4rem',
+                          background: 'rgba(56, 189, 248, 0.1)',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          borderRadius: '6px'
+                        }}>
+                          <span style={{ fontWeight: 800, fontFamily: 'Outfit', fontSize: '1.1rem', color: '#38bdf8' }}>
+                            {item.quantity}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                            {item.sets} × {item.pieces_per_set} pcs
+                          </span>
+                        </div>
                       </td>
-                      <td>
-                        <input 
-                          type="number" 
-                          min="0" 
-                          step="any"
-                          value={item.rate || ''} 
-                          placeholder="0"
-                          onChange={e => updateLineItem(index, 'rate', parseFloat(e.target.value) || 0)}
-                          style={{ width: '100%', padding: '0.5rem', textAlign: 'right', fontSize: '0.9rem', fontWeight: 600 }}
-                        />
+                      <td style={{ padding: '10px 8px' }}>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <span style={{ position: 'absolute', left: '10px', color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: 600, pointerEvents: 'none' }}>
+                            ₹
+                          </span>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            step="any"
+                            value={item.rate || ''} 
+                            placeholder="0.00"
+                            onChange={e => updateLineItem(index, 'rate', parseFloat(e.target.value) || 0)}
+                            style={{ 
+                              width: '100%', 
+                              padding: '0.65rem 0.6rem 0.65rem 1.6rem', 
+                              textAlign: 'right', 
+                              fontSize: '1rem', 
+                              fontWeight: 700, 
+                              fontFamily: 'monospace',
+                              background: item.is_manual_rate ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                              border: item.is_manual_rate ? '2px solid #f59e0b' : '1.5px solid rgba(255, 255, 255, 0.25)',
+                              borderRadius: '6px',
+                              color: item.is_manual_rate ? '#fcd34d' : '#ffffff'
+                            }}
+                          />
+                        </div>
+                        {item.is_manual_rate && (
+                          <div style={{ textAlign: 'right', marginTop: '2px' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 600 }}>
+                              ✏️ Manual Rate
+                            </span>
+                          </div>
+                        )}
                       </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.95rem', fontWeight: 600, color: '#f8fafc', padding: '10px 8px' }}>
                         ₹{item.taxable_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td>
+                      <td style={{ padding: '10px 8px' }}>
                         <select 
                           value={item.gst_rate} 
                           onChange={e => updateLineItem(index, 'gst_rate', parseFloat(e.target.value))}
-                          style={{ width: '100%', padding: '0.45rem', fontSize: '0.85rem', textAlign: 'center' }}
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.65rem 0.4rem', 
+                            fontSize: '0.9rem', 
+                            fontWeight: 700,
+                            textAlign: 'center',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1.5px solid rgba(255, 255, 255, 0.25)',
+                            borderRadius: '6px',
+                            color: '#ffffff'
+                          }}
                         >
                           <option value="5">5%</option>
                           <option value="18">18%</option>
@@ -1036,20 +1280,31 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                           <option value="0">0%</option>
                         </select>
                       </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.9rem', color: '#f59e0b' }}>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.95rem', color: '#f59e0b', fontWeight: 700, padding: '10px 8px' }}>
                         ₹{item.gst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'Outfit', fontWeight: 700, fontSize: '0.95rem' }}>
+                      <td style={{ textAlign: 'right', fontFamily: 'Outfit', fontWeight: 800, fontSize: '1.1rem', color: 'var(--color-success)', padding: '10px 8px' }}>
                         ₹{item.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center', padding: '10px 6px' }}>
                         <button 
                           type="button" 
                           onClick={() => removeLineItem(index)} 
-                          style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '4px' }}
+                          style={{ 
+                            border: 'none', 
+                            background: 'rgba(244, 63, 94, 0.12)', 
+                            color: 'var(--color-danger)', 
+                            cursor: 'pointer', 
+                            padding: '8px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s ease'
+                          }}
                           title="Remove item"
                         >
-                          <Trash2 size={17} />
+                          <Trash2 size={18} />
                         </button>
                       </td>
                     </tr>

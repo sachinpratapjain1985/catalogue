@@ -534,6 +534,35 @@ tr:hover td {
   padding: 1.5rem;
 }
 
+/* Proforma Items Table Styling - Clean inputs, hidden spinners, sticky header */
+.proforma-table {
+  position: relative;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.proforma-table table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.proforma-table input[type="number"]::-webkit-inner-spin-button,
+.proforma-table input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.proforma-table input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.proforma-table input:focus,
+.proforma-table select:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+  outline: none !important;
+}
+
 /* Proforma Invoice & Print Styling */
 .proforma-modal-overlay {
   position: fixed;
