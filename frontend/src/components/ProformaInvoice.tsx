@@ -34,6 +34,9 @@ interface CatalogItem {
   material?: string;
   description?: string;
   image_path?: string;
+  is_available?: boolean;
+  sets_count?: number;
+  total_pieces?: number;
 }
 
 interface ProformaLineItem {
@@ -53,6 +56,8 @@ interface ProformaLineItem {
   gst_rate: number;
   gst_amount: number;
   total_amount: number;
+  stock_status?: 'available' | 'out_of_stock' | 'inactive';
+  available_sets?: number;
 }
 
 interface ProformaInvoiceData {
@@ -176,6 +181,49 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
       return () => clearTimeout(timer);
     }
   }, [manualEditNotice]);
+
+  // Inactive / Out of stock warning modal state
+  const [stockWarningModal, setStockWarningModal] = useState<{
+    rowIndex: number;
+    sku: string;
+    status: 'inactive' | 'out_of_stock';
+    setsCount: number;
+    category: string;
+    rate: number;
+    pcsPerSet: number;
+  } | null>(null);
+
+  const handleRejectStockWarning = () => {
+    if (!stockWarningModal) return;
+    const { rowIndex, sku } = stockWarningModal;
+    setLineItems(prev => {
+      const updated = [...prev];
+      if (updated[rowIndex]) {
+        updated[rowIndex] = {
+          ...updated[rowIndex],
+          article_number: '',
+          description: '',
+          rate: 0,
+          original_rate: 0,
+          taxable_amount: 0,
+          gst_amount: 0,
+          total_amount: 0,
+          stock_status: undefined,
+          available_sets: undefined
+        };
+      }
+      return updated;
+    });
+    showError(`Article "${sku}" was rejected and removed from line items.`);
+    setStockWarningModal(null);
+  };
+
+  const handleContinueStockWarning = () => {
+    if (!stockWarningModal) return;
+    const { sku, status } = stockWarningModal;
+    showSuccess(`Article "${sku}" added anyway (${status === 'inactive' ? 'Marked Inactive' : 'Out of Stock'}).`);
+    setStockWarningModal(null);
+  };
 
   // Load invoices on mount or filter change
   useEffect(() => {
@@ -324,6 +372,12 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               const pcs = parseInt(it.pieces_per_set) || 1;
               const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
               const rt = parseFloat(it.rate) || 0;
+              const isInactive = matchedCatalog ? matchedCatalog.is_available === false : false;
+              const isOutOfStock = matchedCatalog ? (matchedCatalog.is_available !== false && ((matchedCatalog.sets_count ?? 0) <= 0)) : false;
+              const stockStatus: 'available' | 'out_of_stock' | 'inactive' | undefined = matchedCatalog
+                ? (isInactive ? 'inactive' : isOutOfStock ? 'out_of_stock' : 'available')
+                : undefined;
+              const availSets = matchedCatalog ? (matchedCatalog.sets_count ?? 0) : undefined;
               return {
                 id: it.id,
                 item_id: it.item_id,
@@ -341,6 +395,8 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 gst_rate: parseFloat(it.gst_rate) || 5,
                 gst_amount: parseFloat(it.gst_amount) || 0,
                 total_amount: parseFloat(it.total_amount) || 0,
+                stock_status: stockStatus,
+                available_sets: availSets,
               };
             })
           );
@@ -387,6 +443,12 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               const pcs = parseInt(it.pieces_per_set) || 1;
               const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
               const rt = parseFloat(it.rate) || 0;
+              const isInactive = matchedCatalog ? matchedCatalog.is_available === false : false;
+              const isOutOfStock = matchedCatalog ? (matchedCatalog.is_available !== false && ((matchedCatalog.sets_count ?? 0) <= 0)) : false;
+              const stockStatus: 'available' | 'out_of_stock' | 'inactive' | undefined = matchedCatalog
+                ? (isInactive ? 'inactive' : isOutOfStock ? 'out_of_stock' : 'available')
+                : undefined;
+              const availSets = matchedCatalog ? (matchedCatalog.sets_count ?? 0) : undefined;
               return {
                 item_id: it.item_id,
                 article_number: it.article_number,
@@ -403,6 +465,8 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 gst_rate: parseFloat(it.gst_rate) || 5,
                 gst_amount: parseFloat(it.gst_amount) || 0,
                 total_amount: parseFloat(it.total_amount) || 0,
+                stock_status: stockStatus,
+                available_sets: availSets,
               };
             })
           );
@@ -474,6 +538,42 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
           item.description = found.work ? `${found.work} ${found.material ? '• ' + found.material : ''}` : (found.description || '');
           // Garment GST Rule: <= 2500 is 5%, > 2500 is 18%
           item.gst_rate = item.rate <= 2500 ? 5 : 18;
+
+          // Check stock availability & inactive status
+          const isInactive = found.is_available === false;
+          const isOutOfStock = found.is_available !== false && ((found.sets_count ?? 0) <= 0);
+
+          if (isInactive) {
+            item.stock_status = 'inactive';
+            item.available_sets = found.sets_count ?? 0;
+            setStockWarningModal({
+              rowIndex: index,
+              sku: found.sku_id,
+              status: 'inactive',
+              setsCount: found.sets_count ?? 0,
+              category: found.category_name || '',
+              rate: chosenRate || 0,
+              pcsPerSet: defaultPcs
+            });
+          } else if (isOutOfStock) {
+            item.stock_status = 'out_of_stock';
+            item.available_sets = found.sets_count ?? 0;
+            setStockWarningModal({
+              rowIndex: index,
+              sku: found.sku_id,
+              status: 'out_of_stock',
+              setsCount: found.sets_count ?? 0,
+              category: found.category_name || '',
+              rate: chosenRate || 0,
+              pcsPerSet: defaultPcs
+            });
+          } else {
+            item.stock_status = 'available';
+            item.available_sets = found.sets_count ?? 0;
+          }
+        } else {
+          item.stock_status = undefined;
+          item.available_sets = undefined;
         }
       }
 
@@ -806,6 +906,167 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
             </div>
           )}
 
+          {/* Stock Availability / Inactive Warning Confirmation Dialog */}
+          {stockWarningModal && (
+            <div
+              className="fade-in"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.82)',
+                backdropFilter: 'blur(8px)',
+                zIndex: 100010,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '1.5rem'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  background: '#161c2b',
+                  border: `2px solid ${stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b'}`,
+                  borderRadius: '16px',
+                  padding: '2rem',
+                  maxWidth: '540px',
+                  width: '100%',
+                  boxShadow: '0 30px 70px rgba(0, 0, 0, 0.85)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.25rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                  <div style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '50%',
+                    background: stockWarningModal.status === 'inactive' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <AlertCircle size={30} color={stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b'} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '1.25rem',
+                      fontWeight: 700,
+                      color: stockWarningModal.status === 'inactive' ? '#f87171' : '#fbbf24'
+                    }}>
+                      {stockWarningModal.status === 'inactive' 
+                        ? 'Article is Marked Inactive!' 
+                        : 'Article is Out of Stock!'}
+                    </h3>
+                    <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.88rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                      {stockWarningModal.status === 'inactive'
+                        ? 'This design is currently disabled/inactive in the wholesale catalog.'
+                        : 'This design has 0 sets available in current factory inventory.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '0.75rem',
+                  fontSize: '0.9rem'
+                }}>
+                  <div>
+                    <span style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block' }}>Article / SKU</span>
+                    <strong style={{ color: '#ffffff', fontSize: '1.1rem', fontFamily: 'Outfit' }}>{stockWarningModal.sku}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block' }}>Category</span>
+                    <strong style={{ color: '#ffffff' }}>{stockWarningModal.category || 'Garments'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block' }}>Catalog Rate</span>
+                    <strong style={{ color: '#38bdf8' }}>₹{stockWarningModal.rate} / pc</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block' }}>Stock Status</span>
+                    <span style={{
+                      display: 'inline-block',
+                      fontWeight: 800,
+                      color: stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b',
+                      textTransform: 'uppercase',
+                      fontSize: '0.85rem'
+                    }}>
+                      {stockWarningModal.status === 'inactive' ? '🚫 Inactive' : '⚠️ 0 Sets Left'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: stockWarningModal.status === 'inactive' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                  borderLeft: `4px solid ${stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b'}`,
+                  padding: '0.8rem 1rem',
+                  borderRadius: '0 8px 8px 0',
+                  fontSize: '0.88rem',
+                  color: '#e2e8f0',
+                  lineHeight: 1.4
+                }}>
+                  It is your choice to continue adding this item to the proforma or reject/remove it.
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '1rem',
+                  marginTop: '0.5rem',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={handleRejectStockWarning}
+                    className="btn btn-secondary"
+                    style={{
+                      borderColor: '#ef4444',
+                      color: '#f87171',
+                      padding: '0.65rem 1.3rem',
+                      fontSize: '0.92rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
+                    <Trash2 size={16} />
+                    <span>Reject / Remove</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleContinueStockWarning}
+                    className="btn btn-primary"
+                    style={{
+                      background: stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b',
+                      borderColor: stockWarningModal.status === 'inactive' ? '#ef4444' : '#f59e0b',
+                      color: '#000000',
+                      padding: '0.65rem 1.4rem',
+                      fontSize: '0.92rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>Continue Anyway</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Pinned Modal Header */}
           <div style={{
             padding: '1rem 1.5rem',
@@ -1120,20 +1381,90 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                               fontSize: '0.95rem', 
                               fontFamily: 'Outfit', 
                               fontWeight: 600,
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              border: '1.5px solid rgba(255, 255, 255, 0.2)',
+                              background: item.stock_status === 'inactive'
+                                ? 'rgba(239, 68, 68, 0.15)'
+                                : item.stock_status === 'out_of_stock'
+                                  ? 'rgba(245, 158, 11, 0.15)'
+                                  : 'rgba(255, 255, 255, 0.08)',
+                              border: item.stock_status === 'inactive'
+                                ? '1.5px solid #ef4444'
+                                : item.stock_status === 'out_of_stock'
+                                  ? '1.5px solid #f59e0b'
+                                  : '1.5px solid rgba(255, 255, 255, 0.2)',
                               borderRadius: '6px',
-                              color: '#ffffff'
+                              color: item.stock_status === 'inactive'
+                                ? '#fca5a5'
+                                : item.stock_status === 'out_of_stock'
+                                  ? '#fcd34d'
+                                  : '#ffffff'
                             }}
                             required
                           />
                           <datalist id={`sku-list-${index}`}>
-                            {catalogItems.map(c => (
-                              <option key={c.id} value={c.sku_id}>
-                                {c.sku_id} - {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.revised_rate || c.rate})
-                              </option>
-                            ))}
+                            {catalogItems.map(c => {
+                              const isInactive = c.is_available === false;
+                              const isOutOfStock = c.is_available !== false && ((c.sets_count ?? 0) <= 0);
+                              const tag = isInactive 
+                                ? '[🚫 INACTIVE]' 
+                                : isOutOfStock 
+                                  ? '[⚠️ OUT OF STOCK]' 
+                                  : `[Stock: ${c.sets_count ?? 0} sets]`;
+                              return (
+                                <option key={c.id} value={c.sku_id}>
+                                  {c.sku_id} • {tag} • {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.revised_rate || c.rate})
+                                </option>
+                              );
+                            })}
                           </datalist>
+
+                          {/* Status Indicator Badges below SKU input */}
+                          {item.stock_status === 'inactive' && (
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.72rem',
+                              background: 'rgba(239, 68, 68, 0.25)',
+                              color: '#f87171',
+                              border: '1px solid rgba(239, 68, 68, 0.5)',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              marginTop: '4px',
+                              fontWeight: 700
+                            }}>
+                              🚫 Inactive Article
+                            </div>
+                          )}
+                          {item.stock_status === 'out_of_stock' && (
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.72rem',
+                              background: 'rgba(245, 158, 11, 0.25)',
+                              color: '#fbbf24',
+                              border: '1px solid rgba(245, 158, 11, 0.5)',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              marginTop: '4px',
+                              fontWeight: 700
+                            }}>
+                              ⚠️ Out of Stock (0 Sets)
+                            </div>
+                          )}
+                          {item.stock_status === 'available' && item.available_sets !== undefined && (
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.7rem',
+                              color: '#34d399',
+                              marginTop: '3px',
+                              fontWeight: 600
+                            }}>
+                              ✓ Stock: {item.available_sets} sets
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '10px 8px' }}>
@@ -1418,7 +1749,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               alignItems: 'center',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '0.95rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.95rem' }}>
                 <span>
                   Total Items: <strong style={{ color: 'var(--text-primary)' }}>{summary.totalSets} Sets ({summary.totalPieces} Pieces)</strong>
                 </span>
@@ -1426,6 +1757,23 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                 <span>
                   Grand Total: <strong style={{ color: 'var(--color-success)', fontSize: '1.35rem', fontFamily: 'Outfit' }}>₹{summary.grandTotal.toLocaleString('en-IN')}</strong>
                 </span>
+                {lineItems.some(it => it.stock_status === 'inactive' || it.stock_status === 'out_of_stock') && (
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: 'rgba(245, 158, 11, 0.18)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: '#fbbf24',
+                    padding: '0.3rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600
+                  }}>
+                    <AlertCircle size={14} />
+                    Contains Inactive / Out-of-Stock Items
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '1rem' }}>
