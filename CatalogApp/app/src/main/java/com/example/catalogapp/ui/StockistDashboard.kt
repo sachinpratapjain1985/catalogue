@@ -52,6 +52,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.font.FontStyle
 import android.widget.Toast
 
 
@@ -164,7 +167,9 @@ fun StockistDashboard(
                     Text(
                         text = selectedCategory?.name ?: "Stock Folders",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -725,6 +730,7 @@ fun StockItemCard(
     sessionManager: SessionManager,
     apiService: CatalogApiService
 ) {
+    val context = LocalContext.current
     // Current stock and rate states
     var sets by remember { mutableStateOf(item.sets_count) }
     var isAvailable by remember { mutableStateOf(item.is_available) }
@@ -750,104 +756,220 @@ fun StockItemCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(12.dp)
         ) {
-            // High-Performance Thumbnail Preview with Zoom Trigger
-            Box(
-                modifier = Modifier
-                    .size(105.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showZoomDialog = true }
+            // Main Top Content Row: Image + Complete Details
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = item.sku_id,
-                    onError = {
-                        val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
-                        if (imageUrl != fallback) {
-                            imageUrl = fallback
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-
-                // Real Photos / Zoom Hint Badge
+                // High-Performance Thumbnail Preview with Zoom Trigger
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    contentAlignment = Alignment.Center
+                        .size(105.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showZoomDialog = true }
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = item.sku_id,
+                        onError = {
+                            val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
+                            if (imageUrl != fallback) {
+                                imageUrl = fallback
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    // Real Photos / Zoom Hint Badge
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Zoom",
+                                tint = Color.White,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = if (sessionManager.canAccessRealImages() && item.real_image_count > 0) "Real (${item.real_image_count})" else "Zoom",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // SKU Details Column (Full width without being squished!)
+                Column(
+                    modifier = Modifier.weight(1f)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Zoom",
-                            tint = Color.White,
-                            modifier = Modifier.size(11.dp)
-                        )
                         Text(
-                            text = if (sessionManager.canAccessRealImages() && item.real_image_count > 0) "Real (${item.real_image_count})" else "Zoom",
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
+                            text = item.sku_id,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        // Status pill badge
+                        val statusLabel = when {
+                            !isAvailable -> "Inactive"
+                            sets > 0 -> "Active"
+                            else -> "Out Stock"
+                        }
+                        val statusBg = when {
+                            !isAvailable -> MaterialTheme.colorScheme.errorContainer
+                            sets > 0 -> Color(0xFFD1FAE5) // light green
+                            else -> Color(0xFFFFEDD5) // light orange
+                        }
+                        val statusColor = when {
+                            !isAvailable -> MaterialTheme.colorScheme.error
+                            sets > 0 -> Color(0xFF047857) // dark green
+                            else -> Color(0xFFC2410C) // dark orange
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = statusBg,
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
+                            Text(
+                                text = statusLabel,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = statusColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Pack details
+                    Text(
+                        text = "Pack: ${item.pieces_per_set} pcs/set",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+
+                    // Fabric / Material (Visible now!)
+                    if (!item.material.isNullOrBlank()) {
+                        Text(
+                            text = "Fabric: ${item.material}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Work Details
+                    if (!item.work.isNullOrBlank()) {
+                        Text(
+                            text = "✨ Work: ${item.work}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Description / Notes (Visible now!)
+                    if (!item.description.isNullOrBlank()) {
+                        Text(
+                            text = item.description,
+                            fontSize = 11.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+                    }
+
+                    // Pricing & Age Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Rate / Offer display
+                        if (currentRevisedRate != null && currentRevisedRate!! > 0 && currentRevisedRate != item.rate) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "₹${item.rate}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "🔥 ₹$currentRevisedRate",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFD97706)
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Rate: ₹${item.rate}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        // Stock Age Badge
+                        Text(
+                            text = "$age days old",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ageColor
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // SKU Details and stock selectors
-            Column(
-                modifier = Modifier.weight(1f)
+            // Action Row 1: Sets Counter + Total Pieces + Active Switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = item.sku_id,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-                Text(
-                    text = "Pack: ${item.pieces_per_set} pcs/set" + if (!item.work.isNullOrBlank()) " | ✨ ${item.work}" else "",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (currentRevisedRate != null && currentRevisedRate!! > 0) {
-                    Text(
-                        text = "🔥 Offer Rate: ₹$currentRevisedRate",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFD97706),
-                        modifier = Modifier.padding(top = 1.dp)
-                    )
-                }
-
-                // Stock Age Badge
-                Text(
-                    text = "$age days old",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ageColor,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(6.dp))
-
                 // Sets counter increment / decrement
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -855,163 +977,156 @@ fun StockItemCard(
                 ) {
                     IconButton(
                         onClick = { if (sets > 0) sets-- },
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(30.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("-", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
 
                     Text(
                         text = "$sets sets",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
 
                     IconButton(
                         onClick = { sets++ },
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(30.dp),
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
                     }
+
+                    Text(
+                        text = "($totalQty pcs)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
                 }
-                
-                Text(
-                    text = "Total pieces: $totalQty",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
 
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Right actions column (Rate Input, Revised Rate Input, Switch Availability, Update button)
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.width(110.dp)
-            ) {
-                // Inline Base Rate Field
-                OutlinedTextField(
-                    value = rateText,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                            rateText = newValue
-                        }
-                    },
-                    label = { Text("Base (₹)", fontSize = 8.sp) },
-                    enabled = sessionManager.canEditRates(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                    singleLine = true,
-                    shape = RoundedCornerShape(6.dp)
-                )
-
-                // Inline Revised / Offer Rate Field
-                OutlinedTextField(
-                    value = revisedRateText,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                            revisedRateText = newValue
-                        }
-                    },
-                    label = { Text("🔥 Offer (₹)", fontSize = 8.sp, color = Color(0xFFD97706)) },
-                    placeholder = { Text("None", fontSize = 8.sp) },
-                    enabled = sessionManager.canEditRates(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontSize = 11.sp, 
-                        fontWeight = FontWeight.Bold,
-                        color = if (revisedRateText.isNotEmpty()) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
-                    ),
-                    singleLine = true,
-                    shape = RoundedCornerShape(6.dp)
-                )
-
-                // Availability Toggle
+                // Active / Inactive Switch
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val statusLabel = when {
-                        !isAvailable -> "Inactive"
-                        sets > 0 -> "Active"
-                        else -> "Out Stock"
-                    }
-                    val statusColor = when {
-                        !isAvailable -> MaterialTheme.colorScheme.error
-                        sets > 0 -> MaterialTheme.colorScheme.primary
-                        else -> Color(0xFFF97316)
-                    }
                     Text(
-                        text = statusLabel,
-                        fontSize = 8.sp,
+                        text = if (isAvailable) "Active" else "Inactive",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = statusColor
+                        color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                     Switch(
                         checked = isAvailable,
                         onCheckedChange = { isAvailable = it },
-                        modifier = Modifier.scale(0.6f)
+                        modifier = Modifier.scale(0.75f)
+                    )
+                }
+            }
+
+            // Action Row 2: Rate Editing (if permitted) & Save Button
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (sessionManager.canEditRates()) {
+                    OutlinedTextField(
+                        value = rateText,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                rateText = newValue
+                            }
+                        },
+                        label = { Text("Base (₹)", fontSize = 9.sp) },
+                        modifier = Modifier
+                            .width(85.dp)
+                            .height(50.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = revisedRateText,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                revisedRateText = newValue
+                            }
+                        },
+                        label = { Text("Offer (₹)", fontSize = 9.sp, color = Color(0xFFD97706)) },
+                        placeholder = { Text("None", fontSize = 9.sp) },
+                        modifier = Modifier
+                            .width(85.dp)
+                            .height(50.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontSize = 12.sp, 
+                            fontWeight = FontWeight.Bold,
+                            color = if (revisedRateText.isNotEmpty()) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp)
                     )
                 }
 
-                // Save Changes button
+                // Save Button
                 Button(
                     onClick = {
                         isUpdating = true
                         isSuccess = false
                         scope.launch {
                             try {
-                                val rateVal = rateText.toIntOrNull() ?: item.rate
-                                val revisedVal = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
+                                val canEdit = sessionManager.canEditRates()
+                                val parsedBase = rateText.toIntOrNull() ?: item.rate
+                                val parsedRev = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
+                                
+                                // Only pass rates if user has permission AND they actually changed
+                                val finalRate = if (canEdit && parsedBase != item.rate) parsedBase else null
+                                val finalRevised = if (canEdit && parsedRev != item.revised_rate) parsedRev else null
+
                                 val response = apiService.updateStock(
                                     item.id,
                                     StockUpdateRequest(
                                         setsCount = sets, 
                                         isAvailable = isAvailable, 
-                                        rate = rateVal,
-                                        revisedRate = revisedVal
+                                        rate = finalRate,
+                                        revisedRate = finalRevised
                                     )
                                 )
                                 currentRevisedRate = response.revised_rate
                                 isSuccess = true
+                                Toast.makeText(context, "${item.sku_id} saved successfully", Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) {
-                                // silent catch or failure state
+                                val msg = e.message ?: "Failed to save ${item.sku_id}"
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                             } finally {
                                 isUpdating = false
                             }
                         }
                     },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(28.dp),
+                        .weight(1f)
+                        .height(44.dp),
                     enabled = !isUpdating,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
                     ),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     if (isUpdating) {
-                        Box(
-                            modifier = Modifier.size(12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White)
-                        }
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp, 
+                            color = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
                     } else if (isSuccess) {
-                        Icon(Icons.Default.Check, contentDescription = "Saved", modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text("Saved", fontSize = 10.sp)
+                        Icon(Icons.Default.Check, contentDescription = "Saved", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Saved", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     } else {
-                        Text("Save", fontSize = 10.sp)
+                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

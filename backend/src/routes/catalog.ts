@@ -353,10 +353,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       let queryStr = `
          SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
-                s.sets_count, s.total_pieces, s.is_available,
+                COALESCE(s.sets_count, 0) as sets_count, 
+                COALESCE(s.total_pieces, 0) as total_pieces, 
+                COALESCE(s.is_available, true) as is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
          FROM items i
-         JOIN stock s ON s.item_id = i.id
+         LEFT JOIN stock s ON s.item_id = i.id
          LEFT JOIN (
              SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
              FROM item_real_images 
@@ -438,7 +440,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
   }
 });
 
-// POST /api/catalog/items/:id/stock - Update SKU stock & optional rate (Stockist/Manager/Admin)
+// POST /api/catalog/items/:id/stock - Update SKU stock & optional rate (Stockist/Manager/Admin/Both)
 router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 0;
@@ -446,17 +448,20 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   const baseRole = req.user?.baseRole;
   const { setsCount, isAvailable, rate, revisedRate } = req.body;
 
-  if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager') {
+  if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager' && role !== 'both') {
     res.status(403).json({ error: 'Only stockists, managers or admins can modify stock levels or rates' });
     return;
   }
 
   try {
-    // Get current item and stock state
+    // Get current item and stock state (LEFT JOIN so missing stock row doesn't block saving)
     const currentRes = await query(
-      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, s.sets_count, s.total_pieces, s.is_available 
+      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, 
+              COALESCE(s.sets_count, 0) as sets_count, 
+              COALESCE(s.total_pieces, 0) as total_pieces, 
+              COALESCE(s.is_available, true) as is_available 
        FROM items i
-       JOIN stock s ON s.item_id = i.id
+       LEFT JOIN stock s ON s.item_id = i.id
        WHERE i.id = $1`,
       [itemId]
     );
@@ -480,11 +485,11 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       }
     }
 
-    // Handle optional rate update
+    // Handle optional rate update (only verify permission if rate is actually changing)
     let updatedRate = item.rate;
-    if (rate !== undefined) {
+    if (rate !== undefined && rate !== null) {
       const rateVal = parseInt(rate);
-      if (rateVal !== item.rate) {
+      if (!isNaN(rateVal) && rateVal !== item.rate) {
         // Check if user is allowed to edit rates
         const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
         const userRecord = userCheck.rows[0];
@@ -508,20 +513,20 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       }
     }
 
-    // Handle optional revised rate update
+    // Handle optional revised rate update (only verify permission if revisedRate is actually changing)
     let updatedRevisedRate = item.revised_rate;
     if (revisedRate !== undefined) {
-      const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
-      const userRecord = userCheck.rows[0];
-      const canUserEditRates = userRecord && (userRecord.role === 'superadmin' || userRecord.role === 'manager' || !!userRecord.can_edit_rates);
-      
-      if (!canUserEditRates) {
-        res.status(403).json({ error: 'You are not authorized to update pricing rates.' });
-        return;
-      }
-
       const parsedRevised = (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) ? null : parseInt(revisedRate);
       if (parsedRevised !== item.revised_rate) {
+        const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
+        const userRecord = userCheck.rows[0];
+        const canUserEditRates = userRecord && (userRecord.role === 'superadmin' || userRecord.role === 'manager' || !!userRecord.can_edit_rates);
+        
+        if (!canUserEditRates) {
+          res.status(403).json({ error: 'You are not authorized to update pricing rates.' });
+          return;
+        }
+
         await query(
           'UPDATE items SET revised_rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [parsedRevised, itemId]
@@ -550,12 +555,17 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       logType = 'reduction';
     }
 
-    // Update DB
+    // Upsert into stock table so missing rows never block saving
     await query(
-      `UPDATE stock 
-       SET sets_count = $1, total_pieces = $2, is_available = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
-       WHERE item_id = $5`,
-      [targetSets, targetPieces, targetAvailable, userId, itemId]
+      `INSERT INTO stock (item_id, sets_count, total_pieces, is_available, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (item_id) DO UPDATE 
+       SET sets_count = EXCLUDED.sets_count, 
+           total_pieces = EXCLUDED.total_pieces, 
+           is_available = EXCLUDED.is_available, 
+           updated_at = CURRENT_TIMESTAMP, 
+           updated_by = EXCLUDED.updated_by`,
+      [itemId, targetSets, targetPieces, targetAvailable, userId]
     );
 
     // Only log if something actually changed
