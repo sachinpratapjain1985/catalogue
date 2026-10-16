@@ -1012,11 +1012,13 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
   }
 });
 
-// PUT /api/admin/items/:id - Update SKU details, rate, or stock (Manager/Admin)
-router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+// PUT /api/admin/items/:id - Update SKU details, rate, stock, or replace main image (Manager/Admin)
+router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 1;
   const { skuId, categoryId, piecesPerSet, description, material, work, rate, revisedRate, setsCount, isAvailable, originalCreatedAt } = req.body;
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+  const primaryFile = files?.['image']?.[0];
 
   try {
     // 1. Get current item and stock state
@@ -1029,6 +1031,9 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     );
 
     if (currentRes.rows.length === 0) {
+      if (primaryFile && fs.existsSync(primaryFile.path)) {
+        fs.unlinkSync(primaryFile.path);
+      }
       res.status(404).json({ error: 'SKU not found' });
       return;
     }
@@ -1042,12 +1047,83 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
         [skuId.trim(), itemId]
       );
       if (skuExists.rows.length > 0) {
+        if (primaryFile && fs.existsSync(primaryFile.path)) {
+          fs.unlinkSync(primaryFile.path);
+        }
         res.status(400).json({ error: `SKU ID '${skuId.trim()}' already exists. Please choose a unique SKU.` });
         return;
       }
     }
 
-    // 2. Update items metadata if provided
+    // 2. Process Replacement Image if uploaded
+    let newImagePath: string | null = null;
+    if (primaryFile) {
+      const ext = path.extname(primaryFile.filename);
+      const baseName = path.basename(primaryFile.filename, ext);
+      const thumbFilename = `${baseName}-thumb${ext}`;
+      const thumbPath = path.join(uploadDir, thumbFilename);
+
+      // Generate optimized thumbnail
+      try {
+        let sharpObj = sharp(primaryFile.path)
+          .resize(320, 320, { fit: 'inside', withoutEnlargement: true });
+
+        const extension = ext.toLowerCase();
+        if (extension === '.png') {
+          sharpObj = sharpObj.png({ quality: 70, compressionLevel: 6 });
+        } else if (extension === '.webp') {
+          sharpObj = sharpObj.webp({ quality: 70 });
+        } else {
+          sharpObj = sharpObj.jpeg({ quality: 70, progressive: true });
+        }
+
+        await sharpObj.toFile(thumbPath);
+        console.log(`[Thumbnail] Generated replacement optimized thumbnail at ${thumbPath}`);
+      } catch (thumbErr) {
+        console.error('[Thumbnail] Failed to generate optimized replacement thumbnail:', thumbErr);
+        try {
+          await sharp(primaryFile.path)
+            .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+            .toFile(thumbPath);
+        } catch (e) {
+          console.error('[Thumbnail Fallback] Failed as well:', e);
+        }
+      }
+
+      // Clean up previous image & thumbnail from disk and visual index
+      if (item.image_path) {
+        const oldFullPath = path.join(uploadDir, path.basename(item.image_path));
+        if (fs.existsSync(oldFullPath)) {
+          try {
+            fs.unlinkSync(oldFullPath);
+          } catch (e) {
+            console.error('Failed to delete old image file', oldFullPath, e);
+          }
+        }
+        const oldExt = path.extname(item.image_path);
+        const oldBaseName = path.basename(item.image_path, oldExt);
+        const oldThumbPath = path.join(uploadDir, `${oldBaseName}-thumb${oldExt}`);
+        if (fs.existsSync(oldThumbPath)) {
+          try {
+            fs.unlinkSync(oldThumbPath);
+          } catch (e) {
+            console.error('Failed to delete old thumbnail file', oldThumbPath, e);
+          }
+        }
+
+        // Clean up from visual search DB and memory cache
+        try {
+          await query('DELETE FROM item_image_features WHERE item_id = $1 AND image_path = $2', [itemId, item.image_path]);
+          removeCachedVisualFeature(itemId, item.image_path);
+        } catch (vfErr) {
+          console.error('[Visual Index] Failed to clean old visual feature:', vfErr);
+        }
+      }
+
+      newImagePath = `/uploads/${primaryFile.filename}`;
+    }
+
+    // 3. Update items metadata if provided
     let updateFields: string[] = [];
     let params: any[] = [];
     let paramIndex = 1;
@@ -1060,6 +1136,11 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
     if (categoryId !== undefined) {
       updateFields.push(`category_id = $${paramIndex}`);
       params.push(parseInt(categoryId));
+      paramIndex++;
+    }
+    if (newImagePath !== null) {
+      updateFields.push(`image_path = $${paramIndex}`);
+      params.push(newImagePath);
       paramIndex++;
     }
     if (piecesPerSet !== undefined) {
@@ -1088,7 +1169,7 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       paramIndex++;
     }
     if (revisedRate !== undefined) {
-      if (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) {
+      if (revisedRate === null || revisedRate === '' || isNaN(parseInt(revisedRate)) || parseInt(revisedRate) <= 0) {
         updateFields.push(`revised_rate = $${paramIndex}`);
         params.push(null);
         paramIndex++;
@@ -1110,7 +1191,14 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       await query(queryStr, params);
     }
 
-    // 3. Log rate change if rate or revised_rate changed
+    // Re-index new image for visual search if replaced
+    if (newImagePath) {
+      indexItemImage(itemId, newImagePath, 'primary').catch(err => {
+        console.error('[Visual Index] Failed to re-index item on image update:', err);
+      });
+    }
+
+    // 4. Log rate change if rate or revised_rate changed
     if (rate !== undefined && parseInt(rate) !== item.rate) {
       await query(
         `INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)`,
@@ -1119,7 +1207,7 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       console.log(`[Rate Log] Rate for item ${itemId} changed from ${item.rate} to ${rate} by user ${userId}`);
     }
     if (revisedRate !== undefined) {
-      const parsedRevised = (revisedRate === null || revisedRate === '' || parseInt(revisedRate) <= 0) ? null : parseInt(revisedRate);
+      const parsedRevised = (revisedRate === null || revisedRate === '' || isNaN(parseInt(revisedRate)) || parseInt(revisedRate) <= 0) ? null : parseInt(revisedRate);
       if (parsedRevised !== item.revised_rate) {
         await query(
           `INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)`,
@@ -1129,9 +1217,9 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
       }
     }
 
-    // 4. Update stock levels if provided
+    // 5. Update stock levels if provided
     const targetSets = setsCount !== undefined ? parseInt(setsCount) : item.sets_count;
-    const targetAvailable = isAvailable !== undefined ? !!isAvailable : item.is_available;
+    const targetAvailable = isAvailable !== undefined ? (isAvailable === true || isAvailable === 'true') : item.is_available;
     const piecesPerSetVal = piecesPerSet !== undefined ? parseInt(piecesPerSet) : item.pieces_per_set;
     const targetPieces = targetSets * piecesPerSetVal;
 
@@ -1185,6 +1273,9 @@ router.put('/items/:id', async (req: AuthenticatedRequest, res: Response): Promi
 
     res.json(updatedRes.rows[0]);
   } catch (error) {
+    if (primaryFile && fs.existsSync(primaryFile.path)) {
+      try { fs.unlinkSync(primaryFile.path); } catch (e) {}
+    }
     console.error('Update item details error:', error);
     res.status(500).json({ error: (error as any).message || 'Internal server error' });
   }

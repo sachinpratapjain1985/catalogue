@@ -104,6 +104,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
   const [editDescription, setEditDescription] = useState('');
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Folder/Category editing states
   const [editingCatId, setEditingCatId] = useState<number | null>(null);
@@ -577,25 +580,55 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     if (!editingItem) return;
 
     try {
-      const response = await fetch(`/api/admin/items/${editingItem.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          skuId: editSkuId,
-          categoryId: editCategoryId,
-          piecesPerSet: editPiecesPerSet,
-          material: editMaterial,
-          work: editWork,
-          rate: editRate,
-          revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
-          setsCount: editSetsCount,
-          isAvailable: editIsAvailable,
-          description: editDescription
-        })
-      });
+      setLoading(true);
+      let response;
+
+      if (editImageFile) {
+        const formData = new FormData();
+        formData.append('skuId', editSkuId);
+        formData.append('categoryId', editCategoryId);
+        formData.append('piecesPerSet', editPiecesPerSet.toString());
+        formData.append('material', editMaterial);
+        formData.append('work', editWork);
+        formData.append('rate', editRate);
+        if (editRevisedRate.trim() !== '') {
+          formData.append('revisedRate', editRevisedRate.trim());
+        } else {
+          formData.append('revisedRate', '');
+        }
+        formData.append('setsCount', editSetsCount.toString());
+        formData.append('isAvailable', editIsAvailable ? 'true' : 'false');
+        formData.append('description', editDescription);
+        formData.append('image', editImageFile);
+
+        response = await fetch(`/api/admin/items/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+      } else {
+        response = await fetch(`/api/admin/items/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            skuId: editSkuId,
+            categoryId: editCategoryId,
+            piecesPerSet: editPiecesPerSet,
+            material: editMaterial,
+            work: editWork,
+            rate: editRate,
+            revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
+            setsCount: editSetsCount,
+            isAvailable: editIsAvailable,
+            description: editDescription
+          })
+        });
+      }
 
       const data = await response.json();
 
@@ -603,12 +636,17 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setItems(items.map(item => item.id === editingItem.id ? data : item));
         setIsEditModalOpen(false);
         setEditingItem(null);
+        setEditImageFile(null);
+        setEditImagePreview(null);
+        if (editFileInputRef.current) editFileInputRef.current.value = '';
         showSuccess('SKU updated successfully');
       } else {
         showError(data.error || 'Failed to update SKU');
       }
     } catch (err) {
       showError('Failed to save update');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1579,6 +1617,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                                 setEditSetsCount(item.sets_count);
                                 setEditIsAvailable(item.is_available);
                                 setEditDescription(item.description || '');
+                                setEditImageFile(null);
+                                setEditImagePreview(item.image_path);
+                                if (editFileInputRef.current) editFileInputRef.current.value = '';
                                 setIsEditModalOpen(true);
                               }}
                               style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
@@ -1712,6 +1753,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 onClick={() => {
                   setIsEditModalOpen(false);
                   setEditingItem(null);
+                  setEditImageFile(null);
+                  setEditImagePreview(null);
+                  if (editFileInputRef.current) editFileInputRef.current.value = '';
                 }}
                 style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold' }}
               >
@@ -1720,6 +1764,102 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             </div>
 
             <form onSubmit={handleUpdateSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Replace Main Image Section */}
+              <div className="form-group" style={{ marginBottom: '0.25rem' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Main Catalog Image</span>
+                  {editImageFile && (
+                    <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 600 }}>
+                      ✓ New replacement image selected
+                    </span>
+                  )}
+                </label>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '1rem', 
+                  alignItems: 'center', 
+                  background: 'rgba(255, 255, 255, 0.03)', 
+                  padding: '0.85rem', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: editImageFile ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--glass-border)' 
+                }}>
+                  <div style={{ 
+                    position: 'relative', 
+                    width: '84px', 
+                    height: '108px', 
+                    flexShrink: 0, 
+                    borderRadius: 'var(--radius-sm)', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--glass-border)', 
+                    background: '#090d16',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {editImagePreview ? (
+                      <img 
+                        src={editImagePreview} 
+                        alt={editSkuId}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>No Image</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                    <input 
+                      type="file" 
+                      ref={editFileInputRef}
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setEditImageFile(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setEditImagePreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
+                      >
+                        <Upload size={14} />
+                        {editImageFile ? 'Choose Different Image' : 'Replace Main Image'}
+                      </button>
+                      {editImageFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditImageFile(null);
+                            setEditImagePreview(editingItem?.image_path || null);
+                            if (editFileInputRef.current) editFileInputRef.current.value = '';
+                          }}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', color: 'var(--color-danger)' }}
+                        >
+                          Revert to Original
+                        </button>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+                      {editImageFile ? (
+                        <span style={{ color: 'var(--text-primary)' }}>File: <strong>{editImageFile.name}</strong></span>
+                      ) : (
+                        'Click "Replace Main Image" to upload an updated catalog photo or fixed poster design.'
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
                 <label>SKU ID (SKU Number)</label>
                 <input 
@@ -1848,7 +1988,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
+                <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
@@ -1856,6 +1998,9 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   onClick={() => {
                     setIsEditModalOpen(false);
                     setEditingItem(null);
+                    setEditImageFile(null);
+                    setEditImagePreview(null);
+                    if (editFileInputRef.current) editFileInputRef.current.value = '';
                   }}
                 >
                   Cancel
