@@ -58,6 +58,7 @@ data class SKUItemDto(
     val description: String?,
     val material: String?,
     val work: String? = null,
+    val stitcher_name: String? = null,
     val sets_count: Int,
     val total_pieces: Int,
     val is_available: Boolean,

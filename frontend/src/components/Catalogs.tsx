@@ -41,6 +41,7 @@ interface SKUItem {
   description: string;
   material: string;
   work?: string;
+  stitcher_name?: string | null;
   rate: number;
   revised_rate?: number | null;
   sets_count: number;
@@ -85,6 +86,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [description, setDescription] = useState('');
   const [material, setMaterial] = useState('');
   const [work, setWork] = useState('');
+  const [stitcherName, setStitcherName] = useState('');
   const [rate, setRate] = useState('');
   const [stockType, setStockType] = useState<'new' | 'old'>('new');
   const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
@@ -99,6 +101,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editPiecesPerSet, setEditPiecesPerSet] = useState(4);
   const [editMaterial, setEditMaterial] = useState('');
   const [editWork, setEditWork] = useState('');
+  const [editStitcherName, setEditStitcherName] = useState('');
   const [editRate, setEditRate] = useState('');
   const [editRevisedRate, setEditRevisedRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
@@ -525,6 +528,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     formData.append('description', description.trim());
     formData.append('material', material.trim());
     formData.append('work', work.trim());
+    formData.append('stitcherName', stitcherName.trim());
     formData.append('rate', rate.trim() || '0');
     formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
     formData.append('image', selectedFile);
@@ -555,6 +559,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setDescription('');
         setMaterial('');
         setWork('');
+        setStitcherName('');
         setRate('');
         setStockType('new');
         setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
@@ -590,6 +595,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         formData.append('piecesPerSet', editPiecesPerSet.toString());
         formData.append('material', editMaterial);
         formData.append('work', editWork);
+        formData.append('stitcherName', editStitcherName.trim());
         formData.append('rate', editRate);
         if (editRevisedRate.trim() !== '') {
           formData.append('revisedRate', editRevisedRate.trim());
@@ -621,6 +627,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             piecesPerSet: editPiecesPerSet,
             material: editMaterial,
             work: editWork,
+            stitcherName: editStitcherName.trim(),
             rate: editRate,
             revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
             setsCount: editSetsCount,
@@ -638,6 +645,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
         setEditingItem(null);
         setEditImageFile(null);
         setEditImagePreview(null);
+        setEditStitcherName('');
         if (editFileInputRef.current) editFileInputRef.current.value = '';
         showSuccess('SKU updated successfully');
       } else {
@@ -1192,8 +1200,8 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group">
                 <label>Work Type</label>
                 <select 
                   value={work} 
@@ -1206,7 +1214,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </select>
               </div>
 
-              <div className="form-group" style={{ flex: 1 }}>
+              <div className="form-group">
                 <label>Material Details</label>
                 <input 
                   type="text" 
@@ -1215,8 +1223,10 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   onChange={e => setMaterial(e.target.value)}
                 />
               </div>
+            </div>
 
-              <div className="form-group" style={{ flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group">
                 <label>Base Rate / Price (₹)</label>
                 <input 
                   type="number" 
@@ -1224,6 +1234,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   value={rate}
                   onChange={e => setRate(e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Stitcher Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. AHM, RASD (Optional)" 
+                  value={stitcherName}
+                  onChange={e => setStitcherName(e.target.value)}
                 />
               </div>
             </div>
@@ -1612,6 +1632,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                                 setEditPiecesPerSet(item.pieces_per_set);
                                 setEditMaterial(item.material || '');
                                 setEditWork(item.work || '');
+                                setEditStitcherName(item.stitcher_name || '');
                                 setEditRate(item.rate.toString());
                                 setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
                                 setEditSetsCount(item.sets_count);
@@ -1646,6 +1667,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                           {item.work && (
                             <span className="folder-tag" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
                               ✨ {item.work}
+                            </span>
+                          )}
+                          {item.stitcher_name && (
+                            <span className="folder-tag" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.25)' }} title={`Stitcher: ${item.stitcher_name}`}>
+                              🧵 {item.stitcher_name}
                             </span>
                           )}
                         </div>
@@ -1755,6 +1781,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                   setEditingItem(null);
                   setEditImageFile(null);
                   setEditImagePreview(null);
+                  setEditStitcherName('');
                   if (editFileInputRef.current) editFileInputRef.current.value = '';
                 }}
                 style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold' }}
@@ -1921,7 +1948,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label>Base Rate (₹)</label>
                   <input 
@@ -1933,13 +1960,23 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                 </div>
 
                 <div className="form-group">
-                  <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 New / Revised Rate (₹)</label>
+                  <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 Revised Rate (₹)</label>
                   <input 
                     type="number" 
-                    placeholder="e.g. 450 (or leave blank)"
+                    placeholder="e.g. 450 (or blank)"
                     value={editRevisedRate}
                     onChange={e => setEditRevisedRate(e.target.value)}
                     style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Stitcher Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. AHM, RASD"
+                    value={editStitcherName}
+                    onChange={e => setEditStitcherName(e.target.value)}
                   />
                 </div>
               </div>
@@ -2000,6 +2037,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                     setEditingItem(null);
                     setEditImageFile(null);
                     setEditImagePreview(null);
+                    setEditStitcherName('');
                     if (editFileInputRef.current) editFileInputRef.current.value = '';
                   }}
                 >

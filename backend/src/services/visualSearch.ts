@@ -42,6 +42,7 @@ export interface ImageSearchResult {
   description: string | null;
   material: string | null;
   work: string | null;
+  stitcher_name?: string | null;
   rate: number;
   revised_rate: number | null;
   original_created_at: string;
@@ -630,7 +631,7 @@ export async function searchCatalogByImage(
 
   let metaQueryStr = `
     SELECT i.id as item_id, i.sku_id, i.category_id, i.image_path as primary_image_path, i.pieces_per_set,
-           i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
+           i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
            c.name as category_name,
            (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
            s.sets_count, s.total_pieces, s.is_available,
@@ -719,6 +720,7 @@ export async function searchCatalogByImage(
     description: row.description,
     material: row.material,
     work: row.work,
+    stitcher_name: row.stitcher_name,
     rate: row.rate,
     revised_rate: row.revised_rate,
     original_created_at: row.original_created_at,

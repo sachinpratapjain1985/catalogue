@@ -283,6 +283,64 @@ object SharingUtils {
     }
 
     /**
+     * Renders a discreet, small stitcher identifier badge at the bottom center of the image.
+     * Low profile and unobtrusive — strictly for internal reference without highlighting.
+     */
+    fun addBottomCenterStitcherBadge(originalBitmap: Bitmap, stitcherName: String): Bitmap {
+        val trimmed = stitcherName.trim()
+        if (trimmed.isEmpty()) return originalBitmap
+
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // Small discreet font size - low profile, not highlighted
+        val fontSize = (width / 42f).coerceIn(14f, 26f)
+        val paddingHorizontal = fontSize * 0.45f
+        val paddingVertical = fontSize * 0.22f
+        val cornerRadius = fontSize * 0.25f
+
+        val marginBottom = height * 0.02f // 2% from bottom edge
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(175, 240, 240, 240) // Soft translucent off-white, not harsh
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            letterSpacing = 0.06f
+            textAlign = Paint.Align.CENTER
+        }
+
+        val textBounds = android.graphics.Rect()
+        textPaint.getTextBounds(trimmed, 0, trimmed.length, textBounds)
+        val textWidth = textPaint.measureText(trimmed)
+        val textHeight = textBounds.height().toFloat()
+
+        val badgeWidth = textWidth + (paddingHorizontal * 2f)
+        val badgeHeight = textHeight + (paddingVertical * 2f)
+
+        val left = (width - badgeWidth) / 2f
+        val right = left + badgeWidth
+        val bottom = height - marginBottom
+        val top = bottom - badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Subtle discreet translucent dark pill behind text to ensure readability on any color background without highlighting
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, bgPaint)
+
+        val textX = badgeRect.centerX()
+        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
+        canvas.drawText(trimmed, textX, textY, textPaint)
+
+        return mutableBitmap
+    }
+
+    /**
      * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp.
      */
     suspend fun downloadAndShareImages(
@@ -311,6 +369,7 @@ object SharingUtils {
                     val targetFile: File,
                     val isRealImage: Boolean,
                     val hasRevisedRate: Boolean,
+                    val hasStitcher: Boolean,
                     val suffix: String
                 )
 
@@ -333,6 +392,7 @@ object SharingUtils {
                                 targetFile = file,
                                 isRealImage = shareRealImages && item.real_images.isNotEmpty(),
                                 hasRevisedRate = item.revised_rate != null && item.revised_rate > 0,
+                                hasStitcher = !item.stitcher_name.isNullOrBlank(),
                                 suffix = suffix
                             )
                         )
@@ -359,7 +419,7 @@ object SharingUtils {
                             val body = response.body ?: throw Exception("Empty body for ${task.item.sku_id}")
                             val bytes = body.bytes()
 
-                            if (task.isRealImage || task.hasRevisedRate) {
+                            if (task.isRealImage || task.hasRevisedRate || task.hasStitcher) {
                                 val decodeOptions = BitmapFactory.Options().apply {
                                     inPreferredConfig = Bitmap.Config.ARGB_8888
                                     inScaled = false
@@ -396,7 +456,16 @@ object SharingUtils {
                                         processedBitmap = rateBadgeBitmap
                                     }
 
-                                    // 4. Save at 96% high quality JPEG or 100% PNG (indistinguishable visual clarity with 3-5x faster file writing)
+                                    // 4. Apply Stitcher Name in bottom center (small, discreet, not highlighted) if present
+                                    if (task.hasStitcher && !task.item.stitcher_name.isNullOrBlank()) {
+                                        val stitcherBitmap = addBottomCenterStitcherBadge(processedBitmap, task.item.stitcher_name)
+                                        if (processedBitmap != rawBitmap && processedBitmap != stitcherBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = stitcherBitmap
+                                    }
+
+                                    // 5. Save at 96% high quality JPEG or 100% PNG (indistinguishable visual clarity with 3-5x faster file writing)
                                     FileOutputStream(task.targetFile).use { out ->
                                         if (task.suffix.equals(".png", ignoreCase = true)) {
                                             processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

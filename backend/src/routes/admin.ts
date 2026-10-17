@@ -791,7 +791,7 @@ router.delete('/works/:id', async (req: Request, res: Response): Promise<void> =
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
               u.username as updated_by_user,
@@ -835,7 +835,7 @@ router.get('/items', async (req: Request, res: Response) => {
 
 // POST /api/admin/items - Upload new SKU
 router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'real_images', maxCount: 5 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { skuId, categoryId, piecesPerSet, description, material, work, rate, revisedRate, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, stitcherName, rate, revisedRate, originalCreatedAt } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
   const primaryFile = files?.['image']?.[0];
   const realFiles = files?.['real_images'] || [];
@@ -848,6 +848,8 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
   const clientUserId = req.user?.id || 1; // Fallback to admin
   const finalDescription = description && description.trim() !== '' ? description.trim() : '';
   const finalWork = work && work.trim() !== '' ? work.trim() : '';
+  const rawStitcher = stitcherName !== undefined ? stitcherName : (req.body as any).stitcher_name;
+  const finalStitcherName = rawStitcher && rawStitcher.trim() !== '' ? rawStitcher.trim() : null;
   const finalRate = parseInt(rate || '0');
   const finalRevisedRate = revisedRate && !isNaN(parseInt(revisedRate)) && parseInt(revisedRate) > 0 ? parseInt(revisedRate) : null;
   let originalDate = new Date();
@@ -902,10 +904,10 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     // Insert Item
     const itemRes = await query(
-      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, work, rate, revised_rate, original_created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO items (sku_id, category_id, image_path, pieces_per_set, description, material, work, stitcher_name, rate, revised_rate, original_created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalWork, finalRate, finalRevisedRate, originalDate]
+      [skuId, parseInt(categoryId), imagePath, pieces, finalDescription, material || '', finalWork, finalStitcherName, finalRate, finalRevisedRate, originalDate]
     );
 
     const newItem = itemRes.rows[0];
@@ -943,7 +945,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
 
     // Fetch newly created row with all category/stock attributes for catalog state mapping
     const completedRes = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.original_created_at, i.created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i
@@ -1016,7 +1018,7 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
 router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 1;
-  const { skuId, categoryId, piecesPerSet, description, material, work, rate, revisedRate, setsCount, isAvailable, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, stitcherName, rate, revisedRate, setsCount, isAvailable, originalCreatedAt } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
   const primaryFile = files?.['image']?.[0];
 
@@ -1163,6 +1165,13 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
       params.push(work.trim());
       paramIndex++;
     }
+    const rawStitcher = stitcherName !== undefined ? stitcherName : (req.body as any).stitcher_name;
+    if (rawStitcher !== undefined) {
+      const finalStitcher = (rawStitcher && rawStitcher.trim() !== '') ? rawStitcher.trim() : null;
+      updateFields.push(`stitcher_name = $${paramIndex}`);
+      params.push(finalStitcher);
+      paramIndex++;
+    }
     if (rate !== undefined) {
       updateFields.push(`rate = $${paramIndex}`);
       params.push(parseInt(rate));
@@ -1261,7 +1270,7 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
 
     // Fetch updated row
     const updatedRes = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.rate, i.revised_rate, i.original_created_at,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i

@@ -99,6 +99,10 @@ export const runMigrations = async () => {
     await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS revised_rate INTEGER DEFAULT NULL');
     console.log('[Migration] items.revised_rate column verified.');
 
+    // 3e-2. Add stitcher_name column to items table
+    await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS stitcher_name VARCHAR(100) DEFAULT NULL');
+    console.log('[Migration] items.stitcher_name column verified.');
+
     // 3f. Create item_image_features table for visual reverse image search
     await pool.query(`
       CREATE TABLE IF NOT EXISTS item_image_features (
