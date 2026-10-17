@@ -132,7 +132,8 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
       const firstVisitTime = parseInt(storedFirstVisit, 10);
       const elapsed = now - firstVisitTime;
       // If 7 days have elapsed, mark as disappeared
-      if (elapsed > 7 * 24 * 60 * 60 * 1000) {
+      // If 30 days (1 month) have elapsed, mark as disappeared
+      if (elapsed > 30 * 24 * 60 * 60 * 1000) {
         setIsDisappeared(true);
       } else if (elapsed > 24 * 60 * 60 * 1000) {
         // If 24 hours have elapsed since the user's first visit, mark as expired locally
@@ -175,7 +176,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
       }
       if (json.created_at) {
         const linkAge = Date.now() - new Date(json.created_at).getTime();
-        if (linkAge > 7 * 24 * 60 * 60 * 1000) {
+        if (linkAge > 30 * 24 * 60 * 60 * 1000) {
           setIsDisappeared(true);
         }
       }
@@ -423,7 +424,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             </div>
 
             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', marginBottom: '0.4rem' }}>
-              {isDisappeared ? 'यह लिंक समाप्त हो चुका है (7 दिन पूरे हो चुके हैं)' : '24 घंटे की समय सीमा समाप्त हो गई है'}
+              {isDisappeared ? 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)' : '24 घंटे की समय सीमा समाप्त हो गई है'}
             </h2>
             <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
               VIP 24-Hour Exclusive Access Has Ended

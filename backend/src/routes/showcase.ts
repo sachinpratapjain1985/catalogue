@@ -56,14 +56,14 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
     const createdAt = new Date(link.created_at);
     const expiresAt = new Date(link.expires_at);
     const isExpired = now > expiresAt;
-    const isDisappeared = (now.getTime() - createdAt.getTime()) > (7 * 24 * 60 * 60 * 1000);
+    const isDisappeared = (now.getTime() - createdAt.getTime()) > (30 * 24 * 60 * 60 * 1000);
 
-    // If older than 7 days (1 week), the link disappears completely
+    // If older than 1 month (30 days), the link is permanently removed
     if (isDisappeared) {
       res.status(404).json({
         notFound: true,
         disappeared: true,
-        message: 'यह लिंक समाप्त हो चुका है (7 दिन पूरे हो चुके हैं)। नवीनतम कैटलॉग के लिए नीचे दिए हुए नंबर पर कॉल या WhatsApp करें।',
+        message: 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)। नवीनतम कैटलॉग के लिए नीचे दिए हुए नंबर पर कॉल या WhatsApp करें।',
         salesContacts: getShuffledSalesContacts(),
         callContact: CALL_CONTACT,
         communityLink: COMMUNITY_LINK,
