@@ -244,6 +244,11 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   };
 
   const handleToggleShowcase = async (item: SKUItem) => {
+    const nextState = !item.is_in_showcase;
+    // Optimistic instant state update
+    setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: nextState } : it));
+    showSuccess(nextState ? `Added ${item.sku_id} to 24h Showcase!` : `Removed ${item.sku_id} from Showcase`);
+
     try {
       const res = await fetch('/api/admin/showcase/toggle', {
         method: 'POST',
@@ -251,19 +256,30 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ itemId: item.id })
+        body: JSON.stringify({ itemId: item.id, state: nextState })
       });
       if (res.ok) {
         const data = await res.json();
         setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: data.item.is_in_showcase } : it));
+      } else {
+        // Rollback on failure
+        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
+        showError('Failed to save showcase selection on server');
       }
     } catch (err) {
       console.error('Failed to toggle showcase', err);
+      setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
+      showError('Network error updating showcase');
     }
   };
 
   const handleBulkToggleShowcase = async (add: boolean) => {
     if (selectedItems.length === 0) return;
+    const targets = [...selectedItems];
+    // Optimistic instant UI update
+    setItems(prev => prev.map(it => targets.includes(it.id) ? { ...it, is_in_showcase: add } : it));
+    showSuccess(`${targets.length} designs ${add ? 'added to' : 'removed from'} 24h showcase!`);
+
     try {
       const res = await fetch('/api/admin/showcase/bulk-toggle', {
         method: 'POST',
@@ -271,14 +287,16 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ itemIds: selectedItems, state: add })
+        body: JSON.stringify({ itemIds: targets, state: add })
       });
-      if (res.ok) {
-        setItems(prev => prev.map(it => selectedItems.includes(it.id) ? { ...it, is_in_showcase: add } : it));
-        showSuccess(`${selectedItems.length} items ${add ? 'added to' : 'removed from'} 24h showcase!`);
+      if (!res.ok) {
+        showError('Server error while saving bulk showcase update');
+        fetchSKUs();
       }
     } catch (err) {
       console.error('Failed bulk showcase toggle', err);
+      showError('Network error updating showcase');
+      fetchSKUs();
     }
   };
 
@@ -287,19 +305,32 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       setShowcaseGenerating(true);
       setShowcaseErrorMsg('');
       setShowcaseSuccessMsg('');
+
+      // Combine designs already in showcase PLUS any designs currently checked on screen
+      const currentShowcaseIds = items.filter(it => it.is_in_showcase).map(it => it.id);
+      const combinedIds = Array.from(new Set([...currentShowcaseIds, ...selectedItems]));
+
       const res = await fetch('/api/admin/showcase/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          itemIds: combinedIds.length > 0 ? combinedIds : undefined
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        // Also persist flagged state locally if checked items were added
+        if (selectedItems.length > 0) {
+          setItems(prev => prev.map(it => combinedIds.includes(it.id) ? { ...it, is_in_showcase: true } : it));
+        }
+
+        const clientUrl = `${window.location.origin}/showcase/${data.token}`;
         setShowcaseActiveLink({
           token: data.token,
-          url: data.url,
+          url: clientUrl,
           expires_at: data.expires_at,
           item_count: data.count
         });
@@ -1053,7 +1084,7 @@ ${clientUrl}
   const filteredItems = items
     .filter(item => {
       const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = filterCatId === '' || item.category_id === parseInt(filterCatId);
+      const matchesCategory = filterShowcaseOnly || filterCatId === '' || item.category_id === parseInt(filterCatId);
       
       let matchesAge = true;
       if (filterAgeLimit) {

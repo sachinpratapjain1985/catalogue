@@ -792,6 +792,7 @@ router.get('/items', async (req: Request, res: Response) => {
   try {
     const result = await query(
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
+              COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
               u.username as updated_by_user,
@@ -946,6 +947,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
     // Fetch newly created row with all category/stock attributes for catalog state mapping
     const completedRes = await query(
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
+              COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i
@@ -1271,6 +1273,7 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
     // Fetch updated row
     const updatedRes = await query(
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+              COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               s.sets_count, s.total_pieces, s.is_available
        FROM items i
