@@ -66,8 +66,28 @@ export async function generateShowcaseLink(userId?: number, customItemIds?: numb
     [token, itemIds, expiresAt, userId || null]
   );
 
+  // Automatically purge links older than 7 days to keep backend DB clean & high-performing
+  purgeExpiredShowcaseLinks().catch(() => {});
+
   console.log(`[Showcase] Generated fresh 24h showcase link: token=${token}, items=${itemIds.length}, expires=${expiresAt.toISOString()}`);
   return { token, expires_at: expiresAt, count: itemIds.length };
+}
+
+// Automatically purges expired showcase links older than 7 days from the database
+export async function purgeExpiredShowcaseLinks(): Promise<number> {
+  try {
+    const res = await query(
+      `DELETE FROM showcase_links WHERE created_at < NOW() - INTERVAL '7 days'`
+    );
+    const count = (res as any).rowCount || 0;
+    if (count > 0) {
+      console.log(`[Showcase Cleanup] Successfully purged ${count} expired showcase links older than 7 days.`);
+    }
+    return count;
+  } catch (err) {
+    console.error('[Showcase Cleanup] Error purging expired links:', err);
+    return 0;
+  }
 }
 
 // Sends showcase email to sales team
@@ -199,6 +219,7 @@ export function initializeShowcaseCron(): void {
   cron.schedule('0 7 * * *', async () => {
     console.log('[Showcase Cron] Triggering 7:00 AM daily showcase generation...');
     try {
+      await purgeExpiredShowcaseLinks();
       const link = await generateShowcaseLink();
       await sendShowcaseEmail(link.token);
     } catch (err) {

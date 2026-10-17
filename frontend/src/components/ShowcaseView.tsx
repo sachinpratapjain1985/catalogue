@@ -51,6 +51,7 @@ interface SalesContact {
 
 interface ShowcaseResponse {
   notFound?: boolean;
+  disappeared?: boolean;
   expired?: boolean;
   message?: string;
   token?: string;
@@ -85,6 +86,30 @@ interface ShowcaseViewProps {
   token: string;
 }
 
+// Helpers for WhatsApp, Call, and fast thumbnails
+export const formatWhatsAppUrl = (rawPhone: string, text?: string) => {
+  let clean = (rawPhone || '').replace(/\D/g, '');
+  if (clean.length === 10) {
+    clean = '91' + clean;
+  }
+  const baseUrl = `https://wa.me/${clean}`;
+  return text ? `${baseUrl}?text=${encodeURIComponent(text)}` : baseUrl;
+};
+
+export const formatCallUrl = (rawPhone: string) => {
+  const clean = (rawPhone || '').replace(/\D/g, '');
+  return clean.length === 10 ? `tel:+91${clean}` : `tel:+${clean}`;
+};
+
+export const getThumbnailUrl = (imagePath: string) => {
+  if (!imagePath) return '';
+  const lastDotIndex = imagePath.lastIndexOf('.');
+  if (lastDotIndex !== -1 && !imagePath.includes('-thumb.')) {
+    return imagePath.substring(0, lastDotIndex) + '-thumb' + imagePath.substring(lastDotIndex);
+  }
+  return imagePath;
+};
+
 export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const [data, setData] = useState<ShowcaseResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +117,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
   const [isClientLockedOut, setIsClientLockedOut] = useState(false);
+  const [isDisappeared, setIsDisappeared] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
@@ -105,8 +131,11 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     } else {
       const firstVisitTime = parseInt(storedFirstVisit, 10);
       const elapsed = now - firstVisitTime;
-      // If 24 hours have elapsed since the user's first visit, mark as expired locally
-      if (elapsed > 24 * 60 * 60 * 1000) {
+      // If 7 days have elapsed, mark as disappeared
+      if (elapsed > 7 * 24 * 60 * 60 * 1000) {
+        setIsDisappeared(true);
+      } else if (elapsed > 24 * 60 * 60 * 1000) {
+        // If 24 hours have elapsed since the user's first visit, mark as expired locally
         setIsClientLockedOut(true);
       }
     }
@@ -116,7 +145,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
 
   // Live countdown timer based on server expires_at
   useEffect(() => {
-    if (!data?.expires_at || data.expired || isClientLockedOut) return;
+    if (!data?.expires_at || data.expired || isClientLockedOut || isDisappeared) return;
 
     const interval = setInterval(() => {
       const diff = new Date(data.expires_at!).getTime() - Date.now();
@@ -133,7 +162,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [data, isClientLockedOut]);
+  }, [data, isClientLockedOut, isDisappeared]);
 
   const fetchShowcase = async () => {
     try {
@@ -141,7 +170,16 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
       const res = await fetch(`/api/public/showcase/${token}`);
       const json: ShowcaseResponse = await res.json();
       setData(json);
-      if (res.status === 404) {
+      if (json.disappeared) {
+        setIsDisappeared(true);
+      }
+      if (json.created_at) {
+        const linkAge = Date.now() - new Date(json.created_at).getTime();
+        if (linkAge > 7 * 24 * 60 * 60 * 1000) {
+          setIsDisappeared(true);
+        }
+      }
+      if (res.status === 404 && !json.disappeared) {
         setError(json.message || 'Showcase link not found');
       }
     } catch (err: any) {
@@ -165,7 +203,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     }
   };
 
-  const isExpired = isClientLockedOut || data?.expired;
+  const isExpired = isDisappeared || isClientLockedOut || !!data?.expired;
 
   // Render Loading
   if (loading) {
@@ -358,13 +396,13 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
       {/* Main Container */}
       <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '1rem' }}>
         
-        {/* State 1: Link Expired View (> 24 hours) */}
+        {/* State 1: Link Expired View (> 24 hours or disappeared > 7 days) */}
         {isExpired ? (
           <div style={{
-            background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95))',
+            background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95))',
             borderRadius: '16px',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            padding: '2rem 1.25rem',
+            border: isDisappeared ? '1px solid rgba(244, 63, 94, 0.35)' : '1px solid rgba(245, 158, 11, 0.35)',
+            padding: '2.5rem 1.25rem',
             textAlign: 'center',
             marginTop: '1rem',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
@@ -376,20 +414,47 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               width: '64px',
               height: '64px',
               borderRadius: '50%',
-              background: 'rgba(244, 63, 94, 0.15)',
-              border: '2px solid rgba(244, 63, 94, 0.4)',
-              color: '#f43f5e',
+              background: isDisappeared ? 'rgba(244, 63, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              border: isDisappeared ? '2px solid rgba(244, 63, 94, 0.4)' : '2px solid rgba(245, 158, 11, 0.4)',
+              color: isDisappeared ? '#f43f5e' : '#fbbf24',
               marginBottom: '1rem'
             }}>
               <Clock size={32} />
             </div>
 
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem' }}>
-              VIP 24-Hour Preview Window Has Ended
+            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', marginBottom: '0.4rem' }}>
+              {isDisappeared ? 'यह लिंक समाप्त हो चुका है (7 दिन पूरे हो चुके हैं)' : '24 घंटे की समय सीमा समाप्त हो गई है'}
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.9rem', maxWidth: '540px', margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
-              This exclusive catalog link was valid for 24 hours. To checkout our latest live collections and place wholesale orders, kindly connect directly with our sales team below.
-            </p>
+            <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
+              VIP 24-Hour Exclusive Access Has Ended
+            </div>
+
+            {/* Exact Hindi Notice Box as Requested */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(99, 102, 241, 0.15))',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '12px',
+              padding: '1.1rem 1.25rem',
+              maxWidth: '620px',
+              margin: '0 auto 1.5rem',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{
+                fontSize: '1.15rem',
+                fontWeight: 800,
+                color: '#34d399',
+                lineHeight: 1.5
+              }}>
+                लेटेस्ट कैटलॉग के लिए नीचे दिए हुए WhatsApp नंबर से हमारी टीम से संपर्क करें
+              </div>
+              <div style={{
+                fontSize: '0.8rem',
+                color: '#cbd5e1',
+                marginTop: '6px'
+              }}>
+                (Latest catalog ke liye niche diye hue WhatsApp number se hamari team se sampark karein)
+              </div>
+            </div>
 
             {/* Direct Call Desk */}
             <div style={{
@@ -402,7 +467,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               margin: '0 auto 1.5rem'
             }}>
               <a
-                href={`tel:${callContact.rawPhone}`}
+                href={formatCallUrl(callContact.rawPhone)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -414,7 +479,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 }}
               >
                 <Phone size={20} />
-                CALL: {callContact.rawPhone}
+                CALL: +91 {callContact.rawPhone.replace(/\D/g, '').slice(-10)}
               </a>
               <div style={{
                 marginTop: '0.4rem',
@@ -434,22 +499,24 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             {/* Randomized Sales Team WhatsApp Contact Buttons */}
             <div style={{ maxWidth: '500px', margin: '0 auto 1.5rem' }}>
               <p style={{
-                fontSize: '0.75rem',
+                fontSize: '0.78rem',
                 letterSpacing: '1px',
                 textTransform: 'uppercase',
                 color: '#94a3b8',
-                marginBottom: '0.75rem'
+                marginBottom: '0.75rem',
+                fontWeight: 600
               }}>
-                Connect on WhatsApp (Instant Response)
+                Connect on WhatsApp (Direct Sales Desk)
               </p>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                 {salesContacts.map(contact => (
                   <a
                     key={contact.phone}
-                    href={`https://api.whatsapp.com/send?phone=${contact.rawPhone}&text=${encodeURIComponent(
-                      'Hello VS FASHION team, I am viewing your exclusive catalog collection and want to see your latest wholesale designs.'
-                    )}`}
+                    href={formatWhatsAppUrl(
+                      contact.rawPhone,
+                      'नमस्ते VS FASHION टीम, मुझे आपका कैटलॉग देखना है। कृपया लेटेस्ट होलसेल डिज़ाइन शेयर करें।'
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -469,10 +536,10 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                       <MessageSquare size={20} />
-                      {contact.name} ({contact.rawPhone})
+                      {contact.name} (+91 {contact.rawPhone.replace(/\D/g, '').slice(-10)})
                     </span>
                     <span style={{ fontSize: '0.75rem', opacity: 0.9, background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                      Connect Now →
+                      Chat on WhatsApp →
                     </span>
                   </a>
                 ))}
@@ -562,7 +629,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 data.items.map((item, index) => {
                   const salesRep = getRandomSalesNumber(index);
                   const whatsappMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated 24h showcase: ${window.location.href}`;
-                  const whatsappUrl = `https://api.whatsapp.com/send?phone=${salesRep.rawPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+                  const whatsappUrl = formatWhatsAppUrl(salesRep.rawPhone, whatsappMsg);
 
                   return (
                     <div
@@ -591,9 +658,16 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                         }}
                       >
                         <img
-                          src={item.image_path}
+                          src={getThumbnailUrl(item.image_path)}
                           alt={item.sku_id}
                           loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            if (target.src !== item.image_path) {
+                              target.src = item.image_path;
+                            }
+                          }}
                           style={{
                             position: 'absolute',
                             top: 0,
@@ -715,26 +789,28 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 {salesContacts.map(c => (
                   <a
                     key={c.phone}
-                    href={`https://api.whatsapp.com/send?phone=${c.rawPhone}&text=${encodeURIComponent(
+                    href={formatWhatsAppUrl(
+                      c.rawPhone,
                       'Hello VS FASHION, I am browsing your 24h showcase catalog and want to discuss wholesale orders.'
-                    )}`}
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
                       background: 'linear-gradient(135deg, #25d366, #128c7e)',
                       color: '#fff',
-                      padding: '0.5rem 0.85rem',
+                      padding: '0.55rem 0.95rem',
                       borderRadius: '8px',
                       textDecoration: 'none',
                       fontWeight: 700,
                       fontSize: '0.8rem',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem'
+                      gap: '0.4rem',
+                      boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
                     }}
                   >
                     <MessageSquare size={15} />
-                    {c.name} ({c.rawPhone})
+                    {c.name} (+91 {c.rawPhone.replace(/\D/g, '').slice(-10)})
                   </a>
                 ))}
               </div>
@@ -801,8 +877,8 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               <div>
                 <strong style={{ color: '#fff' }}>Call Desk:</strong>
                 <div>
-                  <a href={`tel:${callContact.rawPhone}`} style={{ color: '#38bdf8', textDecoration: 'none' }}>
-                    +91 {callContact.rawPhone}
+                  <a href={formatCallUrl(callContact.rawPhone)} style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}>
+                    +91 {callContact.rawPhone.replace(/\D/g, '').slice(-10)}
                   </a>
                 </div>
                 <div style={{ fontSize: '0.7rem', color: '#fbbf24', marginTop: '2px' }}>

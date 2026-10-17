@@ -53,15 +53,32 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
 
     const link = linkRes.rows[0];
     const now = new Date();
+    const createdAt = new Date(link.created_at);
     const expiresAt = new Date(link.expires_at);
     const isExpired = now > expiresAt;
+    const isDisappeared = (now.getTime() - createdAt.getTime()) > (7 * 24 * 60 * 60 * 1000);
 
-    // Check if expired
+    // If older than 7 days (1 week), the link disappears completely
+    if (isDisappeared) {
+      res.status(404).json({
+        notFound: true,
+        disappeared: true,
+        message: 'यह लिंक समाप्त हो चुका है (7 दिन पूरे हो चुके हैं)। नवीनतम कैटलॉग के लिए नीचे दिए हुए नंबर पर कॉल या WhatsApp करें।',
+        salesContacts: getShuffledSalesContacts(),
+        callContact: CALL_CONTACT,
+        communityLink: COMMUNITY_LINK,
+        brandDetails: BRAND_DETAILS
+      });
+      return;
+    }
+
+    // Check if 24 hours expired
     if (isExpired) {
       res.json({
         expired: true,
-        message: 'VIP 24-Hour Preview Window Has Ended',
+        message: 'लेटेस्ट कैटलॉग के लिए नीचे दिए हुए WhatsApp नंबर से हमारी टीम से संपर्क करें',
         expires_at: link.expires_at,
+        created_at: link.created_at,
         salesContacts: getShuffledSalesContacts(),
         callContact: CALL_CONTACT,
         communityLink: COMMUNITY_LINK,
