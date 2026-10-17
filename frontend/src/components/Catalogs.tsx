@@ -362,11 +362,12 @@ export default function Catalogs({ token, user }: CatalogsProps) {
 
   const handleCopyShowcaseWhatsAppText = () => {
     if (!showcaseActiveLink) return;
+    const clientUrl = `${window.location.origin}/showcase/${showcaseActiveLink.token}`;
     const shareText = 
 `*DESUKA by VS FASHION — Exclusive Wholesale Showcase*
 
 Check out our latest curated wholesale collection (Valid for 24 hours):
-${showcaseActiveLink.url}
+${clientUrl}
 
 📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
 📞 Call: 9718503340 | WhatsApp: 8796333844
@@ -3148,41 +3149,50 @@ ${showcaseActiveLink.url}
 
                   {/* URL Row */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input 
-                      type="text" 
-                      readOnly 
-                      value={showcaseActiveLink.url} 
-                      style={{ 
-                        flex: 1, 
-                        background: '#0b0f19', 
-                        border: '1px solid rgba(255, 255, 255, 0.15)', 
-                        padding: '0.6rem 0.85rem',
-                        fontSize: '0.85rem',
-                        color: '#38bdf8',
-                        borderRadius: '6px'
-                      }} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(showcaseActiveLink.url);
-                        setShowcaseSuccessMsg('Link copied to clipboard!');
-                        setTimeout(() => setShowcaseSuccessMsg(''), 2500);
-                      }}
-                      className="btn btn-secondary"
-                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <Copy size={14} /> Copy
-                    </button>
-                    <a
-                      href={showcaseActiveLink.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary"
-                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
-                    >
-                      <ExternalLink size={14} /> Preview
-                    </a>
+                    {(() => {
+                      const clientUrl = showcaseActiveLink.token 
+                        ? `${window.location.origin}/showcase/${showcaseActiveLink.token}` 
+                        : (showcaseActiveLink.url || '').replace(/https?:\/\/[^/]+/, window.location.origin);
+                      return (
+                        <>
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={clientUrl} 
+                            style={{ 
+                              flex: 1, 
+                              background: '#0b0f19', 
+                              border: '1px solid rgba(255, 255, 255, 0.15)', 
+                              padding: '0.6rem 0.85rem',
+                              fontSize: '0.85rem',
+                              color: '#38bdf8',
+                              borderRadius: '6px'
+                            }} 
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(clientUrl);
+                              setShowcaseSuccessMsg('Link copied to clipboard!');
+                              setTimeout(() => setShowcaseSuccessMsg(''), 2500);
+                            }}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <Copy size={14} /> Copy
+                          </button>
+                          <a
+                            href={clientUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                          >
+                            <ExternalLink size={14} /> Preview
+                          </a>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* WhatsApp Quick Share Button */}

@@ -79,7 +79,10 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
     settingsRes.rows.forEach(r => { settings[r.key] = r.value; });
 
     const recipient = targetEmail || settings['daily_email_recipient'] || 'wholesale@desukafashion.com';
-    const baseUrl = settings['base_url'] || process.env.BASE_URL || 'https://lms.desukafashion.com';
+    let baseUrl = settings['base_url'] || process.env.BASE_URL || 'https://catalog.desukafashion.com';
+    if (baseUrl.includes('lms.desukafashion.com')) {
+      baseUrl = 'https://catalog.desukafashion.com';
+    }
     const showcaseUrl = `${baseUrl}/showcase/${token}`;
     const todayStr = new Date().toLocaleDateString('en-IN', {
       weekday: 'long',

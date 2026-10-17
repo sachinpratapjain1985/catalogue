@@ -54,11 +54,12 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (showcaseToken) return;
     if (token) {
       // Validate token and fetch user details
       fetchUser();
     }
-  }, [token]);
+  }, [token, showcaseToken]);
 
   useEffect(() => {
     if (user && user.role === 'sales') {

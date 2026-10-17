@@ -277,7 +277,8 @@ export const runMigrations = async () => {
       ['daily_email_recipient', 'wholesale@desukafashion.com'],
       ['email_enabled', 'true'],
       ['daily_cron_time', '07:00'],
-      ['auto_generate_daily', 'true']
+      ['auto_generate_daily', 'true'],
+      ['base_url', 'https://catalog.desukafashion.com']
     ];
     for (const [k, v] of defaultSettings) {
       await pool.query(`
@@ -286,6 +287,13 @@ export const runMigrations = async () => {
         ON CONFLICT (key) DO NOTHING
       `, [k, v]);
     }
+
+    // Ensure base_url is updated to catalog.desukafashion.com if old lms URL exists
+    await pool.query(`
+      UPDATE showcase_settings 
+      SET value = 'https://catalog.desukafashion.com' 
+      WHERE key = 'base_url' AND (value LIKE '%lms.desukafashion.com%' OR value = '');
+    `).catch(() => {});
     console.log('[Migration] Showcase tables and columns verified.');
 
     console.log('[Migration] Database migrations completed successfully!');

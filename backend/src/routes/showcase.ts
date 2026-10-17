@@ -126,7 +126,17 @@ adminShowcaseRouter.get('/summary', async (req: AuthenticatedRequest, res: Respo
     const settings: Record<string, string> = {};
     settingsRes.rows.forEach(r => { settings[r.key] = r.value; });
 
-    const baseUrl = settings['base_url'] || process.env.BASE_URL || 'https://lms.desukafashion.com';
+    let baseUrl = settings['base_url'] || process.env.BASE_URL;
+    if (!baseUrl || baseUrl.includes('lms.desukafashion.com')) {
+      const host = req.get('host');
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      if (host && !host.includes('lms.')) {
+        baseUrl = `${proto}://${host}`;
+      } else {
+        baseUrl = 'https://catalog.desukafashion.com';
+      }
+    }
+
     const activeLink = activeLinkRes.rows[0] ? {
       ...activeLinkRes.rows[0],
       url: `${baseUrl}/showcase/${activeLinkRes.rows[0].token}`
@@ -238,7 +248,16 @@ adminShowcaseRouter.post('/generate', async (req: AuthenticatedRequest, res: Res
     
     // Retrieve base URL
     const baseUrlRes = await query("SELECT value FROM showcase_settings WHERE key = 'base_url'");
-    const baseUrl = baseUrlRes.rows[0]?.value || process.env.BASE_URL || 'https://lms.desukafashion.com';
+    let baseUrl = baseUrlRes.rows[0]?.value || process.env.BASE_URL;
+    if (!baseUrl || baseUrl.includes('lms.desukafashion.com')) {
+      const host = req.get('host');
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      if (host && !host.includes('lms.')) {
+        baseUrl = `${proto}://${host}`;
+      } else {
+        baseUrl = 'https://catalog.desukafashion.com';
+      }
+    }
     const url = `${baseUrl}/showcase/${result.token}`;
 
     res.json({
