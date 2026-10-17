@@ -9,12 +9,24 @@ export const SALES_CONTACTS = [
   { name: 'VS FASHION Sales 3', phone: '+918796443844', rawPhone: '8796443844' },
 ];
 
-export const CALL_CONTACT = {
-  name: 'VS FASHION Wholesale Desk',
-  phone: '+919718503340',
-  rawPhone: '9718503340',
-  note: 'Please save this number for future connect',
-};
+export const CALL_CONTACTS = [
+  {
+    name: 'Daytime Direct Team Desk',
+    phone: '+919240202545',
+    rawPhone: '9240202545',
+    note: 'Daytime Direct Call — Connect directly with our team',
+    isPrimary: true
+  },
+  {
+    name: 'Wholesale Helpdesk',
+    phone: '+919718503340',
+    rawPhone: '9718503340',
+    note: 'Please save this number for future connect',
+    isPrimary: false
+  }
+];
+
+export const CALL_CONTACT = CALL_CONTACTS[0];
 
 export const COMMUNITY_LINK = 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
 
@@ -122,7 +134,7 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
       `*DESUKA by VS FASHION — Exclusive Wholesale Showcase*\n\n` +
       `Check out our latest curated wholesale collection (Valid for 24 hours):\n${showcaseUrl}\n\n` +
       `📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031\n` +
-      `📞 Call: 9718503340 | WhatsApp: 8796333844\n` +
+      `📞 Call: 9240202545 / 9718503340 | WhatsApp: 8796333844\n` +
       `🌐 desukafashion.com`
     );
     const whatsappShareLink = `https://api.whatsapp.com/send?text=${whatsappShareText}`;
@@ -168,7 +180,7 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
           <div style="border-top: 1px solid #334155; padding-top: 16px; font-size: 12px; color: #64748b; line-height: 1.6;">
             <p style="margin: 2px 0;"><strong>VS FASHION — DESUKA</strong></p>
             <p style="margin: 2px 0;">📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031</p>
-            <p style="margin: 2px 0;">📞 Call: 9718503340 | 📧 wholesale@desukafashion.com</p>
+            <p style="margin: 2px 0;">📞 Call: 9240202545 / 9718503340 | 📧 wholesale@desukafashion.com</p>
             <p style="margin: 2px 0;">🌐 <a href="https://desukafashion.com" style="color: #64748b;">desukafashion.com</a></p>
           </div>
         </div>

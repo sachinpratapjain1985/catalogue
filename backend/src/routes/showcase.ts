@@ -5,6 +5,7 @@ import {
   generateShowcaseLink, 
   sendShowcaseEmail, 
   SALES_CONTACTS, 
+  CALL_CONTACTS,
   CALL_CONTACT, 
   COMMUNITY_LINK, 
   BRAND_DETAILS 
@@ -45,6 +46,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         error: 'Exclusive showcase link not found or has been removed.',
         salesContacts: getShuffledSalesContacts(),
         callContact: CALL_CONTACT,
+        callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
         brandDetails: BRAND_DETAILS
       });
@@ -66,6 +68,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         message: 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)। नवीनतम कैटलॉग के लिए नीचे दिए हुए नंबर पर कॉल या WhatsApp करें।',
         salesContacts: getShuffledSalesContacts(),
         callContact: CALL_CONTACT,
+        callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
         brandDetails: BRAND_DETAILS
       });
@@ -81,6 +84,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         created_at: link.created_at,
         salesContacts: getShuffledSalesContacts(),
         callContact: CALL_CONTACT,
+        callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
         brandDetails: BRAND_DETAILS
       });
@@ -113,6 +117,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       items: itemsRes.rows,
       salesContacts: getShuffledSalesContacts(),
       callContact: CALL_CONTACT,
+      callContacts: CALL_CONTACTS,
       communityLink: COMMUNITY_LINK,
       brandDetails: BRAND_DETAILS
     });

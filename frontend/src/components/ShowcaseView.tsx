@@ -49,6 +49,14 @@ interface SalesContact {
   rawPhone: string;
 }
 
+interface CallContact {
+  name: string;
+  phone: string;
+  rawPhone: string;
+  note: string;
+  isPrimary?: boolean;
+}
+
 interface ShowcaseResponse {
   notFound?: boolean;
   disappeared?: boolean;
@@ -59,12 +67,8 @@ interface ShowcaseResponse {
   created_at?: string;
   items?: ShowcaseItem[];
   salesContacts: SalesContact[];
-  callContact: {
-    name: string;
-    phone: string;
-    rawPhone: string;
-    note: string;
-  };
+  callContact: CallContact;
+  callContacts?: CallContact[];
   communityLink: string;
   brandDetails: {
     company: string;
@@ -269,24 +273,48 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
         <p style={{ color: '#94a3b8', fontSize: '0.9rem', maxWidth: '420px', marginBottom: '1.5rem', lineHeight: 1.5 }}>
           {error}
         </p>
-        <a 
-          href="tel:9718503340"
-          style={{
-            background: 'linear-gradient(135deg, #25d366, #128c7e)',
-            color: '#fff',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '10px',
-            textDecoration: 'none',
-            fontWeight: 700,
-            fontSize: '0.9rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <Phone size={18} />
-          Call Wholesale Desk: 9718503340
-        </a>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', width: '100%', maxWidth: '340px' }}>
+          <a 
+            href="tel:+919240202545"
+            style={{
+              background: 'linear-gradient(135deg, #25d366, #128c7e)',
+              color: '#fff',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '10px',
+              textDecoration: 'none',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 4px 14px rgba(37, 211, 102, 0.3)'
+            }}
+          >
+            <Phone size={18} />
+            Direct Call Desk: +91 9240202545
+          </a>
+          <a 
+            href="tel:+919718503340"
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#f8fafc',
+              padding: '0.6rem 1.25rem',
+              borderRadius: '10px',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <Phone size={15} />
+            Helpdesk: +91 9718503340
+          </a>
+        </div>
       </div>
     );
   }
@@ -313,12 +341,25 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     { name: 'VS FASHION Sales 3', phone: '+918796443844', rawPhone: '8796443844' },
   ];
 
-  const callContact = data?.callContact || {
-    name: 'VS FASHION Wholesale Desk',
-    phone: '+919718503340',
-    rawPhone: '9718503340',
-    note: 'Please save this number for future connect',
-  };
+  const callContacts = data?.callContacts || [
+    {
+      name: 'Daytime Direct Team Desk',
+      phone: '+919240202545',
+      rawPhone: '9240202545',
+      note: 'Daytime Direct Call — Connect directly with our team',
+      isPrimary: true
+    },
+    {
+      name: 'Wholesale Helpdesk',
+      phone: '+919718503340',
+      rawPhone: '9718503340',
+      note: 'Please save this number for future connect',
+      isPrimary: false
+    }
+  ];
+
+  const primaryCallContact = callContacts[0];
+  const secondaryCallContact = callContacts[1] || callContacts[0];
 
   const communityLink = data?.communityLink || 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
 
@@ -457,43 +498,118 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               </div>
             </div>
 
-            {/* Direct Call Desk */}
+            {/* Direct Call Desk (Primary Daytime + Helpdesk) */}
             <div style={{
-              background: 'rgba(99, 102, 241, 0.1)',
-              border: '1px solid rgba(99, 102, 241, 0.3)',
-              borderRadius: '12px',
-              padding: '1rem',
+              background: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              borderRadius: '14px',
+              padding: '1.25rem',
               marginBottom: '1.5rem',
-              maxWidth: '500px',
+              maxWidth: '520px',
               margin: '0 auto 1.5rem'
             }}>
-              <a
-                href={formatCallUrl(callContact.rawPhone)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  color: '#60a5fa',
-                  fontSize: '1.15rem',
-                  fontWeight: 700,
-                  textDecoration: 'none'
-                }}
-              >
-                <Phone size={20} />
-                CALL: +91 {callContact.rawPhone.replace(/\D/g, '').slice(-10)}
-              </a>
               <div style={{
-                marginTop: '0.4rem',
-                fontSize: '0.75rem',
-                color: '#fbbf24',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.3rem'
+                fontSize: '0.78rem',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+                marginBottom: '0.85rem',
+                fontWeight: 600
               }}>
-                <Bookmark size={13} />
-                {callContact.note}
+                Direct Call Helpline
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Primary: 9240202545 Direct Daytime */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(37, 211, 102, 0.12), rgba(16, 185, 129, 0.18))',
+                  border: '1px solid rgba(37, 211, 102, 0.4)',
+                  borderRadius: '10px',
+                  padding: '0.85rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem'
+                }}>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      ⚡ Direct Team Desk (Daytime)
+                    </div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
+                      +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>
+                      {primaryCallContact.note}
+                    </div>
+                  </div>
+                  <a
+                    href={formatCallUrl(primaryCallContact.rawPhone)}
+                    style={{
+                      background: 'linear-gradient(135deg, #25d366, #128c7e)',
+                      color: '#fff',
+                      padding: '0.6rem 1.1rem',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 2px 10px rgba(37, 211, 102, 0.3)'
+                    }}
+                  >
+                    <Phone size={16} />
+                    Call Now
+                  </a>
+                </div>
+
+                {/* Secondary: 9718503340 Wholesale Helpdesk */}
+                {secondaryCallContact && (
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '10px',
+                    padding: '0.75rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem'
+                  }}>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
+                        {secondaryCallContact.name}
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0' }}>
+                        +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Bookmark size={11} />
+                        {secondaryCallContact.note}
+                      </div>
+                    </div>
+                    <a
+                      href={formatCallUrl(secondaryCallContact.rawPhone)}
+                      style={{
+                        background: 'rgba(99, 102, 241, 0.2)',
+                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                        color: '#a5b4fc',
+                        padding: '0.5rem 0.9rem',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        fontSize: '0.8rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <Phone size={14} />
+                      Call
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -876,14 +992,27 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             <div style={{ display: 'flex', gap: '0.6rem' }}>
               <Phone size={18} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <strong style={{ color: '#fff' }}>Call Desk:</strong>
+                <strong style={{ color: '#fff' }}>Direct Call Helpline:</strong>
                 <div>
-                  <a href={formatCallUrl(callContact.rawPhone)} style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}>
-                    +91 {callContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                  <a href={formatCallUrl(primaryCallContact.rawPhone)} style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}>
+                    +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
                   </a>
+                  <span style={{ fontSize: '0.7rem', color: '#86efac', marginLeft: '0.4rem', fontWeight: 600 }}>
+                    (Daytime Direct Desk)
+                  </span>
                 </div>
+                {secondaryCallContact && (
+                  <div style={{ marginTop: '0.2rem' }}>
+                    <a href={formatCallUrl(secondaryCallContact.rawPhone)} style={{ color: '#cbd5e1', textDecoration: 'none', fontSize: '0.82rem', fontWeight: 600 }}>
+                      +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    </a>
+                    <span style={{ fontSize: '0.68rem', color: '#fbbf24', marginLeft: '0.35rem' }}>
+                      (Helpdesk)
+                    </span>
+                  </div>
+                )}
                 <div style={{ fontSize: '0.7rem', color: '#fbbf24', marginTop: '2px' }}>
-                  ⭐ Please save this number for future connect
+                  ⭐ Please save these numbers for future connect
                 </div>
                 <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Mail size={14} color="#94a3b8" />
