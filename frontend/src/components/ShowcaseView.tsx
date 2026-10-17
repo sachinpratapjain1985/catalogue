@@ -198,7 +198,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     if (navigator.share) {
       navigator.share({
         title: 'DESUKA by VS FASHION — 24h Showcase',
-        text: 'Checkout exclusive wholesale collections from DESUKA by VS FASHION (Valid for 24 hours):',
+        text: '📢 ये सारे सैंपल कलेक्शन हैं, और डिटेल्स में देखने के लिए नीचे दिए हुए नंबर पर संपर्क करें।\nLooking for more wholesale designs or customized sets? Chat directly with our Gandhi Nagar sales desk on WhatsApp:\n',
         url: window.location.href,
       }).catch(() => {});
     } else {
@@ -735,6 +735,50 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               )}
             </div>
 
+            {/* Sample Collection Notice Banner as Requested */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: '12px',
+              padding: '0.9rem 1.15rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
+            }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: '#fbbf24'
+              }}>
+                <Sparkles size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: '0.98rem',
+                  fontWeight: 800,
+                  color: '#fef08a',
+                  lineHeight: 1.45
+                }}>
+                  📢 ये सारे सैंपल कलेक्शन हैं, और डिटेल्स में देखने के लिए नीचे दिए हुए नंबर पर संपर्क करें
+                </div>
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#cbd5e1',
+                  marginTop: '4px'
+                }}>
+                  (Ye saare sample collection hain, aur details mein dekhne ke liye neeche diye hue number par sampark karein)
+                </div>
+              </div>
+            </div>
+
             {/* Catalog Grid (Clean default images ONLY, NO prices, NO set counts, NO quantities) */}
             <div style={{
               display: 'grid',
@@ -889,47 +933,132 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             {/* Quick Sticky WhatsApp Action Bar at Bottom of Active View */}
             <div style={{
               background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
               borderRadius: '14px',
-              padding: '1rem',
+              padding: '1.35rem 1.1rem',
               marginBottom: '2rem',
-              textAlign: 'center'
+              textAlign: 'center',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
             }}>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', marginBottom: '0.35rem' }}>
+              {/* Hindi Notice Reminder */}
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: '8px',
+                padding: '0.55rem 0.85rem',
+                marginBottom: '1rem',
+                display: 'inline-block',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                color: '#fef08a'
+              }}>
+                📢 ये सारे सैंपल कलेक्शन हैं, और डिटेल्स में देखने के लिए नीचे दिए हुए नंबर पर संपर्क करें
+              </div>
+
+              {/* Hindi Headline */}
+              <div style={{
+                fontSize: '1.05rem',
+                fontWeight: 800,
+                color: '#38bdf8',
+                lineHeight: 1.4,
+                marginBottom: '0.25rem'
+              }}>
+                क्या आप और होलसेल डिज़ाइन्स या कस्टमाइज़्ड सेट्स देखना चाहते हैं?
+              </div>
+              {/* English Headline requested by user */}
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '0.6rem' }}>
                 Looking for more wholesale designs or customized sets?
               </h4>
-              <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '0.85rem' }}>
+
+              {/* Hindi Subtitle */}
+              <div style={{
+                fontSize: '0.85rem',
+                color: '#86efac',
+                fontWeight: 600,
+                lineHeight: 1.4,
+                marginBottom: '0.25rem'
+              }}>
+                लाइव वीडियो प्रीव्यू और पूरे कैटलॉग के लिए हमारे गांधी नगर सेल्स डेस्क से WhatsApp पर सीधे चैट करें:
+              </div>
+              {/* English Subtitle requested by user */}
+              <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '1rem' }}>
                 Chat directly with our Gandhi Nagar sales desk on WhatsApp for live video preview and catalogs:
               </p>
               
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', justifyContent: 'center' }}>
                 {salesContacts.map(c => (
                   <a
                     key={c.phone}
                     href={formatWhatsAppUrl(
                       c.rawPhone,
-                      'Hello VS FASHION, I am browsing your 24h showcase catalog and want to discuss wholesale orders.'
+                      'नमस्ते VS FASHION, मुझे और होलसेल डिज़ाइन्स / कस्टमाइज़्ड सेट्स देखने हैं। कृपया लाइव वीडियो कॉल या कैटलॉग शेयर करें।'
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
                       background: 'linear-gradient(135deg, #25d366, #128c7e)',
                       color: '#fff',
-                      padding: '0.55rem 0.95rem',
+                      padding: '0.65rem 1.05rem',
                       borderRadius: '8px',
                       textDecoration: 'none',
                       fontWeight: 700,
-                      fontSize: '0.8rem',
+                      fontSize: '0.85rem',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
-                      boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
+                      gap: '0.45rem',
+                      boxShadow: '0 3px 10px rgba(37, 211, 102, 0.3)',
+                      transition: 'transform 0.15s ease'
                     }}
                   >
-                    <MessageSquare size={15} />
+                    <MessageSquare size={16} />
                     {c.name} (+91 {c.rawPhone.replace(/\D/g, '').slice(-10)})
                   </a>
                 ))}
+              </div>
+
+              {/* Direct call desk quick connect */}
+              <div style={{
+                marginTop: '1rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.6rem',
+                flexWrap: 'wrap'
+              }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Direct Call Helpdesk:</span>
+                <a
+                  href={formatCallUrl(primaryCallContact.rawPhone)}
+                  style={{
+                    color: '#60a5fa',
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}
+                >
+                  <Phone size={14} />
+                  +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (Daytime Desk)
+                </a>
+                {secondaryCallContact && (
+                  <a
+                    href={formatCallUrl(secondaryCallContact.rawPhone)}
+                    style={{
+                      color: '#cbd5e1',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.8rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
+                    }}
+                  >
+                    +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                  </a>
+                )}
               </div>
             </div>
           </>

@@ -132,9 +132,11 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
 
     const whatsappShareText = encodeURIComponent(
       `*DESUKA by VS FASHION — Exclusive Wholesale Showcase*\n\n` +
-      `Check out our latest curated wholesale collection (Valid for 24 hours):\n${showcaseUrl}\n\n` +
+      `📢 *ये सारे सैंपल कलेक्शन हैं, और डिटेल्स में देखने के लिए नीचे दिए हुए नंबर पर संपर्क करें*\n\n` +
+      `Looking for more wholesale designs or customized sets? Chat directly with our Gandhi Nagar sales desk on WhatsApp for live video preview and catalogs:\n` +
+      `${showcaseUrl}\n\n` +
       `📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031\n` +
-      `📞 Call: 9240202545 / 9718503340 | WhatsApp: 8796333844\n` +
+      `📞 Direct Call: 9240202545 / 9718503340 | WhatsApp: 8796333844\n` +
       `🌐 desukafashion.com`
     );
     const whatsappShareLink = `https://api.whatsapp.com/send?text=${whatsappShareText}`;
