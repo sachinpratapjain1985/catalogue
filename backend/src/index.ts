@@ -7,6 +7,8 @@ import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import catalogRoutes from './routes/catalog';
 import proformaRoutes from './routes/proforma';
+import { publicShowcaseRouter, adminShowcaseRouter } from './routes/showcase';
+import { initializeShowcaseCron } from './services/showcaseScheduler';
 
 dotenv.config();
 
@@ -46,8 +48,10 @@ app.use((req, res, next) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/proforma', proformaRoutes);
+app.use('/api/admin/showcase', adminShowcaseRouter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/public/showcase', publicShowcaseRouter);
 
 // Serve Static Frontend Assets in Production
 const publicPath = path.join(__dirname, 'public');
@@ -168,6 +172,9 @@ server.listen(PORT, async () => {
   }
   // Run admin seed in background on startup
   seedAdmin();
+
+  // Initialize Showcase 7:00 AM daily cron job
+  initializeShowcaseCron();
 
   // Run background visual index upgrade for Gemini v2 color-agnostic matching
   setTimeout(() => {

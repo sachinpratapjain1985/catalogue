@@ -19,7 +19,11 @@ import {
   Sparkles,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  Star,
+  Link,
+  Mail,
+  ExternalLink
 } from 'lucide-react';
 
 interface Category {
@@ -47,6 +51,7 @@ interface SKUItem {
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
+  is_in_showcase?: boolean;
   original_created_at?: string;
   created_at: string;
   category_name?: string;
@@ -148,6 +153,17 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [filterOffersOnly, setFilterOffersOnly] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterRateRange, setFilterRateRange] = useState('');
+  const [filterShowcaseOnly, setFilterShowcaseOnly] = useState(false);
+
+  // 24-Hour Showcase management states
+  const [showcaseModalOpen, setShowcaseModalOpen] = useState(false);
+  const [showcaseActiveLink, setShowcaseActiveLink] = useState<{ token: string; url: string; expires_at: string; item_count: number } | null>(null);
+  const [showcaseGenerating, setShowcaseGenerating] = useState(false);
+  const [showcaseSendingEmail, setShowcaseSendingEmail] = useState(false);
+  const [showcaseEmailRecipient, setShowcaseEmailRecipient] = useState('wholesale@desukafashion.com');
+  const [showcaseSuccessMsg, setShowcaseSuccessMsg] = useState('');
+  const [showcaseErrorMsg, setShowcaseErrorMsg] = useState('');
+  const [copiedShowcaseText, setCopiedShowcaseText] = useState(false);
 
   // Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -161,6 +177,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     fetchCategories();
     fetchWorks();
     fetchSKUs();
+    fetchShowcaseSummary();
   }, []);
 
   useEffect(() => {
@@ -205,6 +222,159 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     } catch (e) {
       console.error('Failed to load works', e);
     }
+  };
+
+  const fetchShowcaseSummary = async () => {
+    try {
+      const response = await fetch('/api/admin/showcase/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.activeLink) {
+          setShowcaseActiveLink(data.activeLink);
+        }
+        if (data.settings?.daily_email_recipient) {
+          setShowcaseEmailRecipient(data.settings.daily_email_recipient);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load showcase summary', e);
+    }
+  };
+
+  const handleToggleShowcase = async (item: SKUItem) => {
+    try {
+      const res = await fetch('/api/admin/showcase/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemId: item.id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: data.item.is_in_showcase } : it));
+      }
+    } catch (err) {
+      console.error('Failed to toggle showcase', err);
+    }
+  };
+
+  const handleBulkToggleShowcase = async (add: boolean) => {
+    if (selectedItems.length === 0) return;
+    try {
+      const res = await fetch('/api/admin/showcase/bulk-toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemIds: selectedItems, state: add })
+      });
+      if (res.ok) {
+        setItems(prev => prev.map(it => selectedItems.includes(it.id) ? { ...it, is_in_showcase: add } : it));
+        showSuccess(`${selectedItems.length} items ${add ? 'added to' : 'removed from'} 24h showcase!`);
+      }
+    } catch (err) {
+      console.error('Failed bulk showcase toggle', err);
+    }
+  };
+
+  const handleGenerateShowcase = async () => {
+    try {
+      setShowcaseGenerating(true);
+      setShowcaseErrorMsg('');
+      setShowcaseSuccessMsg('');
+      const res = await fetch('/api/admin/showcase/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowcaseActiveLink({
+          token: data.token,
+          url: data.url,
+          expires_at: data.expires_at,
+          item_count: data.count
+        });
+        setShowcaseSuccessMsg(`Fresh 24-hour showcase link generated successfully with ${data.count} designs!`);
+      } else {
+        setShowcaseErrorMsg(data.error || 'Failed to generate showcase link');
+      }
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Server error');
+    } finally {
+      setShowcaseGenerating(false);
+    }
+  };
+
+  const handleSendShowcaseEmail = async () => {
+    try {
+      setShowcaseSendingEmail(true);
+      setShowcaseErrorMsg('');
+      setShowcaseSuccessMsg('');
+      const res = await fetch('/api/admin/showcase/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          token: showcaseActiveLink?.token,
+          email: showcaseEmailRecipient
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowcaseSuccessMsg(data.message || `Email sent successfully to ${showcaseEmailRecipient}!`);
+      } else {
+        setShowcaseErrorMsg(data.message || 'Failed to send email');
+      }
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Server error sending email');
+    } finally {
+      setShowcaseSendingEmail(false);
+    }
+  };
+
+  const handleSaveEmailRecipient = async () => {
+    try {
+      await fetch('/api/admin/showcase/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ daily_email_recipient: showcaseEmailRecipient })
+      });
+      setShowcaseSuccessMsg('Daily 7:00 AM email recipient updated successfully!');
+      setTimeout(() => setShowcaseSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error('Failed to update email recipient', err);
+    }
+  };
+
+  const handleCopyShowcaseWhatsAppText = () => {
+    if (!showcaseActiveLink) return;
+    const shareText = 
+`*DESUKA by VS FASHION — Exclusive Wholesale Showcase*
+
+Check out our latest curated wholesale collection (Valid for 24 hours):
+${showcaseActiveLink.url}
+
+📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
+📞 Call: 9718503340 | WhatsApp: 8796333844
+🌐 desukafashion.com`;
+
+    navigator.clipboard.writeText(shareText);
+    setCopiedShowcaseText(true);
+    setTimeout(() => setCopiedShowcaseText(false), 2500);
   };
 
   const handleCreateWork = async (e: React.FormEvent) => {
@@ -911,12 +1081,13 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       }
 
       const matchesWork = filterWork === '' || (item.work || '') === filterWork;
+      const matchesShowcase = !filterShowcaseOnly || !!item.is_in_showcase;
       
       // Ensure item belongs to one of the user's permitted categories
       const allowedCatIds = categories.map(c => c.id);
       const isPermittedCategory = allowedCatIds.includes(item.category_id);
 
-      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers;
+      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers && matchesShowcase;
     })
     .sort((a, b) => {
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
@@ -951,6 +1122,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0).length;
   const inactiveDesigns = items.filter(item => !item.is_available).length;
   const revisedDesigns = items.filter(item => item.revised_rate && item.revised_rate > 0).length;
+  const showcaseDesignsCount = items.filter(item => item.is_in_showcase).length;
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -1026,6 +1198,34 @@ export default function Catalogs({ token, user }: CatalogsProps) {
           </div>
           <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)' }}>
             <XCircle size={20} />
+          </div>
+        </div>
+
+        <div 
+          className="glass-card" 
+          onClick={() => setShowcaseModalOpen(true)}
+          style={{ 
+            padding: '1rem', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            borderColor: 'rgba(99, 102, 241, 0.4)',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          title="Click to manage Daily 24h Client Showcase Link & 7AM Auto-Email"
+        >
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#a5b4fc', textTransform: 'uppercase', fontWeight: 700 }}>
+              🌟 24h Showcase
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>
+              {showcaseDesignsCount}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(99, 102, 241, 0.25)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#a5b4fc' }}>
+            <Star size={20} />
           </div>
         </div>
       </div>
@@ -1486,6 +1686,47 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               🔥 Offers Only ({revisedDesigns})
             </button>
 
+            {/* Filter Showcase Only */}
+            <button 
+              type="button"
+              className={`btn ${filterShowcaseOnly ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterShowcaseOnly(!filterShowcaseOnly)}
+              style={{ 
+                padding: '0.6rem 1.2rem', 
+                fontSize: '0.85rem', 
+                whiteSpace: 'nowrap',
+                background: filterShowcaseOnly ? '#6366f1' : undefined,
+                color: filterShowcaseOnly ? '#fff' : '#a5b4fc',
+                borderColor: '#6366f1',
+                fontWeight: 700
+              }}
+              title="Filter to show only articles selected for 24h Showcase"
+            >
+              🌟 Showcase ({showcaseDesignsCount})
+            </button>
+
+            {/* Open Showcase Manager Button */}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowcaseModalOpen(true)}
+              style={{
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.85rem',
+                whiteSpace: 'nowrap',
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontWeight: 700,
+                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)'
+              }}
+              title="Generate or share 24-hour showcase link with clients"
+            >
+              <Link size={15} />
+              24h Client Link
+            </button>
+
             {/* Filter Age */}
             <button 
               type="button"
@@ -1554,6 +1795,27 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                           }}
                         />
                       </div>
+                      {item.is_in_showcase && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '10px',
+                          left: '38px',
+                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))',
+                          color: '#fff',
+                          fontSize: '0.65rem',
+                          fontWeight: 800,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.5px',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          zIndex: 5
+                        }}>
+                          ★ SHOWCASE
+                        </div>
+                      )}
                       <img 
                         src={getThumbnailUrl(item.image_path)} 
                         alt={item.sku_id} 
@@ -1615,6 +1877,30 @@ export default function Catalogs({ token, user }: CatalogsProps) {
                       <div className="flex-between">
                         <span className="sku-tag">{item.sku_id}</span>
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleShowcase(item);
+                            }}
+                            style={{ 
+                              border: item.is_in_showcase ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)', 
+                              background: item.is_in_showcase ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.06)', 
+                              color: item.is_in_showcase ? '#34d399' : '#cbd5e1', 
+                              cursor: 'pointer', 
+                              fontSize: '0.75rem', 
+                              fontWeight: 600, 
+                              padding: '3px 7px', 
+                              borderRadius: '4px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '3px' 
+                            }}
+                            title={item.is_in_showcase ? 'Remove design from 24h Showcase' : 'Add design to 24h Showcase'}
+                          >
+                            <Star size={11} fill={item.is_in_showcase ? '#34d399' : 'none'} />
+                            {item.is_in_showcase ? 'Showcase' : '+ Showcase'}
+                          </button>
                           <button 
                             onClick={() => fetchRealImagesForItem(item)}
                             style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
@@ -2304,6 +2590,51 @@ export default function Catalogs({ token, user }: CatalogsProps) {
             <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto', flexWrap: 'wrap', marginTop: '1.2rem' }}>
               <button 
                 type="button" 
+                onClick={() => handleBulkToggleShowcase(true)}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 0.9rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid #10b981',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#34d399',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Add selected designs to 24h Showcase"
+              >
+                <Star size={14} fill="#34d399" />
+                + Showcase
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => handleBulkToggleShowcase(false)}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 0.9rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  color: '#f43f5e',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Remove selected designs from 24h Showcase"
+              >
+                - Showcase
+              </button>
+
+              <button 
+                type="button" 
                 onClick={handleCopyDetails}
                 className="btn"
                 style={{ 
@@ -2678,6 +3009,289 @@ export default function Catalogs({ token, user }: CatalogsProps) {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 24-Hour VIP Showcase Link & 7AM Auto-Email Manager Modal */}
+      {showcaseModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 10500 }}>
+          <div className="modal-content" style={{ maxWidth: '650px', background: '#0f172a', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff'
+                }}>
+                  <Star size={18} fill="#fff" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#fff' }}>24-Hour VIP Client Showcase Manager</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Generate temporary mobile catalogs for WhatsApp Business clients (No Prices, No QTY)
+                  </p>
+                </div>
+              </div>
+              <button 
+                className="close-btn" 
+                onClick={() => {
+                  setShowcaseModalOpen(false);
+                  setShowcaseSuccessMsg('');
+                  setShowcaseErrorMsg('');
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem 0' }}>
+              {/* Feedback Notifications */}
+              {showcaseSuccessMsg && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#34d399', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ✓ {showcaseSuccessMsg}
+                </div>
+              )}
+              {showcaseErrorMsg && (
+                <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid #f43f5e', color: '#fb7185', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ⚠ {showcaseErrorMsg}
+                </div>
+              )}
+
+              {/* Status Ribbon */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Current Showcase Selection
+                  </div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a5b4fc', marginTop: '2px' }}>
+                    {showcaseDesignsCount} Designs Selected
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterShowcaseOnly(true);
+                      setShowcaseModalOpen(false);
+                    }}
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '0.5rem 0.85rem' }}
+                  >
+                    View / Curate Designs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateShowcase}
+                    disabled={showcaseGenerating}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                      fontSize: '0.8rem',
+                      padding: '0.5rem 1rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
+                    <Sparkles size={15} />
+                    {showcaseGenerating ? 'Generating...' : 'Generate New 24h Link'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Link Box */}
+              {showcaseActiveLink && (
+                <div style={{
+                  background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8))',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Active Client URL (Valid 24 Hours)
+                    </span>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      color: '#fbbf24',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontWeight: 600
+                    }}>
+                      Expires: {new Date(showcaseActiveLink.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(showcaseActiveLink.expires_at).toLocaleDateString()})
+                    </span>
+                  </div>
+
+                  {/* URL Row */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={showcaseActiveLink.url} 
+                      style={{ 
+                        flex: 1, 
+                        background: '#0b0f19', 
+                        border: '1px solid rgba(255, 255, 255, 0.15)', 
+                        padding: '0.6rem 0.85rem',
+                        fontSize: '0.85rem',
+                        color: '#38bdf8',
+                        borderRadius: '6px'
+                      }} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(showcaseActiveLink.url);
+                        setShowcaseSuccessMsg('Link copied to clipboard!');
+                        setTimeout(() => setShowcaseSuccessMsg(''), 2500);
+                      }}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Copy size={14} /> Copy
+                    </button>
+                    <a
+                      href={showcaseActiveLink.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                    >
+                      <ExternalLink size={14} /> Preview
+                    </a>
+                  </div>
+
+                  {/* WhatsApp Quick Share Button */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={handleCopyShowcaseWhatsAppText}
+                      className="btn"
+                      style={{
+                        background: '#25d366',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Share2 size={15} />
+                      {copiedShowcaseText ? 'Copied WhatsApp Text!' : 'Copy WhatsApp Share Message'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendShowcaseEmail}
+                      disabled={showcaseSendingEmail}
+                      className="btn btn-secondary"
+                      style={{
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <Mail size={15} />
+                      {showcaseSendingEmail ? 'Sending Email...' : 'Email to Sales Team Now'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Daily 7:00 AM Automated Email Configuration */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Mail size={16} color="#6366f1" />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
+                    Daily 7:00 AM Scheduled Email Dispatch
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.5 }}>
+                  Every day at <strong>7:00 AM IST</strong>, the system generates a fresh 24-hour showcase link from currently selected items and emails it directly to your sales team to start forwarding to customer leads.
+                </p>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <input
+                    type="email"
+                    value={showcaseEmailRecipient}
+                    onChange={e => setShowcaseEmailRecipient(e.target.value)}
+                    placeholder="sales@desukafashion.com"
+                    style={{
+                      flex: 1,
+                      background: '#0b0f19',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      padding: '0.5rem 0.8rem',
+                      fontSize: '0.85rem',
+                      color: '#fff',
+                      borderRadius: '6px'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveEmailRecipient}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 600 }}
+                  >
+                    Save Recipient
+                  </button>
+                </div>
+              </div>
+
+              {/* Client Safety Rules Checklist */}
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '8px',
+                padding: '0.85rem 1rem',
+                fontSize: '0.75rem',
+                color: '#cbd5e1',
+                lineHeight: 1.6
+              }}>
+                <strong style={{ color: '#fbbf24' }}>🔒 Security & Commercial Rules Enforced:</strong>
+                <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+                  <li><strong>Zero Price Exposure:</strong> Rates and revised rates are strictly hidden from clients.</li>
+                  <li><strong>Zero Quantity Exposure:</strong> Set pieces, total sets, and stock counts are completely hidden.</li>
+                  <li><strong>24-Hour Lifetime:</strong> After 24 hours, clients see randomized WhatsApp sales desk buttons (8796333844, 8796893844, 8796443844), direct call (9718503340), community link, and full social profiles.</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

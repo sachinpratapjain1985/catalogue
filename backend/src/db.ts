@@ -246,6 +246,48 @@ export const runMigrations = async () => {
     await pool.query("UPDATE items SET description = '' WHERE description = 'DESUKA by VS FASHION Gandhi Nagar Delhi.'");
     console.log('[Migration] Cleared default descriptions from existing items.');
 
+    // 7. Showcase Feature (24-Hour VIP Client Links)
+    await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS is_in_showcase BOOLEAN NOT NULL DEFAULT FALSE');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_items_is_in_showcase ON items(is_in_showcase)');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS showcase_links (
+          id SERIAL PRIMARY KEY,
+          token VARCHAR(64) UNIQUE NOT NULL,
+          item_ids INTEGER[] NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          views_count INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_showcase_links_token ON showcase_links(token)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_showcase_links_expires ON showcase_links(expires_at DESC)');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS showcase_settings (
+          key VARCHAR(50) PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Seed default showcase settings
+    const defaultSettings = [
+      ['daily_email_recipient', 'wholesale@desukafashion.com'],
+      ['email_enabled', 'true'],
+      ['daily_cron_time', '07:00'],
+      ['auto_generate_daily', 'true']
+    ];
+    for (const [k, v] of defaultSettings) {
+      await pool.query(`
+        INSERT INTO showcase_settings (key, value) 
+        VALUES ($1, $2) 
+        ON CONFLICT (key) DO NOTHING
+      `, [k, v]);
+    }
+    console.log('[Migration] Showcase tables and columns verified.');
+
     console.log('[Migration] Database migrations completed successfully!');
 
     // Run background generation of missing thumbnails for 800+ products

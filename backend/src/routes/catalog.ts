@@ -181,6 +181,7 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
 
     let queryStr = `
        SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+              COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
               s.sets_count, s.total_pieces, s.is_available,
@@ -306,6 +307,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       // Sales user only sees available stock items
       let queryStr = `
          SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+                COALESCE(i.is_in_showcase, false) as is_in_showcase,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
                 COALESCE(ri.real_count, 0) as real_image_count
@@ -352,6 +354,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       // Stockists and Admins see all items to maintain stock
       let queryStr = `
          SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+                COALESCE(i.is_in_showcase, false) as is_in_showcase,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 COALESCE(s.sets_count, 0) as sets_count, 
                 COALESCE(s.total_pieces, 0) as total_pieces, 

@@ -14,6 +14,7 @@ import Catalogs from './components/Catalogs';
 import Users from './components/Users';
 import Reports from './components/Reports';
 import ProformaInvoice from './components/ProformaInvoice';
+import ShowcaseView from './components/ShowcaseView';
 
 export interface UserProfile {
   id: number;
@@ -24,7 +25,24 @@ export interface UserProfile {
   can_manage_proforma?: boolean;
 }
 
+function getShowcaseTokenFromUrl(): string | null {
+  const pathname = window.location.pathname;
+  const match = pathname.match(/^\/showcase\/([a-zA-Z0-9_\-]+)/);
+  if (match) return match[1];
+
+  const hash = window.location.hash;
+  const hashMatch = hash.match(/showcase\/([a-zA-Z0-9_\-]+)/);
+  if (hashMatch) return hashMatch[1];
+
+  const params = new URLSearchParams(window.location.search);
+  const qToken = params.get('showcase');
+  if (qToken) return qToken;
+
+  return null;
+}
+
 function App() {
+  const showcaseToken = getShowcaseTokenFromUrl();
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'catalogs' | 'users' | 'reports' | 'proforma'>('dashboard');
@@ -135,6 +153,11 @@ function App() {
     setUsernameInput('');
     setPasswordInput('');
   };
+
+  // Render Public Showcase View (No login required)
+  if (showcaseToken) {
+    return <ShowcaseView token={showcaseToken} />;
+  }
 
   // Render Login view
   if (!token || !user) {
