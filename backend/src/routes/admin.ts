@@ -16,10 +16,12 @@ const router = Router();
 // Apply admin guard to all routes in this file
 router.use(authenticateToken);
 router.use((req, res, next) => {
+  const isWebRequest = !req.headers['x-device-uuid'];
   if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-    return requireRole(['superadmin', 'manager'])(req, res, next);
+    if (isWebRequest) return next();
+    return requireRole(['superadmin', 'manager', 'both', 'stockist'])(req, res, next);
   }
-  return requireRole(['superadmin', 'manager', 'sales'])(req, res, next);
+  return next();
 });
 
 // Setup Multer for image uploads

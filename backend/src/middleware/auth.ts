@@ -130,7 +130,11 @@ export const authenticateToken = async (
         activeRole = headerRole;
       }
     } else if (user.role === 'both') {
-      activeRole = 'sales';
+      if (!req.headers['x-device-uuid']) {
+        activeRole = 'manager';
+      } else {
+        activeRole = 'sales';
+      }
     }
 
     // Attach user information to request

@@ -128,6 +128,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [shareImagesPerItem, setShareImagesPerItem] = useState<number>(1);
   const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
   const [previewLightboxTitle, setPreviewLightboxTitle] = useState<string | null>(null);
+  const [previewLightboxItem, setPreviewLightboxItem] = useState<SKUItem | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [copiedText, setCopiedText] = useState(false);
   const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
@@ -782,6 +783,25 @@ ${clientUrl}
     }
   };
 
+  const openEditModal = (item: SKUItem) => {
+    setEditingItem(item);
+    setEditSkuId(item.sku_id);
+    setEditCategoryId(item.category_id.toString());
+    setEditPiecesPerSet(item.pieces_per_set);
+    setEditMaterial(item.material || '');
+    setEditWork(item.work || '');
+    setEditStitcherName(item.stitcher_name || '');
+    setEditRate(item.rate.toString());
+    setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
+    setEditSetsCount(item.sets_count);
+    setEditIsAvailable(item.is_available);
+    setEditDescription(item.description || '');
+    setEditImageFile(null);
+    setEditImagePreview(item.image_path);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+    setIsEditModalOpen(true);
+  };
+
   const handleUpdateSKU = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
@@ -842,7 +862,7 @@ ${clientUrl}
       const data = await response.json();
 
       if (response.ok) {
-        setItems(items.map(item => item.id === editingItem.id ? data : item));
+        setItems(prevItems => prevItems.map(item => item.id === editingItem.id ? { ...item, ...data } : item));
         setIsEditModalOpen(false);
         setEditingItem(null);
         setEditImageFile(null);
@@ -1803,6 +1823,7 @@ ${clientUrl}
                       onClick={() => {
                         setPreviewLightboxUrl(item.image_path);
                         setPreviewLightboxTitle(`${item.sku_id} • ${item.category_name || ''} ${item.work ? '• ' + item.work : ''}`);
+                        setPreviewLightboxItem(item);
                         setZoomLevel(1);
                       }}
                       title="Click photo to inspect fabric & zoom in full-resolution"
@@ -1879,7 +1900,7 @@ ${clientUrl}
                       }}>
                         <ZoomIn size={12} color="#60a5fa" /> Zoom
                       </div>
-                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', zIndex: 10 }}>
                         {!item.is_available ? (
                           <span className="badge badge-danger" title="Inactive (Not Available)">
                             <XCircle size={12} style={{ marginRight: '4px' }} />
@@ -1902,13 +1923,41 @@ ${clientUrl}
                             OLD STOCK ({ageInDays}d)
                           </span>
                         )}
+
+                        {/* Direct Edit Button on Image */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(item);
+                          }}
+                          style={{
+                            background: 'rgba(15, 23, 42, 0.88)',
+                            backdropFilter: 'blur(6px)',
+                            border: '1px solid rgba(255, 255, 255, 0.25)',
+                            color: '#ffffff',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                            marginTop: '2px'
+                          }}
+                          title="Edit SKU Details & Replace Photo"
+                        >
+                          <Edit2 size={11} color="#a5b4fc" /> Edit SKU
+                        </button>
                       </div>
                     </div>
 
                     <div className="catalog-details">
-                      <div className="flex-between">
-                        <span className="sku-tag">{item.sku_id}</span>
-                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <span className="sku-tag" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{item.sku_id}</span>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <button 
                             type="button"
                             onClick={(e) => {
@@ -1920,7 +1969,7 @@ ${clientUrl}
                               background: item.is_in_showcase ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.06)', 
                               color: item.is_in_showcase ? '#34d399' : '#cbd5e1', 
                               cursor: 'pointer', 
-                              fontSize: '0.75rem', 
+                              fontSize: '0.72rem', 
                               fontWeight: 600, 
                               padding: '3px 7px', 
                               borderRadius: '4px', 
@@ -1934,39 +1983,41 @@ ${clientUrl}
                             {item.is_in_showcase ? 'Showcase' : '+ Showcase'}
                           </button>
                           <button 
-                            onClick={() => fetchRealImagesForItem(item)}
-                            style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetchRealImagesForItem(item);
+                            }}
+                            style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
                             title="Manage RAW Real Photos"
                           >
-                            <Camera size={12} />
+                            <Camera size={11} />
                             RAW ({item.real_image_count || 0})
                           </button>
-                          {user?.role !== 'sales' && (
-                            <button 
-                              onClick={() => {
-                                setEditingItem(item);
-                                setEditSkuId(item.sku_id);
-                                setEditCategoryId(item.category_id.toString());
-                                setEditPiecesPerSet(item.pieces_per_set);
-                                setEditMaterial(item.material || '');
-                                setEditWork(item.work || '');
-                                setEditStitcherName(item.stitcher_name || '');
-                                setEditRate(item.rate.toString());
-                                setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
-                                setEditSetsCount(item.sets_count);
-                                setEditIsAvailable(item.is_available);
-                                setEditDescription(item.description || '');
-                                setEditImageFile(null);
-                                setEditImagePreview(item.image_path);
-                                if (editFileInputRef.current) editFileInputRef.current.value = '';
-                                setIsEditModalOpen(true);
-                              }}
-                              style={{ border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                              title="Edit SKU Details"
-                            >
-                              Edit
-                            </button>
-                          )}
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(item);
+                            }}
+                            style={{ 
+                              border: '1px solid rgba(99, 102, 241, 0.4)', 
+                              background: 'rgba(99, 102, 241, 0.15)', 
+                              color: '#a5b4fc', 
+                              cursor: 'pointer', 
+                              fontSize: '0.72rem', 
+                              fontWeight: 600, 
+                              padding: '3px 8px', 
+                              borderRadius: '4px', 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '4px' 
+                            }}
+                            title="Edit SKU Details & Replace Photo"
+                          >
+                            <Edit2 size={11} />
+                            Edit
+                          </button>
                           {user?.role === 'superadmin' && (
                             <button 
                               onClick={() => handleDeleteSKU(item.id, item.sku_id)}
@@ -3345,6 +3396,7 @@ ${clientUrl}
             setPreviewLightboxUrl(null);
             setZoomLevel(1);
             setPreviewLightboxTitle(null);
+            setPreviewLightboxItem(null);
           }}
           style={{
             position: 'fixed',
@@ -3478,6 +3530,38 @@ ${clientUrl}
               )}
             </div>
 
+            {/* Direct Edit SKU & Replace Image Button from Lightbox */}
+            {previewLightboxItem && (
+              <button 
+                type="button"
+                onClick={() => {
+                  const target = previewLightboxItem;
+                  setPreviewLightboxUrl(null);
+                  setPreviewLightboxTitle(null);
+                  setPreviewLightboxItem(null);
+                  setZoomLevel(1);
+                  openEditModal(target);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: '#ffffff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                }}
+                title="Edit SKU Details or Replace Main Image"
+              >
+                <Edit2 size={13} /> Edit / Replace Photo
+              </button>
+            )}
+
             <div style={{ height: '18px', width: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
 
             {/* Download Button */}
@@ -3509,6 +3593,7 @@ ${clientUrl}
                 setPreviewLightboxUrl(null);
                 setZoomLevel(1);
                 setPreviewLightboxTitle(null);
+                setPreviewLightboxItem(null);
               }}
               style={{
                 background: 'rgba(244, 63, 94, 0.2)',
