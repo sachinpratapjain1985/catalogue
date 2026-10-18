@@ -278,7 +278,9 @@ export const runMigrations = async () => {
       ['email_enabled', 'true'],
       ['daily_cron_time', '07:00'],
       ['auto_generate_daily', 'true'],
-      ['base_url', 'https://catalog.desukafashion.com']
+      ['base_url', 'https://catalog.desukafashion.com'],
+      ['gst_number', '07AKCPJ2754N1ZX'],
+      ['company_website', 'https://www.desukafashion.com']
     ];
     for (const [k, v] of defaultSettings) {
       await pool.query(`
@@ -288,11 +290,23 @@ export const runMigrations = async () => {
       `, [k, v]);
     }
 
-    // Ensure base_url is updated to catalog.desukafashion.com if old lms URL exists
+    // Ensure base_url and company_website are set to official domains
     await pool.query(`
       UPDATE showcase_settings 
       SET value = 'https://catalog.desukafashion.com' 
       WHERE key = 'base_url' AND (value LIKE '%lms.desukafashion.com%' OR value = '');
+    `).catch(() => {});
+
+    await pool.query(`
+      UPDATE showcase_settings 
+      SET value = 'https://www.desukafashion.com' 
+      WHERE key = 'company_website' AND (value = 'https://desukafashion.com' OR value = '');
+    `).catch(() => {});
+
+    await pool.query(`
+      UPDATE showcase_settings 
+      SET value = '07AKCPJ2754N1ZX' 
+      WHERE key = 'gst_number' AND (value = '' OR value IS NULL);
     `).catch(() => {});
     console.log('[Migration] Showcase tables and columns verified.');
 

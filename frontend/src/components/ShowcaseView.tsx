@@ -74,6 +74,7 @@ interface ShowcaseResponse {
     company: string;
     brand: string;
     address: string;
+    gstNumber?: string;
     email: string;
     website: string;
     instagram: string;
@@ -324,8 +325,9 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     company: 'VS FASHION',
     brand: 'DESUKA',
     address: 'IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031',
+    gstNumber: '07AKCPJ2754N1ZX',
     email: 'wholesale@desukafashion.com',
-    website: 'https://desukafashion.com',
+    website: 'https://www.desukafashion.com',
     instagram: 'https://instagram.com/desukab2b',
     facebook: 'https://facebook.com/desukab2b',
     youtube: 'https://youtube.com/@DesukaByVSFashion',
@@ -390,7 +392,12 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
         justifyContent: 'space-between',
         boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <a
+          href="https://www.desukafashion.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}
+        >
           <div style={{
             background: 'linear-gradient(135deg, #6366f1, #a855f7)',
             width: '36px',
@@ -411,7 +418,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               BY VS FASHION • GANDHI NAGAR DELHI
             </div>
           </div>
-        </div>
+        </a>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button
@@ -1114,6 +1121,37 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 >
                   📍 Open Location on Google Maps <ExternalLink size={12} />
                 </a>
+
+                {/* GST Number (Credibility & Trust Badge directly below address) */}
+                <div style={{
+                  marginTop: '0.55rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.45rem'
+                }}>
+                  <div style={{
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: '#34d399',
+                    padding: '0.22rem 0.55rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}>
+                    <span>GSTIN:</span>
+                    <strong style={{ fontFamily: 'monospace', color: '#fff' }}>
+                      {brand.gstNumber || '07AKCPJ2754N1ZX'}
+                    </strong>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 600 }}>
+                    ✓ Govt. Verified B2B Wholesale
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1158,10 +1196,15 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               <div>
                 <strong style={{ color: '#fff' }}>Team Working Hours:</strong>
                 <div>{brand.hours}</div>
-                <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Globe size={14} color="#6366f1" />
-                  <a href={brand.website} target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'none', fontSize: '0.75rem' }}>
-                    desukafashion.com <ExternalLink size={11} />
+                  <a 
+                    href="https://www.desukafashion.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={{ color: '#38bdf8', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 700 }}
+                  >
+                    https://www.desukafashion.com <ExternalLink size={12} />
                   </a>
                 </div>
               </div>
@@ -1312,6 +1355,20 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <span>🏪 Verified On:</span>
+              <span
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#34d399',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '4px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  fontFamily: 'monospace'
+                }}
+              >
+                ✓ GSTIN: {brand.gstNumber || '07AKCPJ2754N1ZX'}
+              </span>
               {brand.verifiedOn.map(v => (
                 <span
                   key={v}

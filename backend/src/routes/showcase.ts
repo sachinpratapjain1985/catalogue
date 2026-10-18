@@ -24,6 +24,23 @@ function getShuffledSalesContacts() {
   return list;
 }
 
+// Helper to dynamically fetch brand details merged with showcase_settings overrides
+async function getDynamicBrandDetails() {
+  try {
+    const sRes = await query("SELECT key, value FROM showcase_settings WHERE key IN ('gst_number', 'company_website', 'company_address')");
+    const map: Record<string, string> = {};
+    sRes.rows.forEach(r => { map[r.key] = r.value; });
+    return {
+      ...BRAND_DETAILS,
+      ...(map['gst_number'] ? { gstNumber: map['gst_number'] } : {}),
+      ...(map['company_website'] ? { website: map['company_website'] } : {}),
+      ...(map['company_address'] ? { address: map['company_address'] } : {})
+    };
+  } catch (e) {
+    return BRAND_DETAILS;
+  }
+}
+
 // ==========================================
 // PUBLIC ENDPOINTS (No authentication required)
 // ==========================================
@@ -33,6 +50,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
   const { token } = req.params;
 
   try {
+    const brandDetails = await getDynamicBrandDetails();
     const linkRes = await query(
       `SELECT id, token, item_ids, expires_at, created_at, views_count
        FROM showcase_links 
@@ -48,7 +66,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
-        brandDetails: BRAND_DETAILS
+        brandDetails
       });
       return;
     }
@@ -70,7 +88,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
-        brandDetails: BRAND_DETAILS
+        brandDetails
       });
       return;
     }
@@ -86,7 +104,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
-        brandDetails: BRAND_DETAILS
+        brandDetails
       });
       return;
     }
@@ -119,7 +137,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       callContact: CALL_CONTACT,
       callContacts: CALL_CONTACTS,
       communityLink: COMMUNITY_LINK,
-      brandDetails: BRAND_DETAILS
+      brandDetails
     });
   } catch (err: any) {
     console.error('Error fetching showcase:', err);

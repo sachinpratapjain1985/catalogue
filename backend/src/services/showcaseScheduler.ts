@@ -34,8 +34,9 @@ export const BRAND_DETAILS = {
   company: 'VS FASHION',
   brand: 'DESUKA',
   address: 'IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031',
+  gstNumber: '07AKCPJ2754N1ZX',
   email: 'wholesale@desukafashion.com',
-  website: 'https://desukafashion.com',
+  website: 'https://www.desukafashion.com',
   instagram: 'https://instagram.com/desukab2b',
   facebook: 'https://facebook.com/desukab2b',
   youtube: 'https://youtube.com/@DesukaByVSFashion',
@@ -136,8 +137,9 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
       `Looking for more wholesale designs or customized sets? Chat directly with our Gandhi Nagar sales desk on WhatsApp for live video preview and catalogs:\n` +
       `${showcaseUrl}\n\n` +
       `📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031\n` +
+      `🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)\n` +
       `📞 Direct Call: 9240202545 / 9718503340 | WhatsApp: 8796333844\n` +
-      `🌐 desukafashion.com`
+      `🌐 https://www.desukafashion.com`
     );
     const whatsappShareLink = `https://api.whatsapp.com/send?text=${whatsappShareText}`;
 
@@ -182,8 +184,9 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
           <div style="border-top: 1px solid #334155; padding-top: 16px; font-size: 12px; color: #64748b; line-height: 1.6;">
             <p style="margin: 2px 0;"><strong>VS FASHION — DESUKA</strong></p>
             <p style="margin: 2px 0;">📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031</p>
+            <p style="margin: 2px 0;">🧾 GSTIN: <strong style="color: #38bdf8;">07AKCPJ2754N1ZX</strong> (Verified B2B Wholesale)</p>
             <p style="margin: 2px 0;">📞 Call: 9240202545 / 9718503340 | 📧 wholesale@desukafashion.com</p>
-            <p style="margin: 2px 0;">🌐 <a href="https://desukafashion.com" style="color: #64748b;">desukafashion.com</a></p>
+            <p style="margin: 2px 0;">🌐 <a href="https://www.desukafashion.com" style="color: #64748b;">https://www.desukafashion.com</a></p>
           </div>
         </div>
       </div>
