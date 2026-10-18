@@ -346,7 +346,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         companyName || 'VS FASHION',
         companyBrand || 'DESUKA',
         companyAddress || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031',
-        companyGst || '',
+        companyGst || '07AKCPJ2754N1ZX',
         companyPhone || '9718503340',
         companyEmail || 'wholesale@desukafashion.com',
         bankName || 'HDFC BANK',
@@ -500,7 +500,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         companyName || 'VS FASHION',
         companyBrand || 'DESUKA',
         companyAddress || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031',
-        companyGst || '',
+        companyGst || '07AKCPJ2754N1ZX',
         companyPhone || '9718503340',
         companyEmail || 'wholesale@desukafashion.com',
         bankName || 'HDFC BANK',
@@ -658,7 +658,7 @@ router.get('/:id/excel', async (req: AuthenticatedRequest, res: Response): Promi
     // Row 2: Subtitle / Address
     sheet.mergeCells('A2:K2');
     const subCell = sheet.getCell('A2');
-    subCell.value = `${inv.company_address || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031'} | Phone: ${inv.company_phone || '9718503340'} | Email: ${inv.company_email || 'wholesale@desukafashion.com'}`;
+    subCell.value = `${inv.company_address || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031'} | GSTIN: ${inv.company_gst || '07AKCPJ2754N1ZX'} | Phone: ${inv.company_phone || '9718503340'} | Email: ${inv.company_email || 'wholesale@desukafashion.com'}`;
     subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '64748B' } };
     subCell.alignment = { horizontal: 'center', vertical: 'middle' };
     sheet.getRow(2).height = 20;

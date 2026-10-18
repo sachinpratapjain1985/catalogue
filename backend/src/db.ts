@@ -184,6 +184,11 @@ export const runMigrations = async () => {
       SET company_email = 'wholesale@desukafashion.com' 
       WHERE company_email LIKE '%sales@desukafashion.com%' OR company_email IS NULL;
     `).catch(() => {});
+    await pool.query(`
+      UPDATE proforma_invoices 
+      SET company_gst = '07AKCPJ2754N1ZX' 
+      WHERE company_gst IS NULL OR company_gst = '' OR LENGTH(company_gst) < 5;
+    `).catch(() => {});
 
     // 3i. Create proforma_invoice_items table
     await pool.query(`

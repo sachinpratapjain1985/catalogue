@@ -1913,7 +1913,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                   {previewInvoice.company_address || 'IX-6362 Netaji Gali Gandhi nagar Delhi-110031'}
                 </div>
                 <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '2px' }}>
-                  Phone: <strong>{previewInvoice.company_phone || '9718503340'}</strong> | Email: {previewInvoice.company_email || 'wholesale@desukafashion.com'}
+                  GSTIN: <strong>{previewInvoice.company_gst || '07AKCPJ2754N1ZX'}</strong> | Phone: <strong>{previewInvoice.company_phone || '9718503340'}</strong> | Email: {previewInvoice.company_email || 'wholesale@desukafashion.com'}
                 </div>
               </div>
 
