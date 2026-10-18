@@ -52,7 +52,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
   try {
     const brandDetails = await getDynamicBrandDetails();
     const linkRes = await query(
-      `SELECT id, token, item_ids, expires_at, created_at, views_count
+      `SELECT id, token, item_ids, expires_at, created_at, views_count, is_suspended, suspended_at
        FROM showcase_links 
        WHERE token = $1`,
       [token]
@@ -75,7 +75,8 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
     const now = new Date();
     const createdAt = new Date(link.created_at);
     const expiresAt = new Date(link.expires_at);
-    const isExpired = now > expiresAt;
+    const isSuspended = link.is_suspended === true;
+    const isExpired = now > expiresAt || isSuspended;
     const isDisappeared = (now.getTime() - createdAt.getTime()) > (30 * 24 * 60 * 60 * 1000);
 
     // If older than 1 month (30 days), the link is permanently removed
@@ -93,10 +94,11 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       return;
     }
 
-    // Check if 24 hours expired
+    // Check if 24 hours expired or manually suspended before time
     if (isExpired) {
       res.json({
         expired: true,
+        suspended: isSuspended,
         message: 'लेटेस्ट कैटलॉग के लिए नीचे दिए हुए WhatsApp नंबर से हमारी टीम से संपर्क करें',
         expires_at: link.expires_at,
         created_at: link.created_at,
@@ -155,10 +157,14 @@ adminShowcaseRouter.use(authenticateToken);
 adminShowcaseRouter.get('/summary', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemCountRes = await query('SELECT COUNT(*) FROM items WHERE is_in_showcase = TRUE');
+    const activeCountRes = await query(
+      `SELECT COUNT(*) FROM showcase_links 
+       WHERE expires_at > NOW() AND (is_suspended IS FALSE OR is_suspended IS NULL)`
+    );
     const activeLinkRes = await query(
-      `SELECT token, expires_at, created_at, array_length(item_ids, 1) as item_count, views_count
+      `SELECT token, expires_at, created_at, array_length(item_ids, 1) as item_count, views_count, is_suspended, suspended_at
        FROM showcase_links 
-       WHERE expires_at > NOW() 
+       WHERE expires_at > NOW() AND (is_suspended IS FALSE OR is_suspended IS NULL)
        ORDER BY expires_at DESC LIMIT 1`
     );
 
@@ -184,11 +190,160 @@ adminShowcaseRouter.get('/summary', async (req: AuthenticatedRequest, res: Respo
 
     res.json({
       showcaseItemCount: parseInt(itemCountRes.rows[0].count || '0'),
+      activeLinksCount: parseInt(activeCountRes.rows[0].count || '0'),
       activeLink,
       settings
     });
   } catch (err: any) {
     console.error('Error fetching showcase summary:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/showcase/links - List all showcase links with live timer status
+adminShowcaseRouter.get('/links', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const settingsRes = await query("SELECT value FROM showcase_settings WHERE key = 'base_url'");
+    let baseUrl = settingsRes.rows[0]?.value || process.env.BASE_URL;
+    if (!baseUrl || baseUrl.includes('lms.desukafashion.com')) {
+      const host = req.get('host');
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      if (host && !host.includes('lms.')) {
+        baseUrl = `${proto}://${host}`;
+      } else {
+        baseUrl = 'https://catalog.desukafashion.com';
+      }
+    }
+
+    const linksRes = await query(
+      `SELECT id, token, item_ids, created_at, expires_at, views_count,
+              is_suspended, suspended_at,
+              array_length(item_ids, 1) as item_count
+       FROM showcase_links
+       ORDER BY created_at DESC
+       LIMIT 60`
+    );
+
+    const now = Date.now();
+    const links = linksRes.rows.map(link => {
+      const expTime = new Date(link.expires_at).getTime();
+      const isSuspended = link.is_suspended === true;
+      const isExpired = expTime <= now;
+      let status: 'active' | 'suspended' | 'expired' = 'active';
+      if (isSuspended) {
+        status = 'suspended';
+      } else if (isExpired) {
+        status = 'expired';
+      }
+
+      return {
+        id: link.id,
+        token: link.token,
+        url: `${baseUrl}/showcase/${link.token}`,
+        item_count: parseInt(link.item_count || '0'),
+        item_ids: link.item_ids || [],
+        created_at: link.created_at,
+        expires_at: link.expires_at,
+        views_count: parseInt(link.views_count || '0'),
+        is_suspended: isSuspended,
+        suspended_at: link.suspended_at,
+        status,
+        remaining_seconds: isSuspended || isExpired ? 0 : Math.max(0, Math.floor((expTime - now) / 1000))
+      };
+    });
+
+    res.json(links);
+  } catch (err: any) {
+    console.error('Error fetching showcase links:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/showcase/links/:token/suspend - Suspend active showcase link before time
+adminShowcaseRouter.post('/links/:token/suspend', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { token } = req.params;
+  try {
+    const result = await query(
+      `UPDATE showcase_links
+       SET is_suspended = TRUE, suspended_at = NOW()
+       WHERE token = $1
+       RETURNING id, token, is_suspended, suspended_at, expires_at`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Showcase link not found' });
+      return;
+    }
+
+    console.log(`[Showcase] Link ${token} suspended manually by admin ${req.user?.username || req.user?.id}`);
+
+    res.json({
+      success: true,
+      message: 'Showcase link suspended successfully. Anyone visiting this link will now see the expired notice.',
+      link: result.rows[0]
+    });
+  } catch (err: any) {
+    console.error('Error suspending showcase link:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/showcase/links/:token/reactivate - Reactivate or extend showcase link
+adminShowcaseRouter.post('/links/:token/reactivate', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { token } = req.params;
+  try {
+    const result = await query(
+      `UPDATE showcase_links
+       SET is_suspended = FALSE,
+           suspended_at = NULL,
+           expires_at = CASE 
+             WHEN expires_at <= NOW() THEN NOW() + INTERVAL '24 hours' 
+             ELSE expires_at 
+           END
+       WHERE token = $1
+       RETURNING id, token, is_suspended, suspended_at, expires_at`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Showcase link not found' });
+      return;
+    }
+
+    console.log(`[Showcase] Link ${token} reactivated by admin ${req.user?.username || req.user?.id}`);
+
+    res.json({
+      success: true,
+      message: 'Showcase link reactivated successfully with active timer.',
+      link: result.rows[0]
+    });
+  } catch (err: any) {
+    console.error('Error reactivating showcase link:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/showcase/links/:token - Delete showcase link
+adminShowcaseRouter.delete('/links/:token', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { token } = req.params;
+  try {
+    const result = await query(
+      `DELETE FROM showcase_links WHERE token = $1 RETURNING id, token`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Showcase link not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Showcase link deleted successfully'
+    });
+  } catch (err: any) {
+    console.error('Error deleting showcase link:', err);
     res.status(500).json({ error: err.message });
   }
 });

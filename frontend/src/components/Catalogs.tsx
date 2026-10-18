@@ -23,7 +23,8 @@ import {
   Star,
   Link,
   Mail,
-  ExternalLink
+  ExternalLink,
+  AlertOctagon
 } from 'lucide-react';
 
 interface Category {
@@ -165,6 +166,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [showcaseSuccessMsg, setShowcaseSuccessMsg] = useState('');
   const [showcaseErrorMsg, setShowcaseErrorMsg] = useState('');
   const [copiedShowcaseText, setCopiedShowcaseText] = useState(false);
+  const [showcaseSuspending, setShowcaseSuspending] = useState(false);
 
   // Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -232,9 +234,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.activeLink) {
-          setShowcaseActiveLink(data.activeLink);
-        }
+        setShowcaseActiveLink(data.activeLink || null);
         if (data.settings?.daily_email_recipient) {
           setShowcaseEmailRecipient(data.settings.daily_email_recipient);
         }
@@ -398,16 +398,44 @@ export default function Catalogs({ token, user }: CatalogsProps) {
     const shareText = 
 `*DESUKA by VS FASHION — Exclusive Wholesale Showcase*
 
-Check out our latest curated wholesale collection (Valid for 24 hours):
+Check out our latest curated wholesale collection (Valid for limited time):
 ${clientUrl}
 
 📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
-📞 Call: 9718503340 | WhatsApp: 8796333844
-🌐 desukafashion.com`;
+🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)
+📞 Daytime Desk: +91 9240202545 | +91 9718503340
+🌐 https://www.desukafashion.com`;
 
     navigator.clipboard.writeText(shareText);
     setCopiedShowcaseText(true);
     setTimeout(() => setCopiedShowcaseText(false), 2500);
+  };
+
+  const handleSuspendShowcase = async () => {
+    if (!showcaseActiveLink) return;
+    if (!window.confirm('Suspend this showcase link immediately? Customers will be blocked from viewing catalog designs and shown the latest catalog contact notice.')) {
+      return;
+    }
+    try {
+      setShowcaseSuspending(true);
+      setShowcaseErrorMsg('');
+      const res = await fetch(`/api/admin/showcase/links/${showcaseActiveLink.token}/suspend`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to suspend link');
+
+      setShowcaseSuccessMsg('Showcase link suspended immediately. Customer access is now blocked.');
+      setShowcaseActiveLink(null);
+      setTimeout(() => setShowcaseSuccessMsg(''), 4000);
+      fetchShowcaseSummary();
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Error suspending link');
+      setTimeout(() => setShowcaseErrorMsg(''), 4000);
+    } finally {
+      setShowcaseSuspending(false);
+    }
   };
 
   const handleCreateWork = async (e: React.FormEvent) => {
@@ -3316,6 +3344,36 @@ ${clientUrl}
                       <Mail size={15} />
                       {showcaseSendingEmail ? 'Sending Email...' : 'Email to Sales Team Now'}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSuspendShowcase}
+                      disabled={showcaseSuspending}
+                      className="btn"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid #ef4444',
+                        color: '#f87171',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        cursor: 'pointer'
+                      }}
+                      title="Suspend link immediately before 24h expires"
+                    >
+                      <AlertOctagon size={15} />
+                      {showcaseSuspending ? 'Suspending...' : 'Suspend Before Time'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      To monitor all active client links, live countdown timers & views in real time, check the <strong style={{ color: '#818cf8' }}>Showcase Monitor</strong> tab in the sidebar navigation.
+                    </span>
                   </div>
                 </div>
               )}

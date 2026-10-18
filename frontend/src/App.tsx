@@ -5,6 +5,7 @@ import {
   Users as UsersIcon, 
   FileSpreadsheet, 
   FileText,
+  Radio,
   LogOut,
   Sparkles,
   Lock
@@ -15,6 +16,7 @@ import Users from './components/Users';
 import Reports from './components/Reports';
 import ProformaInvoice from './components/ProformaInvoice';
 import ShowcaseView from './components/ShowcaseView';
+import ShowcaseManager from './components/ShowcaseManager';
 
 export interface UserProfile {
   id: number;
@@ -45,7 +47,7 @@ function App() {
   const showcaseToken = getShowcaseTokenFromUrl();
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalogs' | 'users' | 'reports' | 'proforma'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalogs' | 'users' | 'reports' | 'proforma' | 'showcase'>('dashboard');
   
   // Login form state
   const [usernameInput, setUsernameInput] = useState('');
@@ -251,6 +253,16 @@ function App() {
               Catalog folders
             </button>
           </li>
+          <li>
+            <button 
+              className={`nav-link ${activeTab === 'showcase' ? 'active' : ''}`}
+              onClick={() => setActiveTab('showcase')}
+              style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left' }}
+            >
+              <Radio size={20} />
+              Showcase Monitor
+            </button>
+          </li>
           {user.role === 'superadmin' && (
             <li>
               <button 
@@ -310,6 +322,13 @@ function App() {
       <main className="main-content">
         {activeTab === 'dashboard' && <Dashboard token={token} />}
         {activeTab === 'catalogs' && <Catalogs token={token} user={user} />}
+        {activeTab === 'showcase' && (
+          <ShowcaseManager 
+            token={token} 
+            user={user} 
+            onNavigateToCatalogs={() => setActiveTab('catalogs')} 
+          />
+        )}
         {activeTab === 'users' && <Users token={token} />}
         {activeTab === 'reports' && <Reports token={token} />}
         {activeTab === 'proforma' && (user.role === 'superadmin' || user.role === 'manager' || user.can_manage_proforma !== false) && (

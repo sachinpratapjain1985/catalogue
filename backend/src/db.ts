@@ -268,6 +268,9 @@ export const runMigrations = async () => {
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_showcase_links_token ON showcase_links(token)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_showcase_links_expires ON showcase_links(expires_at DESC)');
+    await pool.query('ALTER TABLE showcase_links ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN NOT NULL DEFAULT FALSE');
+    await pool.query('ALTER TABLE showcase_links ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP WITH TIME ZONE');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_showcase_links_status ON showcase_links(is_suspended, expires_at DESC)');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showcase_settings (

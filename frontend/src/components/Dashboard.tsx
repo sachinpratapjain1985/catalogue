@@ -7,7 +7,12 @@ import {
   Boxes,
   CheckCircle,
   AlertCircle,
-  XCircle
+  XCircle,
+  Radio,
+  AlertOctagon,
+  Copy,
+  ExternalLink,
+  Check
 } from 'lucide-react';
 
 interface DashboardData {
@@ -55,12 +60,72 @@ interface DashboardProps {
 export default function Dashboard({ token }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showcaseSummary, setShowcaseSummary] = useState<{
+    showcaseItemCount: number;
+    activeLinksCount: number;
+    activeLink: any;
+  } | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [suspending, setSuspending] = useState(false);
+  const [suspendMsg, setSuspendMsg] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000); // refresh every 30 seconds
+    fetchShowcase();
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchShowcase();
+    }, 30000); // refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // 1-second interval to decrement remaining_seconds smoothly on screen
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemainingSeconds(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fetchShowcase = async () => {
+    try {
+      const res = await fetch('/api/admin/showcase/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const sum = await res.json();
+        setShowcaseSummary(sum);
+        if (sum.activeLink?.expires_at) {
+          const diff = Math.max(0, Math.floor((new Date(sum.activeLink.expires_at).getTime() - Date.now()) / 1000));
+          setRemainingSeconds(diff);
+        } else {
+          setRemainingSeconds(0);
+        }
+      }
+    } catch (e) {}
+  };
+
+  const handleSuspendShowcase = async () => {
+    if (!showcaseSummary?.activeLink) return;
+    if (!window.confirm('Suspend this active showcase link immediately? Customers will be blocked from viewing catalog designs and shown the contact notice.')) return;
+    setSuspending(true);
+    try {
+      const res = await fetch(`/api/admin/showcase/links/${showcaseSummary.activeLink.token}/suspend`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSuspendMsg('Showcase page suspended immediately! Customer access is blocked.');
+        setTimeout(() => setSuspendMsg(''), 4000);
+        fetchShowcase();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSuspending(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -106,6 +171,124 @@ export default function Dashboard({ token }: DashboardProps) {
           Refresh Data
         </button>
       </div>
+
+      {/* Active Showcase Monitor Banner */}
+      {showcaseSummary?.activeLink && remainingSeconds > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95))',
+          border: '1px solid rgba(16, 185, 129, 0.4)',
+          borderRadius: '12px',
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 4px 20px rgba(16, 185, 129, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.2)',
+              border: '1px solid #10b981',
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Radio size={20} color="#34d399" />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Live Client Showcase Page Active
+                </span>
+                <span style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid #10b981',
+                  color: '#34d399',
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  fontFamily: 'monospace',
+                  padding: '2px 8px',
+                  borderRadius: '4px'
+                }}>
+                  ⏱️ {Math.floor(remainingSeconds / 3600).toString().padStart(2, '0')}h : {Math.floor((remainingSeconds % 3600) / 60).toString().padStart(2, '0')}m : {(remainingSeconds % 60).toString().padStart(2, '0')}s remaining
+                </span>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', display: 'flex', gap: '1rem' }}>
+                <span>Token: <strong style={{ color: '#fff' }}>{showcaseSummary.activeLink.token}</strong></span>
+                <span>Designs: <strong style={{ color: '#fff' }}>{showcaseSummary.activeLink.item_count || showcaseSummary.showcaseItemCount}</strong></span>
+                <span>Views: <strong style={{ color: '#38bdf8' }}>{showcaseSummary.activeLink.views_count || 0}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={() => {
+                const url = showcaseSummary.activeLink.token 
+                  ? `${window.location.origin}/showcase/${showcaseSummary.activeLink.token}`
+                  : showcaseSummary.activeLink.url;
+                navigator.clipboard.writeText(url);
+                setCopiedLink(true);
+                setTimeout(() => setCopiedLink(false), 2000);
+              }}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              {copiedLink ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+              {copiedLink ? 'Copied!' : 'Copy Link'}
+            </button>
+
+            <a
+              href={`${window.location.origin}/showcase/${showcaseSummary.activeLink.token}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+            >
+              <ExternalLink size={14} /> Preview
+            </a>
+
+            <button
+              onClick={handleSuspendShowcase}
+              disabled={suspending}
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                color: '#f87171',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer'
+              }}
+              title="Suspend this showcase page immediately before 24h expires"
+            >
+              <AlertOctagon size={14} />
+              {suspending ? 'Suspending...' : 'Suspend Before Time'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {suspendMsg && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.15)',
+          border: '1px solid #ef4444',
+          color: '#f87171',
+          padding: '0.65rem 1rem',
+          borderRadius: '8px',
+          fontSize: '0.85rem'
+        }}>
+          {suspendMsg}
+        </div>
+      )}
 
       {/* Metrics Row */}
       <div className="stats-grid">
