@@ -875,6 +875,24 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
       return;
     }
 
+    // Auto-orient original primary photo according to EXIF so photos are always straight
+    try {
+      const tempStraightPath = primaryFile.path + '.straight';
+      const extension = ext.toLowerCase();
+      let straightSharp = sharp(primaryFile.path).rotate();
+      if (extension === '.png') {
+        straightSharp = straightSharp.png({ compressionLevel: 2 });
+      } else if (extension === '.webp') {
+        straightSharp = straightSharp.webp({ quality: 100, lossless: true });
+      } else {
+        straightSharp = straightSharp.jpeg({ quality: 100, chromaSubsampling: '4:4:4' });
+      }
+      await straightSharp.toFile(tempStraightPath);
+      fs.renameSync(tempStraightPath, primaryFile.path);
+    } catch (orientErr) {
+      console.warn('Failed to auto-orient primary photo:', orientErr);
+    }
+
     // Generate optimized thumbnail using sharp
     try {
       let sharpObj = sharp(primaryFile.path)
@@ -1068,6 +1086,24 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
       const baseName = path.basename(primaryFile.filename, ext);
       const thumbFilename = `${baseName}-thumb${ext}`;
       const thumbPath = path.join(uploadDir, thumbFilename);
+
+      // Auto-orient replacement primary photo according to EXIF so photos are always straight
+      try {
+        const tempStraightPath = primaryFile.path + '.straight';
+        const extension = ext.toLowerCase();
+        let straightSharp = sharp(primaryFile.path).rotate();
+        if (extension === '.png') {
+          straightSharp = straightSharp.png({ compressionLevel: 2 });
+        } else if (extension === '.webp') {
+          straightSharp = straightSharp.webp({ quality: 100, lossless: true });
+        } else {
+          straightSharp = straightSharp.jpeg({ quality: 100, chromaSubsampling: '4:4:4' });
+        }
+        await straightSharp.toFile(tempStraightPath);
+        fs.renameSync(tempStraightPath, primaryFile.path);
+      } catch (orientErr) {
+        console.warn('Failed to auto-orient replacement photo:', orientErr);
+      }
 
       // Generate optimized thumbnail
       try {
@@ -1400,11 +1436,22 @@ export const processAndSaveRealImage = async (itemId: number, file: Express.Mult
   const realFilename = `real_${Date.now()}_${baseName}${ext}`;
   const realPath = path.join(realUploadDir, realFilename);
 
-  // Preserve pristine raw uncompressed photo directly from upload with zero quality loss
+  // Auto-orient according to EXIF so real photos are permanently upright & straight,
+  // in actual format with 100% full quality & zero downgrading
   try {
-    fs.copyFileSync(file.path, realPath);
+    const extension = ext.toLowerCase();
+    let sharpObj = sharp(file.path).rotate();
+    if (extension === '.png') {
+      sharpObj = sharpObj.png({ compressionLevel: 2 });
+    } else if (extension === '.webp') {
+      sharpObj = sharpObj.webp({ quality: 100, lossless: true });
+    } else {
+      sharpObj = sharpObj.jpeg({ quality: 100, chromaSubsampling: '4:4:4' });
+    }
+    await sharpObj.toFile(realPath);
   } catch (e) {
-    console.error('Failed to copy raw real photo:', e);
+    console.error('Failed to auto-orient real photo, copying directly:', e);
+    fs.copyFileSync(file.path, realPath);
   }
 
   const urlPath = `/uploads/real/${realFilename}`;

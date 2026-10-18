@@ -1042,7 +1042,8 @@ ${clientUrl}
           setTimeout(() => {
             const link = document.createElement('a');
             link.href = realPath;
-            link.download = `${item.sku_id}-real-${rIdx + 1}.jpg`;
+            const rExt = realPath.substring(realPath.lastIndexOf('.')) || '.jpg';
+            link.download = `${item.sku_id}-real-${rIdx + 1}${rExt}`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -1052,15 +1053,9 @@ ${clientUrl}
       } else {
         setTimeout(() => {
           const link = document.createElement('a');
-          if (user?.role === 'sales') {
-            link.href = `/api/catalog/items/${item.id}/medium?token=${encodeURIComponent(token)}`;
-            const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-            link.download = `${item.sku_id}-medium${ext}`;
-          } else {
-            link.href = item.image_path;
-            const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-            link.download = `${item.sku_id}${ext}`;
-          }
+          link.href = item.image_path;
+          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+          link.download = `${item.sku_id}${ext}`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);

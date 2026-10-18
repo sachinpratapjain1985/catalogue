@@ -14,14 +14,12 @@ import {
 export const publicShowcaseRouter = Router();
 export const adminShowcaseRouter = Router();
 
-// Helper to randomly shuffle sales contact numbers for load balancing
-function getShuffledSalesContacts() {
-  const list = [...SALES_CONTACTS];
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [list[i], list[j]] = [list[j], list[i]];
-  }
-  return list;
+let requestRotationIndex = 0;
+// Helper to rotate sales contact numbers systematically per request for equal load balancing
+function getRotatedSalesContacts() {
+  requestRotationIndex = (requestRotationIndex + 1) % SALES_CONTACTS.length;
+  const shift = requestRotationIndex;
+  return [...SALES_CONTACTS.slice(shift), ...SALES_CONTACTS.slice(0, shift)];
 }
 
 // Helper to dynamically fetch brand details merged with showcase_settings overrides
@@ -62,7 +60,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       res.status(404).json({
         notFound: true,
         error: 'Exclusive showcase link not found or has been removed.',
-        salesContacts: getShuffledSalesContacts(),
+        salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
@@ -85,7 +83,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         notFound: true,
         disappeared: true,
         message: 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)। नवीनतम कैटलॉग के लिए नीचे दिए हुए नंबर पर कॉल या WhatsApp करें।',
-        salesContacts: getShuffledSalesContacts(),
+        salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
@@ -102,7 +100,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         message: 'लेटेस्ट कैटलॉग के लिए नीचे दिए हुए WhatsApp नंबर से हमारी टीम से संपर्क करें',
         expires_at: link.expires_at,
         created_at: link.created_at,
-        salesContacts: getShuffledSalesContacts(),
+        salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
         communityLink: COMMUNITY_LINK,
@@ -135,7 +133,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       expires_at: link.expires_at,
       created_at: link.created_at,
       items: itemsRes.rows,
-      salesContacts: getShuffledSalesContacts(),
+      salesContacts: getRotatedSalesContacts(),
       callContact: CALL_CONTACT,
       callContacts: CALL_CONTACTS,
       communityLink: COMMUNITY_LINK,

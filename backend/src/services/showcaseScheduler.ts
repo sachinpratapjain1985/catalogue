@@ -4,24 +4,26 @@ import crypto from 'crypto';
 import { query } from '../db';
 
 export const SALES_CONTACTS = [
-  { name: 'VS FASHION Sales 1', phone: '+918796333844', rawPhone: '8796333844' },
-  { name: 'VS FASHION Sales 2', phone: '+918796893844', rawPhone: '8796893844' },
-  { name: 'VS FASHION Sales 3', phone: '+918796443844', rawPhone: '8796443844' },
+  { name: 'VS FASHION Sales Desk 1', phone: '+918796333844', rawPhone: '8796333844' },
+  { name: 'VS FASHION Sales Desk 2', phone: '+918796893844', rawPhone: '8796893844' },
+  { name: 'VS FASHION Sales Desk 3', phone: '+918796443844', rawPhone: '8796443844' },
 ];
 
 export const CALL_CONTACTS = [
   {
-    name: 'Daytime Direct Team Desk',
+    name: 'Direct Team Desk (Daytime)',
     phone: '+919240202545',
     rawPhone: '9240202545',
-    note: 'Daytime Direct Call — Connect directly with our team',
+    timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
+    note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
     isPrimary: true
   },
   {
-    name: 'Wholesale Helpdesk',
+    name: 'Wholesale Helpdesk (24x7)',
     phone: '+919718503340',
     rawPhone: '9718503340',
-    note: 'Please save this number for future connect',
+    timing: 'Call for any query anytime',
+    note: 'Call for any query anytime (24x7 Helpdesk)',
     isPrimary: false
   }
 ];

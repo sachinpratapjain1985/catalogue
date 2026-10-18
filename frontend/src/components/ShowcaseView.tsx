@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, 
   Clock, 
@@ -338,24 +338,26 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
   };
 
   const salesContacts = data?.salesContacts || [
-    { name: 'VS FASHION Sales 1', phone: '+918796333844', rawPhone: '8796333844' },
-    { name: 'VS FASHION Sales 2', phone: '+918796893844', rawPhone: '8796893844' },
-    { name: 'VS FASHION Sales 3', phone: '+918796443844', rawPhone: '8796443844' },
+    { name: 'VS FASHION Sales Desk 1', phone: '+918796333844', rawPhone: '8796333844' },
+    { name: 'VS FASHION Sales Desk 2', phone: '+918796893844', rawPhone: '8796893844' },
+    { name: 'VS FASHION Sales Desk 3', phone: '+918796443844', rawPhone: '8796443844' },
   ];
 
   const callContacts = data?.callContacts || [
     {
-      name: 'Daytime Direct Team Desk',
+      name: 'Direct Team Desk (Daytime)',
       phone: '+919240202545',
       rawPhone: '9240202545',
-      note: 'Daytime Direct Call — Connect directly with our team',
+      timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
+      note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
       isPrimary: true
     },
     {
-      name: 'Wholesale Helpdesk',
+      name: 'Wholesale Helpdesk (24x7)',
       phone: '+919718503340',
       rawPhone: '9718503340',
-      note: 'Please save this number for future connect',
+      timing: 'Call for any query anytime',
+      note: 'Call for any query anytime (24x7 Helpdesk)',
       isPrimary: false
     }
   ];
@@ -365,9 +367,22 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
 
   const communityLink = data?.communityLink || 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
 
-  // Helper to pick a sales number for item WhatsApp button
-  const getRandomSalesNumber = (index: number) => {
-    return salesContacts[index % salesContacts.length];
+  // Dynamic session rotation offset so the primary/first contact rotates across different visits/requests
+  const [sessionRotationOffset] = useState(() => Math.floor(Math.random() * 3));
+
+  // Rotated sales contacts list for contact lists and cards
+  const rotatedSalesContacts = useMemo(() => {
+    if (!salesContacts || salesContacts.length === 0) return [];
+    const shift = sessionRotationOffset % salesContacts.length;
+    return [...salesContacts.slice(shift), ...salesContacts.slice(0, shift)];
+  }, [salesContacts, sessionRotationOffset]);
+
+  // Helper to pick rotated sales number per article so articles strictly alternate 1 -> 2 -> 3 -> 1 -> 2 -> 3
+  const getRotatedSalesNumber = (index: number) => {
+    if (rotatedSalesContacts.length === 0) {
+      return { name: 'VS FASHION Sales Desk', phone: '+918796333844', rawPhone: '8796333844' };
+    }
+    return rotatedSalesContacts[index % rotatedSalesContacts.length];
   };
 
   return (
@@ -472,10 +487,10 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             </div>
 
             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', marginBottom: '0.4rem' }}>
-              {isDisappeared ? 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)' : '24 घंटे की समय सीमा समाप्त हो गई है'}
+              {isDisappeared ? 'यह लिंक समाप्त हो चुका है (1 महीना पूरा होने पर हटा दिया गया है)' : 'कैटलॉग लिंक समाप्त हो चुका है'}
             </h2>
             <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
-              VIP 24-Hour Exclusive Access Has Ended
+              Exclusive Catalog Showcase Link Has Expired
             </div>
 
             {/* Exact Hindi Notice Box as Requested */}
@@ -541,13 +556,13 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 }}>
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ⚡ Direct Team Desk (Daytime)
+                      ⚡ Direct Team Desk (Office Timings: 10:00 AM – 7:00 PM)
                     </div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
                       +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>
-                      {primaryCallContact.note}
+                      Call between 10:00 AM – 7:00 PM for direct team assistance
                     </div>
                   </div>
                   <a
@@ -586,14 +601,14 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                   }}>
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
-                        {secondaryCallContact.name}
+                        🏢 Wholesale Helpdesk (Call for any query anytime)
                       </div>
                       <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0' }}>
                         +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
                       </div>
                       <div style={{ fontSize: '0.68rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <Bookmark size={11} />
-                        {secondaryCallContact.note}
+                        Call for any query anytime (24x7 Helpdesk)
                       </div>
                     </div>
                     <a
@@ -620,7 +635,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               </div>
             </div>
 
-            {/* Randomized Sales Team WhatsApp Contact Buttons */}
+            {/* Rotated Sales Team WhatsApp Contact Buttons */}
             <div style={{ maxWidth: '500px', margin: '0 auto 1.5rem' }}>
               <p style={{
                 fontSize: '0.78rem',
@@ -634,7 +649,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {salesContacts.map(contact => (
+                {rotatedSalesContacts.map(contact => (
                   <a
                     key={contact.phone}
                     href={formatWhatsAppUrl(
@@ -795,8 +810,8 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             }}>
               {data?.items && data.items.length > 0 ? (
                 data.items.map((item, index) => {
-                  const salesRep = getRandomSalesNumber(index);
-                  const whatsappMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated 24h showcase: ${window.location.href}`;
+                  const salesRep = getRotatedSalesNumber(index);
+                  const whatsappMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated showcase: ${window.location.href}`;
                   const whatsappUrl = formatWhatsAppUrl(salesRep.rawPhone, whatsappMsg);
 
                   return (
@@ -993,7 +1008,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               </p>
               
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.55rem', justifyContent: 'center' }}>
-                {salesContacts.map(c => (
+                {rotatedSalesContacts.map(c => (
                   <a
                     key={c.phone}
                     href={formatWhatsAppUrl(
@@ -1031,10 +1046,10 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.6rem',
+                gap: '0.8rem',
                 flexWrap: 'wrap'
               }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Direct Call Helpdesk:</span>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Direct Call Desk:</span>
                 <a
                   href={formatCallUrl(primaryCallContact.rawPhone)}
                   style={{
@@ -1046,9 +1061,10 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                     alignItems: 'center',
                     gap: '0.3rem'
                   }}
+                  title="Direct Team Desk (Office Timings: 10:00 AM – 7:00 PM)"
                 >
                   <Phone size={14} />
-                  +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (Daytime Desk)
+                  +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (10 AM – 7 PM)
                 </a>
                 {secondaryCallContact && (
                   <a
@@ -1062,8 +1078,9 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                       alignItems: 'center',
                       gap: '0.25rem'
                     }}
+                    title="Wholesale Helpdesk (Call for any query anytime)"
                   >
-                    +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (Anytime)
                   </a>
                 )}
               </div>

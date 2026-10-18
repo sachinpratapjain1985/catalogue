@@ -70,15 +70,16 @@ router.get('/items/:id/medium', async (req: AuthenticatedRequest, res: Response)
     if (!fs.existsSync(mediumFilePath)) {
       try {
         let sharpObj = sharp(originalFilePath)
-          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true });
+          .rotate()
+          .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true });
 
         const extension = ext.toLowerCase();
         if (extension === '.png') {
-          sharpObj = sharpObj.png({ quality: 80, compressionLevel: 6 });
+          sharpObj = sharpObj.png({ compressionLevel: 2 });
         } else if (extension === '.webp') {
-          sharpObj = sharpObj.webp({ quality: 80 });
+          sharpObj = sharpObj.webp({ quality: 95 });
         } else {
-          sharpObj = sharpObj.jpeg({ quality: 80, progressive: true });
+          sharpObj = sharpObj.jpeg({ quality: 95, chromaSubsampling: '4:4:4' });
         }
 
         await sharpObj.toFile(mediumFilePath);
