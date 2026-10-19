@@ -225,7 +225,19 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
       params.push(maxRate);
     }
 
-    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
+    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+      CASE 
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' OR UPPER(c.name) LIKE '%CROP TOP%' THEN 3
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' OR UPPER(c.name) LIKE '%LEHENGA%' OR UPPER(c.name) LIKE '%LAHANGA%' THEN 4
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') OR UPPER(c.name) LIKE '%SKIRT%' THEN 5
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' OR UPPER(c.name) LIKE '%SHARARA%' THEN 6
+        ELSE 7
+      END ASC, 
+      substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+      COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
+      i.sku_id ASC`;
 
     if (limit !== null && offset !== null) {
       paramCount++;
@@ -341,7 +353,19 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
-      queryStr += ` ORDER BY (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
+      queryStr += ` ORDER BY (s.sets_count > 0) DESC, 
+        CASE 
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' THEN 1
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' THEN 2
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' THEN 3
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' THEN 4
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') THEN 5
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' THEN 6
+          ELSE 7
+        END ASC, 
+        substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+        COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
+        i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;
@@ -399,7 +423,19 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
-      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, i.sku_id ASC`;
+      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+        CASE 
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' THEN 1
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' THEN 2
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' THEN 3
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' THEN 4
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') THEN 5
+          WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' THEN 6
+          ELSE 7
+        END ASC, 
+        substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+        COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
+        i.sku_id ASC`;
       if (limit !== null && offset !== null) {
         paramCount++;
         const limitParam = `$${paramCount}`;

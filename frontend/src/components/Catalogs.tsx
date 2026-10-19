@@ -26,6 +26,7 @@ import {
   ExternalLink,
   AlertOctagon
 } from 'lucide-react';
+import { getPatternInfo } from './ShowcaseView';
 
 interface Category {
   id: number;
@@ -1178,7 +1179,14 @@ ${clientUrl}
         return aOS ? -1 : 1;
       }
       
-      // Secondary sort: serial wise (natural sort)
+      // Secondary sort: pattern hierarchy (PL -> AK -> CTP -> LH -> SKT -> SP)
+      const rankA = getPatternInfo(a.sku_id, a.category_name).rank;
+      const rankB = getPatternInfo(b.sku_id, b.category_name).rank;
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
+      // Tertiary sort: serial wise (natural sort)
       return a.sku_id.localeCompare(b.sku_id, undefined, { numeric: true, sensitivity: 'base' });
     });
 

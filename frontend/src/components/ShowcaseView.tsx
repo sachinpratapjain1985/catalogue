@@ -115,6 +115,40 @@ export const getThumbnailUrl = (imagePath: string) => {
   return imagePath;
 };
 
+// Pattern hierarchy ordered as requested: PL -> AK -> CTP -> LH -> SKT -> SP -> Others
+export const getPatternInfo = (skuId: string = '', categoryName: string = ''): { rank: number; pattern: string } => {
+  const cleanSku = (skuId || '').trim();
+  const match = cleanSku.match(/^[a-zA-Z]+/);
+  if (match) {
+    const prefix = match[0].toUpperCase();
+    if (prefix === 'PL') return { rank: 1, pattern: 'PL' };
+    if (prefix === 'AK') return { rank: 2, pattern: 'AK' };
+    if (prefix === 'CTP') return { rank: 3, pattern: 'CTP' };
+    if (prefix === 'LH') return { rank: 4, pattern: 'LH' };
+    if (prefix === 'SKT' || prefix === 'SK') return { rank: 5, pattern: 'SKT' };
+    if (prefix === 'SP') return { rank: 6, pattern: 'SP' };
+  }
+
+  const cat = (categoryName || '').toUpperCase();
+  if (cat.includes('PLAZO') || cat.includes('PALAZZO')) return { rank: 1, pattern: 'PL' };
+  if (cat.includes('ANARKALI')) return { rank: 2, pattern: 'AK' };
+  if (cat.includes('CROP TOP') || cat.includes('CTP')) return { rank: 3, pattern: 'CTP' };
+  if (cat.includes('LEHENGA') || cat.includes('LAHANGA')) return { rank: 4, pattern: 'LH' };
+  if (cat.includes('SKIRT')) return { rank: 5, pattern: 'SKT' };
+  if (cat.includes('SHARARA')) return { rank: 6, pattern: 'SP' };
+
+  return { rank: 7, pattern: match ? match[0].toUpperCase() : 'OTHER' };
+};
+
+export const compareShowcaseItems = (a: ShowcaseItem, b: ShowcaseItem): number => {
+  const rankA = getPatternInfo(a.sku_id, a.category_name).rank;
+  const rankB = getPatternInfo(b.sku_id, b.category_name).rank;
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+  return a.sku_id.localeCompare(b.sku_id, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const [data, setData] = useState<ShowcaseResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,9 +158,48 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const [isClientLockedOut, setIsClientLockedOut] = useState(false);
   const [isDisappeared, setIsDisappeared] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [selectedPattern, setSelectedPattern] = useState<string>('ALL');
 
   // Dynamic session rotation offset so the primary/first contact rotates across different visits/requests
   const [sessionRotationOffset] = useState(() => Math.floor(Math.random() * 3));
+
+  // Ordered items by pattern hierarchy: PL -> AK -> CTP -> LH -> SKT -> SP
+  const sortedItems = useMemo(() => {
+    if (!data?.items) return [];
+    return [...data.items].sort(compareShowcaseItems);
+  }, [data?.items]);
+
+  // Extract unique patterns present in this showcase
+  const availablePatterns = useMemo(() => {
+    if (!sortedItems.length) return [];
+    const countMap: Record<string, number> = {};
+    sortedItems.forEach(item => {
+      const p = getPatternInfo(item.sku_id, item.category_name).pattern;
+      countMap[p] = (countMap[p] || 0) + 1;
+    });
+
+    const orderedKnown = ['PL', 'AK', 'CTP', 'LH', 'SKT', 'SP'];
+    const result: { pattern: string; count: number }[] = [];
+    
+    orderedKnown.forEach(p => {
+      if (countMap[p]) {
+        result.push({ pattern: p, count: countMap[p] });
+        delete countMap[p];
+      }
+    });
+
+    Object.keys(countMap).sort().forEach(p => {
+      result.push({ pattern: p, count: countMap[p] });
+    });
+
+    return result;
+  }, [sortedItems]);
+
+  // Filtered items based on pattern tab
+  const displayedItems = useMemo(() => {
+    if (selectedPattern === 'ALL') return sortedItems;
+    return sortedItems.filter(item => getPatternInfo(item.sku_id, item.category_name).pattern === selectedPattern);
+  }, [sortedItems, selectedPattern]);
 
   // Fallback defaults if data is null
   const brand = data?.brandDetails || {
@@ -806,6 +879,86 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               </div>
             </div>
 
+            {/* Pattern Quick Filters */}
+            {availablePatterns.length > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                overflowX: 'auto',
+                paddingBottom: '0.65rem',
+                marginBottom: '1.15rem',
+                scrollbarWidth: 'none',
+                WebkitOverflowScrolling: 'touch'
+              }}>
+                <button
+                  onClick={() => setSelectedPattern('ALL')}
+                  style={{
+                    background: selectedPattern === 'ALL' ? '#6366f1' : 'rgba(255, 255, 255, 0.06)',
+                    color: '#fff',
+                    border: selectedPattern === 'ALL' ? '1px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '20px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    boxShadow: selectedPattern === 'ALL' ? '0 2px 10px rgba(99, 102, 241, 0.4)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>All Patterns</span>
+                  <span style={{
+                    background: selectedPattern === 'ALL' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: '10px',
+                    fontSize: '0.7rem'
+                  }}>
+                    {sortedItems.length}
+                  </span>
+                </button>
+
+                {availablePatterns.map(({ pattern, count }) => {
+                  const isSelected = selectedPattern === pattern;
+                  return (
+                    <button
+                      key={pattern}
+                      onClick={() => setSelectedPattern(pattern)}
+                      style={{
+                        background: isSelected ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255, 255, 255, 0.06)',
+                        color: isSelected ? '#000' : '#f8fafc',
+                        border: isSelected ? '1px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.1)',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        boxShadow: isSelected ? '0 2px 10px rgba(245, 158, 11, 0.35)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span>{pattern}</span>
+                      <span style={{
+                        background: isSelected ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                        padding: '0.1rem 0.4rem',
+                        borderRadius: '10px',
+                        fontSize: '0.7rem'
+                      }}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Catalog Grid (Clean default images ONLY, NO prices, NO set counts, NO quantities) */}
             <div style={{
               display: 'grid',
@@ -813,8 +966,8 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               gap: '0.85rem',
               marginBottom: '2rem'
             }}>
-              {data?.items && data.items.length > 0 ? (
-                data.items.map((item, index) => {
+              {displayedItems && displayedItems.length > 0 ? (
+                displayedItems.map((item, index) => {
                   const salesRep = getRotatedSalesNumber(index);
                   const whatsappMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated showcase: ${window.location.href}`;
                   const whatsappUrl = formatWhatsAppUrl(salesRep.rawPhone, whatsappMsg);
@@ -906,12 +1059,31 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                       <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
-                            color: '#fff',
-                            letterSpacing: '0.5px'
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.4rem'
                           }}>
-                            {item.sku_id}
+                            <div style={{
+                              fontSize: '0.85rem',
+                              fontWeight: 700,
+                              color: '#fff',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {item.sku_id}
+                            </div>
+                            <span style={{
+                              background: 'rgba(99, 102, 241, 0.2)',
+                              border: '1px solid rgba(99, 102, 241, 0.35)',
+                              color: '#a5b4fc',
+                              fontSize: '0.62rem',
+                              fontWeight: 800,
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '4px',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {getPatternInfo(item.sku_id, item.category_name).pattern}
+                            </span>
                           </div>
                           <div style={{
                             fontSize: '0.7rem',

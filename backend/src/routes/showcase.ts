@@ -121,7 +121,16 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
        FROM items i
        JOIN categories c ON i.category_id = c.id
        WHERE i.id = ANY($1)
-       ORDER BY substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+       ORDER BY CASE 
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' OR UPPER(c.name) LIKE '%CROP TOP%' THEN 3
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' OR UPPER(c.name) LIKE '%LEHENGA%' OR UPPER(c.name) LIKE '%LAHANGA%' THEN 4
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') OR UPPER(c.name) LIKE '%SKIRT%' THEN 5
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' OR UPPER(c.name) LIKE '%SHARARA%' THEN 6
+                  ELSE 7
+                END ASC, 
+                substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
                 COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
                 i.sku_id ASC`,
       [link.item_ids]
@@ -358,7 +367,16 @@ adminShowcaseRouter.get('/items', async (req: AuthenticatedRequest, res: Respons
        JOIN categories c ON i.category_id = c.id
        LEFT JOIN stock s ON s.item_id = i.id
        WHERE i.is_in_showcase = TRUE
-       ORDER BY substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+       ORDER BY CASE 
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' OR UPPER(c.name) LIKE '%CROP TOP%' THEN 3
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' OR UPPER(c.name) LIKE '%LEHENGA%' OR UPPER(c.name) LIKE '%LAHANGA%' THEN 4
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') OR UPPER(c.name) LIKE '%SKIRT%' THEN 5
+                  WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' OR UPPER(c.name) LIKE '%SHARARA%' THEN 6
+                  ELSE 7
+                END ASC, 
+                substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
                 COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
                 i.sku_id ASC`
     );
