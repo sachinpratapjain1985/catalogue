@@ -125,6 +125,71 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const [isDisappeared, setIsDisappeared] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Dynamic session rotation offset so the primary/first contact rotates across different visits/requests
+  const [sessionRotationOffset] = useState(() => Math.floor(Math.random() * 3));
+
+  // Fallback defaults if data is null
+  const brand = data?.brandDetails || {
+    company: 'VS FASHION',
+    brand: 'DESUKA',
+    address: 'IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031',
+    gstNumber: '07AKCPJ2754N1ZX',
+    email: 'wholesale@desukafashion.com',
+    website: 'https://www.desukafashion.com',
+    instagram: 'https://instagram.com/desukab2b',
+    facebook: 'https://facebook.com/desukab2b',
+    youtube: 'https://youtube.com/@DesukaByVSFashion',
+    googleMaps: 'https://share.google/8egrK2LC6jGeJjAVa',
+    googleSearchTitle: 'VS Fashion DESUKA / VS Fashion Gandhi Nagar Delhi',
+    verifiedOn: ['IndiaMart', 'JustDial', 'TradeIndia'],
+    hours: '10 AM – 7 PM | Daily — Except Monday',
+  };
+
+  const salesContacts = data?.salesContacts || [
+    { name: 'VS FASHION Sales Desk 1', phone: '+918796333844', rawPhone: '8796333844' },
+    { name: 'VS FASHION Sales Desk 2', phone: '+918796893844', rawPhone: '8796893844' },
+    { name: 'VS FASHION Sales Desk 3', phone: '+918796443844', rawPhone: '8796443844' },
+  ];
+
+  const callContacts = data?.callContacts || [
+    {
+      name: 'Direct Team Desk (Daytime)',
+      phone: '+919240202545',
+      rawPhone: '9240202545',
+      timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
+      note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
+      isPrimary: true
+    },
+    {
+      name: 'Wholesale Helpdesk (24x7)',
+      phone: '+919718503340',
+      rawPhone: '9718503340',
+      timing: 'Call for any query anytime',
+      note: 'Call for any query anytime (24x7 Helpdesk)',
+      isPrimary: false
+    }
+  ];
+
+  const primaryCallContact = callContacts[0];
+  const secondaryCallContact = callContacts[1] || callContacts[0];
+
+  const communityLink = data?.communityLink || 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
+
+  // Rotated sales contacts list for contact lists and cards
+  const rotatedSalesContacts = useMemo(() => {
+    if (!salesContacts || salesContacts.length === 0) return [];
+    const shift = sessionRotationOffset % salesContacts.length;
+    return [...salesContacts.slice(shift), ...salesContacts.slice(0, shift)];
+  }, [salesContacts, sessionRotationOffset]);
+
+  // Helper to pick rotated sales number per article so articles strictly alternate 1 -> 2 -> 3 -> 1 -> 2 -> 3
+  const getRotatedSalesNumber = (index: number) => {
+    if (rotatedSalesContacts.length === 0) {
+      return { name: 'VS FASHION Sales Desk', phone: '+918796333844', rawPhone: '8796333844' };
+    }
+    return rotatedSalesContacts[index % rotatedSalesContacts.length];
+  };
+
   useEffect(() => {
     // 24-hour client-side local timer tracking
     const storageKey = `showcase_first_visit_${token}`;
@@ -319,71 +384,6 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
       </div>
     );
   }
-
-  // Fallback defaults if data is null
-  const brand = data?.brandDetails || {
-    company: 'VS FASHION',
-    brand: 'DESUKA',
-    address: 'IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031',
-    gstNumber: '07AKCPJ2754N1ZX',
-    email: 'wholesale@desukafashion.com',
-    website: 'https://www.desukafashion.com',
-    instagram: 'https://instagram.com/desukab2b',
-    facebook: 'https://facebook.com/desukab2b',
-    youtube: 'https://youtube.com/@DesukaByVSFashion',
-    googleMaps: 'https://share.google/8egrK2LC6jGeJjAVa',
-    googleSearchTitle: 'VS Fashion DESUKA / VS Fashion Gandhi Nagar Delhi',
-    verifiedOn: ['IndiaMart', 'JustDial', 'TradeIndia'],
-    hours: '10 AM – 7 PM | Daily — Except Monday',
-  };
-
-  const salesContacts = data?.salesContacts || [
-    { name: 'VS FASHION Sales Desk 1', phone: '+918796333844', rawPhone: '8796333844' },
-    { name: 'VS FASHION Sales Desk 2', phone: '+918796893844', rawPhone: '8796893844' },
-    { name: 'VS FASHION Sales Desk 3', phone: '+918796443844', rawPhone: '8796443844' },
-  ];
-
-  const callContacts = data?.callContacts || [
-    {
-      name: 'Direct Team Desk (Daytime)',
-      phone: '+919240202545',
-      rawPhone: '9240202545',
-      timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
-      note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
-      isPrimary: true
-    },
-    {
-      name: 'Wholesale Helpdesk (24x7)',
-      phone: '+919718503340',
-      rawPhone: '9718503340',
-      timing: 'Call for any query anytime',
-      note: 'Call for any query anytime (24x7 Helpdesk)',
-      isPrimary: false
-    }
-  ];
-
-  const primaryCallContact = callContacts[0];
-  const secondaryCallContact = callContacts[1] || callContacts[0];
-
-  const communityLink = data?.communityLink || 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
-
-  // Dynamic session rotation offset so the primary/first contact rotates across different visits/requests
-  const [sessionRotationOffset] = useState(() => Math.floor(Math.random() * 3));
-
-  // Rotated sales contacts list for contact lists and cards
-  const rotatedSalesContacts = useMemo(() => {
-    if (!salesContacts || salesContacts.length === 0) return [];
-    const shift = sessionRotationOffset % salesContacts.length;
-    return [...salesContacts.slice(shift), ...salesContacts.slice(0, shift)];
-  }, [salesContacts, sessionRotationOffset]);
-
-  // Helper to pick rotated sales number per article so articles strictly alternate 1 -> 2 -> 3 -> 1 -> 2 -> 3
-  const getRotatedSalesNumber = (index: number) => {
-    if (rotatedSalesContacts.length === 0) {
-      return { name: 'VS FASHION Sales Desk', phone: '+918796333844', rawPhone: '8796333844' };
-    }
-    return rotatedSalesContacts[index % rotatedSalesContacts.length];
-  };
 
   return (
     <div style={{
@@ -713,7 +713,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
         ) : (
           /* State 2: Active 24-Hour Showcase View */
           <>
-            {/* Countdown & VIP Access Banner */}
+            {/* VIP Access Banner */}
             <div style={{
               background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
               border: '1px solid rgba(99, 102, 241, 0.3)',
@@ -726,35 +726,40 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
               gap: '0.75rem',
               marginBottom: '1.25rem'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Clock size={18} color="#a5b4fc" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: 'rgba(99, 102, 241, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#a5b4fc'
+                }}>
+                  <Sparkles size={18} />
+                </div>
                 <div>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
-                    VIP 24-Hour Exclusive Access
-                  </span>
-                  <div style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>
-                    Curated latest drops for wholesale buyers
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff' }}>
+                    VIP Exclusive Showcase Collection
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                    Curated latest drops for wholesale buyers • Direct Gandhi Nagar Manufacturer
                   </div>
                 </div>
               </div>
 
-              {timeLeft && (
-                <div style={{
-                  background: 'rgba(15, 23, 42, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  color: '#fbbf24',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem'
-                }}>
-                  <span>Valid for:</span>
-                  <span>{String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s</span>
-                </div>
-              )}
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: '#34d399',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                padding: '0.3rem 0.65rem',
+                borderRadius: '6px'
+              }}>
+                B2B Wholesale Only
+              </span>
             </div>
 
             {/* Sample Collection Notice Banner as Requested */}
@@ -1403,6 +1408,24 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 </span>
               ))}
             </div>
+            {/* Discrete Bottom Refresh Indicator */}
+            {!isExpired && timeLeft && (
+              <div style={{
+                marginTop: '1rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '0.35rem 0.85rem',
+                borderRadius: '20px',
+                fontSize: '0.72rem',
+                color: '#64748b'
+              }}>
+                <Clock size={12} color="#64748b" />
+                <span>Showcase session refreshes in: {String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s</span>
+              </div>
+            )}
             <div style={{ marginTop: '0.75rem', opacity: 0.6, fontSize: '0.7rem' }}>
               © {new Date().getFullYear()} VS FASHION • All rights reserved. Wholesale Fashion Delhi.
             </div>
