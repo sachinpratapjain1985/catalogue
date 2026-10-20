@@ -30,7 +30,7 @@ export const CALL_CONTACTS = [
 
 export const CALL_CONTACT = CALL_CONTACTS[0];
 
-export const COMMUNITY_LINK = 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
+export const COMMUNITY_LINK = 'https://chat.whatsapp.com/ExHwDAh5AuRGpY5WkHGSpl';
 
 export const BRAND_DETAILS = {
   company: 'VS FASHION',

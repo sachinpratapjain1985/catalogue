@@ -246,7 +246,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
   const primaryCallContact = callContacts[0];
   const secondaryCallContact = callContacts[1] || callContacts[0];
 
-  const communityLink = data?.communityLink || 'https://chat.whatsapp.com/CdsyxZokQzo39x4hBzW6O0';
+  const communityLink = data?.communityLink || 'https://chat.whatsapp.com/ExHwDAh5AuRGpY5WkHGSpl';
 
   // Rotated sales contacts list for contact lists and cards
   const rotatedSalesContacts = useMemo(() => {

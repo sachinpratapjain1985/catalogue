@@ -288,7 +288,8 @@ export const runMigrations = async () => {
       ['auto_generate_daily', 'true'],
       ['base_url', 'https://catalog.desukafashion.com'],
       ['gst_number', '07AKCPJ2754N1ZX'],
-      ['company_website', 'https://www.desukafashion.com']
+      ['company_website', 'https://www.desukafashion.com'],
+      ['community_link', 'https://chat.whatsapp.com/ExHwDAh5AuRGpY5WkHGSpl']
     ];
     for (const [k, v] of defaultSettings) {
       await pool.query(`
@@ -298,7 +299,12 @@ export const runMigrations = async () => {
       `, [k, v]);
     }
 
-    // Ensure base_url and company_website are set to official domains
+    // Ensure base_url, company_website, and community_link are updated to latest official links
+    await pool.query(`
+      UPDATE showcase_settings 
+      SET value = 'https://chat.whatsapp.com/ExHwDAh5AuRGpY5WkHGSpl' 
+      WHERE key = 'community_link' AND (value LIKE '%CdsyxZokQzo39x4hBzW6O0%' OR value = '');
+    `).catch(() => {});
     await pool.query(`
       UPDATE showcase_settings 
       SET value = 'https://catalog.desukafashion.com' 

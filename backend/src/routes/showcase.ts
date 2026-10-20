@@ -23,19 +23,25 @@ function getRotatedSalesContacts() {
 }
 
 // Helper to dynamically fetch brand details merged with showcase_settings overrides
-async function getDynamicBrandDetails() {
+async function getDynamicShowcaseMeta() {
   try {
-    const sRes = await query("SELECT key, value FROM showcase_settings WHERE key IN ('gst_number', 'company_website', 'company_address')");
+    const sRes = await query("SELECT key, value FROM showcase_settings WHERE key IN ('gst_number', 'company_website', 'company_address', 'community_link')");
     const map: Record<string, string> = {};
     sRes.rows.forEach(r => { map[r.key] = r.value; });
     return {
-      ...BRAND_DETAILS,
-      ...(map['gst_number'] ? { gstNumber: map['gst_number'] } : {}),
-      ...(map['company_website'] ? { website: map['company_website'] } : {}),
-      ...(map['company_address'] ? { address: map['company_address'] } : {})
+      brandDetails: {
+        ...BRAND_DETAILS,
+        ...(map['gst_number'] ? { gstNumber: map['gst_number'] } : {}),
+        ...(map['company_website'] ? { website: map['company_website'] } : {}),
+        ...(map['company_address'] ? { address: map['company_address'] } : {})
+      },
+      communityLink: map['community_link'] || COMMUNITY_LINK
     };
   } catch (e) {
-    return BRAND_DETAILS;
+    return {
+      brandDetails: BRAND_DETAILS,
+      communityLink: COMMUNITY_LINK
+    };
   }
 }
 
@@ -48,7 +54,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
   const { token } = req.params;
 
   try {
-    const brandDetails = await getDynamicBrandDetails();
+    const { brandDetails, communityLink } = await getDynamicShowcaseMeta();
     const linkRes = await query(
       `SELECT id, token, item_ids, expires_at, created_at, views_count, is_suspended, suspended_at
        FROM showcase_links 
@@ -63,7 +69,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
-        communityLink: COMMUNITY_LINK,
+        communityLink,
         brandDetails
       });
       return;
@@ -86,7 +92,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
-        communityLink: COMMUNITY_LINK,
+        communityLink,
         brandDetails
       });
       return;
@@ -103,7 +109,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
         salesContacts: getRotatedSalesContacts(),
         callContact: CALL_CONTACT,
         callContacts: CALL_CONTACTS,
-        communityLink: COMMUNITY_LINK,
+        communityLink,
         brandDetails
       });
       return;
@@ -145,7 +151,7 @@ publicShowcaseRouter.get('/:token', async (req: Request, res: Response): Promise
       salesContacts: getRotatedSalesContacts(),
       callContact: CALL_CONTACT,
       callContacts: CALL_CONTACTS,
-      communityLink: COMMUNITY_LINK,
+      communityLink,
       brandDetails
     });
   } catch (err: any) {
