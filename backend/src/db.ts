@@ -51,9 +51,10 @@ export const runMigrations = async () => {
     `);
     console.log('[Migration] Items table columns verified.');
 
-    // 2b. Add can_edit_rates & can_access_real_images to users
+    // 2b. Add can_edit_rates, can_access_real_images & can_select_all_articles to users
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_rates BOOLEAN NOT NULL DEFAULT FALSE');
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_real_images BOOLEAN NOT NULL DEFAULT TRUE');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_select_all_articles BOOLEAN NOT NULL DEFAULT FALSE');
     console.log('[Migration] Users columns verified.');
 
     // 3. Create rate_logs table

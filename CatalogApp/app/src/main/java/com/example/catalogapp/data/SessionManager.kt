@@ -18,6 +18,7 @@ class SessionManager(context: Context) {
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_CAN_EDIT_RATES = "can_edit_rates"
         private const val KEY_CAN_ACCESS_REAL_IMAGES = "can_access_real_images"
+        private const val KEY_CAN_SELECT_ALL_ARTICLES = "can_select_all_articles"
     }
 
     init {
@@ -69,13 +70,14 @@ class SessionManager(context: Context) {
     }
 
     // User details
-    fun saveUser(id: Int, username: String, role: String, canEditRates: Boolean, canAccessRealImages: Boolean = true) {
+    fun saveUser(id: Int, username: String, role: String, canEditRates: Boolean, canAccessRealImages: Boolean = true, canSelectAllArticles: Boolean = false) {
         prefs.edit().apply {
             putInt(KEY_USER_ID, id)
             putString(KEY_USERNAME, username)
             putString(KEY_ROLE, role)
             putBoolean(KEY_CAN_EDIT_RATES, canEditRates)
             putBoolean(KEY_CAN_ACCESS_REAL_IMAGES, canAccessRealImages)
+            putBoolean(KEY_CAN_SELECT_ALL_ARTICLES, canSelectAllArticles)
         }.apply()
     }
 
@@ -85,6 +87,10 @@ class SessionManager(context: Context) {
 
     fun canAccessRealImages(): Boolean {
         return prefs.getBoolean(KEY_CAN_ACCESS_REAL_IMAGES, true)
+    }
+
+    fun canSelectAllArticles(): Boolean {
+        return prefs.getBoolean(KEY_CAN_SELECT_ALL_ARTICLES, false)
     }
 
     fun getUserRole(): String? {
@@ -116,6 +122,8 @@ class SessionManager(context: Context) {
             remove(KEY_ROLE)
             remove(KEY_ACTIVE_ROLE)
             remove(KEY_CAN_EDIT_RATES)
+            remove(KEY_CAN_ACCESS_REAL_IMAGES)
+            remove(KEY_CAN_SELECT_ALL_ARTICLES)
         }.apply()
     }
 }

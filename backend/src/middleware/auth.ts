@@ -14,6 +14,7 @@ export interface AuthenticatedRequest extends Request {
     can_edit_rates?: boolean;
     can_access_real_images?: boolean;
     can_manage_proforma?: boolean;
+    can_select_all_articles?: boolean;
   };
 }
 
@@ -44,7 +45,7 @@ export const authenticateToken = async (
 
     // 1. Fetch user status, working hours, and permissions from database to ensure fresh state
     const userRes = await query(
-      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma FROM users WHERE id = $1',
+      'SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, can_select_all_articles FROM users WHERE id = $1',
       [decoded.userId]
     );
 
@@ -146,7 +147,8 @@ export const authenticateToken = async (
       deviceUuid: decoded.deviceUuid,
       can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates,
       can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false,
-      can_manage_proforma: user.role === 'superadmin' || user.role === 'manager' || user.can_manage_proforma !== false
+      can_manage_proforma: user.role === 'superadmin' || user.role === 'manager' || user.can_manage_proforma !== false,
+      can_select_all_articles: user.role === 'superadmin' || user.role === 'manager' || !!user.can_select_all_articles
     };
 
     next();

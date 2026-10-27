@@ -124,6 +124,30 @@ fun StockistDashboard(
     var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
     var selectedWork by remember { mutableStateOf<String?>(null) }
 
+    // Global SKU Search across all folders
+    var globalSkuQuery by remember { mutableStateOf("") }
+    var globalSearchItems by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    var isSearchingGlobal by remember { mutableStateOf(false) }
+
+    val performGlobalSearch: (String) -> Unit = { query ->
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            globalSearchItems = emptyList()
+            isSearchingGlobal = false
+        } else {
+            isSearchingGlobal = true
+            coroutineScope.launch {
+                try {
+                    globalSearchItems = apiService.searchAllItems(search = trimmed)
+                } catch (e: Exception) {
+                    globalSearchItems = emptyList()
+                } finally {
+                    isSearchingGlobal = false
+                }
+            }
+        }
+    }
+
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
             isLoading = true
@@ -180,6 +204,8 @@ fun StockistDashboard(
                             searchQuery = ""
                             statusFilter = ""
                             selectedRateRange = null
+                            globalSkuQuery = ""
+                            globalSearchItems = emptyList()
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -195,15 +221,14 @@ fun StockistDashboard(
                             Icon(Icons.Default.ShoppingCart, contentDescription = "Switch to Sales Mode")
                         }
                     }
-                    IconButton(onClick = { showVisualSearchDialog = true }) {
-                        Icon(
-                            Icons.Default.CameraAlt,
-                            contentDescription = "Visual Photo Matcher",
-                            tint = Color(0xFFF59E0B)
-                        )
-                    }
                     IconButton(onClick = { 
-                        if (selectedCategory != null) loadItems(selectedCategory!!, 1) else loadCategories()
+                        if (selectedCategory != null) {
+                            loadItems(selectedCategory!!, 1)
+                        } else if (globalSkuQuery.isNotEmpty()) {
+                            performGlobalSearch(globalSkuQuery)
+                        } else {
+                            loadCategories()
+                        }
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -239,76 +264,95 @@ fun StockistDashboard(
                         .padding(16.dp)
                 )
             } else if (selectedCategory == null) {
-                // Category List Screen
-                if (categories.isEmpty()) {
-                    Text(
-                        text = "No folder categories assigned to you.",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Category List Screen + Global SKU Search
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Global SKU Search Bar across all folders
+                    OutlinedTextField(
+                        value = globalSkuQuery,
+                        onValueChange = { 
+                            globalSkuQuery = it 
+                            performGlobalSearch(it)
+                        },
+                        placeholder = { Text("Search SKU across all folders...", fontSize = 13.sp) },
+                        leadingIcon = { 
+                            Icon(
+                                Icons.Default.Search, 
+                                contentDescription = "Search SKU", 
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            ) 
+                        },
+                        trailingIcon = {
+                            if (globalSkuQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    globalSkuQuery = "" 
+                                    globalSearchItems = emptyList()
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Camera Visual AI Search Trigger Card
-                        item {
-                            Card(
+
+                    if (globalSkuQuery.isNotEmpty()) {
+                        Text(
+                            text = "🔍 Results (${globalSearchItems.size} SKUs found)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+
+                        if (isSearchingGlobal) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        } else if (globalSearchItems.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "No SKUs found matching \"$globalSkuQuery\" across any folders.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(1),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { showVisualSearchDialog = true },
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                                shape = RoundedCornerShape(14.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                                    .weight(1f),
+                                contentPadding = PaddingValues(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .background(Color(0xFFF59E0B).copy(alpha = 0.2f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Default.CameraAlt,
-                                                contentDescription = "Visual Search",
-                                                tint = Color(0xFFF59E0B),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column {
-                                            Text(
-                                                "Match Costume by Photo",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp,
-                                                color = Color.White
-                                            )
-                                            Text(
-                                                "Snap photo to find matching catalog SKU",
-                                                fontSize = 12.sp,
-                                                color = Color(0xFF94A3B8)
-                                            )
-                                        }
-                                    }
-                                    Icon(
-                                        Icons.Default.Search,
-                                        contentDescription = null,
-                                        tint = Color(0xFFF59E0B),
-                                        modifier = Modifier.size(22.dp)
+                                items(globalSearchItems, key = { it.id }) { item ->
+                                    StockItemCard(
+                                        item = item,
+                                        sessionManager = sessionManager,
+                                        apiService = apiService
                                     )
                                 }
                             }
                         }
-
-                        items(categories) { category ->
+                    } else if (categories.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No folder categories assigned to you.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(categories) { category ->
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -367,6 +411,7 @@ fun StockistDashboard(
                             Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
+                }
                 }
             } else {
                 // SKU Stock Management Screen

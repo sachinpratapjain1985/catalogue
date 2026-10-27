@@ -40,6 +40,135 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response): Promise<v
   }
 });
 
+
+// GET /api/catalog/search - Global search by SKU number/query across ALL folders
+router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const role = req.user?.role;
+  const page = req.query.page ? parseInt(req.query.page as string) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+  const offset = page && limit ? (page - 1) * limit : 0;
+  const search = req.query.search ? (req.query.search as string).trim() : '';
+  const work = req.query.work ? (req.query.work as string).trim() : null;
+  const minRate = req.query.minRate ? parseInt(req.query.minRate as string) : null;
+  const maxRate = req.query.maxRate ? parseInt(req.query.maxRate as string) : null;
+
+  try {
+    let categoryCondition = '';
+    const params: any[] = [];
+    let paramCount = 0;
+
+    // Non-superadmin restricted to permitted folders
+    if (role !== 'superadmin') {
+      paramCount++;
+      categoryCondition = `AND i.category_id IN (SELECT category_id FROM user_categories WHERE user_id = $${paramCount})`;
+      params.push(userId);
+    }
+
+    let queryStr = `
+       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+              COALESCE(i.is_in_showcase, false) as is_in_showcase,
+              c.name as category_name,
+              (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
+              s.sets_count, s.total_pieces, s.is_available,
+              COALESCE(ri.real_count, 0) as real_image_count
+       FROM items i
+       JOIN categories c ON i.category_id = c.id
+       JOIN stock s ON s.item_id = i.id
+       LEFT JOIN (
+           SELECT item_id, CAST(COUNT(*) AS INTEGER) as real_count 
+           FROM item_real_images 
+           GROUP BY item_id
+       ) ri ON ri.item_id = i.id
+       WHERE 1=1
+    `;
+
+    if (role === 'sales') {
+      queryStr += ` AND s.is_available = TRUE`;
+    }
+
+    queryStr += ` ${categoryCondition}`;
+
+    if (search) {
+      paramCount++;
+      queryStr += ` AND (i.sku_id ILIKE $${paramCount} OR i.description ILIKE $${paramCount} OR i.material ILIKE $${paramCount} OR i.work ILIKE $${paramCount} OR c.name ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    if (work) {
+      paramCount++;
+      queryStr += ` AND i.work = $${paramCount}`;
+      params.push(work);
+    }
+    if (minRate !== null && !isNaN(minRate)) {
+      paramCount++;
+      queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+      params.push(minRate);
+    }
+    if (maxRate !== null && !isNaN(maxRate)) {
+      paramCount++;
+      queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+      params.push(maxRate);
+    }
+
+    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+      CASE 
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'CTP' OR UPPER(c.name) LIKE '%CROP TOP%' THEN 3
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'LH' OR UPPER(c.name) LIKE '%LEHENGA%' OR UPPER(c.name) LIKE '%LAHANGA%' THEN 4
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) IN ('SKT', 'SK') OR UPPER(c.name) LIKE '%SKIRT%' THEN 5
+        WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'SP' OR UPPER(c.name) LIKE '%SHARARA%' THEN 6
+        ELSE 7
+      END ASC, 
+      substring(i.sku_id from '^[a-zA-Z\\-]*') ASC, 
+      COALESCE(NULLIF(regexp_replace(i.sku_id, '\\D', '', 'g'), ''), '0')::NUMERIC ASC, 
+      i.sku_id ASC`;
+
+    if (limit) {
+      paramCount++;
+      const limitParam = `$${paramCount}`;
+      paramCount++;
+      const offsetParam = `$${paramCount}`;
+      queryStr += ` LIMIT ${limitParam} OFFSET ${offsetParam}`;
+      params.push(limit, offset);
+    }
+
+    const itemsRes = await query(queryStr, params);
+    const canAccessRealImages = req.user?.role === 'superadmin' || req.user?.can_access_real_images !== false;
+    let finalItems = itemsRes.rows;
+
+    if (canAccessRealImages && finalItems.length > 0) {
+      const itemIds = finalItems.map(it => it.id);
+      const realImagesRes = await query(
+        `SELECT id, item_id, watermarked_path as image_path FROM item_real_images WHERE item_id = ANY($1) ORDER BY id ASC`,
+        [itemIds]
+      );
+      const realImagesMap: Record<number, string[]> = {};
+      realImagesRes.rows.forEach(r => {
+        if (!realImagesMap[r.item_id]) realImagesMap[r.item_id] = [];
+        realImagesMap[r.item_id].push(r.image_path);
+      });
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_images: realImagesMap[it.id] || []
+      }));
+    } else {
+      finalItems = finalItems.map(it => ({
+        ...it,
+        real_image_count: 0,
+        real_images: []
+      }));
+    }
+
+    res.json(finalItems);
+  } catch (error) {
+    console.error('Global SKU search error:', error);
+    res.status(500).json({ error: (error as any).message || 'Internal server error' });
+  }
+});
+
+
 // GET /api/catalog/items/:id/medium - Download medium-compressed version of design
 router.get('/items/:id/medium', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);

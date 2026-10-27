@@ -25,7 +25,8 @@ data class UserDto(
     val username: String,
     val role: String,
     val can_edit_rates: Boolean = false,
-    val can_access_real_images: Boolean = true
+    val can_access_real_images: Boolean = true,
+    val can_select_all_articles: Boolean = false
 )
 
 data class CatalogStatsResponse(
@@ -173,6 +174,13 @@ interface CatalogApiService {
         @Query("work") work: String? = null,
         @Query("minRate") minRate: Int? = null,
         @Query("maxRate") maxRate: Int? = null
+    ): List<SKUItemDto>
+
+    @GET("api/catalog/search")
+    suspend fun searchAllItems(
+        @Query("search") search: String,
+        @Query("limit") limit: Int? = null,
+        @Query("status") status: String? = null
     ): List<SKUItemDto>
 
     @POST("api/catalog/items/{id}/stock")

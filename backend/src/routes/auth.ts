@@ -122,7 +122,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         role: user.role,
         can_edit_rates: user.role === 'superadmin' || user.role === 'manager' || !!user.can_edit_rates,
         can_access_real_images: user.role === 'superadmin' || user.can_access_real_images !== false,
-        can_manage_proforma: user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma
+        can_manage_proforma: user.role === 'superadmin' || user.role === 'manager' || !!user.can_manage_proforma,
+        can_select_all_articles: user.role === 'superadmin' || user.role === 'manager' || !!user.can_select_all_articles
       },
     });
   } catch (error) {

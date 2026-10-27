@@ -313,7 +313,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
   try {
     // Get all users
     const usersRes = await query(
-      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, created_at 
+      `SELECT id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, can_select_all_articles, created_at 
        FROM users 
        ORDER BY role ASC, username ASC`
     );
@@ -353,7 +353,7 @@ router.get('/users', requireRole(['superadmin']), async (req: Request, res: Resp
 
 // POST /api/admin/users
 router.post('/users', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
-  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma } = req.body;
+  const { username, password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma, canSelectAllArticles } = req.body;
 
   if (!username || !password || !role) {
     res.status(400).json({ error: 'Username, password, and role are required' });
@@ -385,6 +385,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
         canEditRates === undefined ? false : !!canEditRates,
         canAccessRealImages === undefined ? true : !!canAccessRealImages,
         canManageProforma === undefined ? false : !!canManageProforma,
+        canSelectAllArticles === undefined ? false : !!canSelectAllArticles,
       ]
     );
 
@@ -413,7 +414,7 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 // PUT /api/admin/users/:id
 router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.id);
-  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma } = req.body;
+  const { password, role, status, workingHoursStart, workingHoursEnd, categoryIds, canEditRates, canAccessRealImages, canManageProforma, canSelectAllArticles } = req.body;
 
   try {
     const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -436,8 +437,9 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       canEditRates !== undefined ? !!canEditRates : user.can_edit_rates,
       canAccessRealImages !== undefined ? !!canAccessRealImages : (user.can_access_real_images !== false),
       canManageProforma !== undefined ? !!canManageProforma : (user.can_manage_proforma || false),
+      canSelectAllArticles !== undefined ? !!canSelectAllArticles : (user.can_select_all_articles || false),
     ];
-    let paramIndex = 8;
+    let paramIndex = 9;
 
     if (password && password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);

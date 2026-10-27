@@ -138,6 +138,30 @@ fun SalesDashboard(
     var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
     var selectedWork by remember { mutableStateOf<String?>(null) }
 
+    // Global SKU Search across all folders
+    var globalSkuQuery by remember { mutableStateOf("") }
+    var globalSearchItems by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    var isSearchingGlobal by remember { mutableStateOf(false) }
+
+    val performGlobalSearch: (String) -> Unit = { query ->
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            globalSearchItems = emptyList()
+            isSearchingGlobal = false
+        } else {
+            isSearchingGlobal = true
+            coroutineScope.launch {
+                try {
+                    globalSearchItems = apiService.searchAllItems(search = trimmed, status = "active")
+                } catch (e: Exception) {
+                    globalSearchItems = emptyList()
+                } finally {
+                    isSearchingGlobal = false
+                }
+            }
+        }
+    }
+
     val loadItems = { category: CategoryDto, page: Int ->
         if (page == 1) {
             isLoading = true
@@ -300,6 +324,8 @@ fun SalesDashboard(
                             items = emptyList()
                             selectedItems.clear()
                             searchQuery = ""
+                            globalSkuQuery = ""
+                            globalSearchItems = emptyList()
                             selectedRateRange = null
                             selectedWork = null
                         }) {
@@ -317,20 +343,17 @@ fun SalesDashboard(
                             Icon(Icons.Default.Build, contentDescription = "Switch to Stockist Mode")
                         }
                     }
-                    IconButton(onClick = { showVisualSearchDialog = true }) {
-                        Icon(
-                            Icons.Default.CameraAlt,
-                            contentDescription = "Visual Photo Matcher",
-                            tint = Color(0xFFF59E0B)
-                        )
-                    }
                     IconButton(onClick = { 
                         if (selectedCategory != null) {
                             loadItems(selectedCategory!!, 1)
                         } else if (selectedTab == 1) {
                             loadRevisedItems(1)
                         } else {
-                            loadCategories()
+                            if (globalSkuQuery.isNotEmpty()) {
+                                performGlobalSearch(globalSkuQuery)
+                            } else {
+                                loadCategories()
+                            }
                         }
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -569,7 +592,127 @@ fun SalesDashboard(
                         )
                     }
 
-                    if (categories.isEmpty()) {
+                    // Global SKU Search across all folders
+                    OutlinedTextField(
+                        value = globalSkuQuery,
+                        onValueChange = { 
+                            globalSkuQuery = it 
+                            performGlobalSearch(it)
+                        },
+                        placeholder = { Text("Search SKU across all folders...", fontSize = 13.sp) },
+                        leadingIcon = { 
+                            Icon(
+                                Icons.Default.Search, 
+                                contentDescription = "Search SKU", 
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            ) 
+                        },
+                        trailingIcon = {
+                            if (globalSkuQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    globalSkuQuery = "" 
+                                    globalSearchItems = emptyList()
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
+                    if (globalSkuQuery.isNotEmpty()) {
+                        // Global SKU Search Results View
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🔍 Results (${globalSearchItems.size} designs found)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            val userRole = sessionManager.getUserRole()
+                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                            if (canSelectAll && globalSearchItems.isNotEmpty()) {
+                                val allSelected = globalSearchItems.all { item -> selectedItems.any { it.id == item.id } }
+                                Surface(
+                                    modifier = Modifier.clickable {
+                                        if (allSelected) {
+                                            val currentIds = globalSearchItems.map { it.id }.toSet()
+                                            selectedItems.removeAll { currentIds.contains(it.id) }
+                                        } else {
+                                            for (item in globalSearchItems) {
+                                                if (!selectedItems.any { it.id == item.id }) {
+                                                    selectedItems.add(item)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = if (allSelected) "Deselect All" else "Select All (${globalSearchItems.size})",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isSearchingGlobal) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        } else if (globalSearchItems.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "No designs found matching \"$globalSkuQuery\" across any folders.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentPadding = PaddingValues(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(globalSearchItems, key = { it.id }) { item ->
+                                    val isSelected = selectedItems.any { it.id == item.id }
+                                    SalesItemCard(
+                                        item = item,
+                                        isSelected = isSelected,
+                                        sessionManager = sessionManager,
+                                        apiService = apiService,
+                                        onSelectToggle = {
+                                            if (isSelected) {
+                                                selectedItems.removeAll { it.id == item.id }
+                                            } else {
+                                                selectedItems.add(item)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else if (categories.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 text = "No folder categories available.",
@@ -582,62 +725,6 @@ fun SalesDashboard(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Camera Visual AI Search Trigger Card
-                            item {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showVisualSearchDialog = true },
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                                    shape = RoundedCornerShape(14.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .background(Color(0xFFF59E0B).copy(alpha = 0.2f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.CameraAlt,
-                                                    contentDescription = "Visual Search",
-                                                    tint = Color(0xFFF59E0B),
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Column {
-                                                Text(
-                                                    "Match Costume by Photo",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp,
-                                                    color = Color.White
-                                                )
-                                                Text(
-                                                    "Snap photo to find matching catalog SKU",
-                                                    fontSize = 12.sp,
-                                                    color = Color(0xFF94A3B8)
-                                                )
-                                            }
-                                        }
-                                        Icon(
-                                            Icons.Default.Search,
-                                            contentDescription = null,
-                                            tint = Color(0xFFF59E0B),
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                }
-                            }
-
                             items(categories) { category ->
                                 Card(
                                     modifier = Modifier
@@ -966,14 +1053,50 @@ fun SalesDashboard(
                         }
                     }
 
-                    // Active count header
-                    Text(
-                        text = if (isOffersTab) "🔥 All Folders Offer Designs (${items.size} loaded)" else "Total Active: ${selectedCategory?.active_count ?: 0} articles",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isOffersTab) Color(0xFFD97706) else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
+                    // Active count header + Select All option
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isOffersTab) "🔥 All Folders Offer Designs (${items.size} loaded)" else "Total Active: ${selectedCategory?.active_count ?: 0} articles",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOffersTab) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
+                        )
+                        val userRole = sessionManager.getUserRole()
+                        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                        if (canSelectAll && items.isNotEmpty()) {
+                            val allSelected = items.all { item -> selectedItems.any { it.id == item.id } }
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    if (allSelected) {
+                                        val currentIds = items.map { it.id }.toSet()
+                                        selectedItems.removeAll { currentIds.contains(it.id) }
+                                    } else {
+                                        for (item in items) {
+                                            if (!selectedItems.any { it.id == item.id }) {
+                                                selectedItems.add(item)
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = if (allSelected) "Deselect All" else "Select All (${items.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
 
                     if (items.isEmpty()) {
                         Box(

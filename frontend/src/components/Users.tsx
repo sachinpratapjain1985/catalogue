@@ -27,6 +27,7 @@ interface User {
   can_edit_rates?: boolean;
   can_access_real_images?: boolean;
   can_manage_proforma?: boolean;
+  can_select_all_articles?: boolean;
   created_at: string;
   assignedCategories: Array<{ id: number; name: string }>;
 }
@@ -65,6 +66,7 @@ export default function Users({ token }: UsersProps) {
   const [canEditRates, setCanEditRates] = useState(false);
   const [canAccessRealImages, setCanAccessRealImages] = useState(true);
   const [canManageProforma, setCanManageProforma] = useState(false);
+  const [canSelectAllArticles, setCanSelectAllArticles] = useState(false);
 
   // UI Messages
   const [errorMsg, setErrorMsg] = useState('');
@@ -135,6 +137,7 @@ export default function Users({ token }: UsersProps) {
       canEditRates,
       canAccessRealImages,
       canManageProforma,
+      canSelectAllArticles,
       categoryIds: (role === 'stockist' || role === 'both' || role === 'manager') ? selectedCatIds : []
     };
 
@@ -178,6 +181,7 @@ export default function Users({ token }: UsersProps) {
     setCanEditRates(!!user.can_edit_rates);
     setCanAccessRealImages(user.can_access_real_images !== false);
     setCanManageProforma(!!user.can_manage_proforma);
+    setCanSelectAllArticles(!!user.can_select_all_articles);
   };
 
   const handleDuplicateUser = (user: User) => {
@@ -193,6 +197,7 @@ export default function Users({ token }: UsersProps) {
     setCanEditRates(!!user.can_edit_rates);
     setCanAccessRealImages(user.can_access_real_images !== false);
     setCanManageProforma(!!user.can_manage_proforma);
+    setCanSelectAllArticles(!!user.can_select_all_articles);
     showSuccess(`Cloned role & permissions from "${user.username}". Enter a new username & password and save.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -280,6 +285,7 @@ export default function Users({ token }: UsersProps) {
     setCanEditRates(false);
     setCanAccessRealImages(true);
     setCanManageProforma(false);
+    setCanSelectAllArticles(false);
   };
 
   const handleCatCheckboxChange = (catId: number) => {
@@ -488,6 +494,19 @@ export default function Users({ token }: UsersProps) {
                     Allow user to create & manage Proforma Invoices (P.I.)
                   </label>
                 </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                  <input 
+                    type="checkbox" 
+                    id="canSelectAllArticles" 
+                    checked={canSelectAllArticles} 
+                    onChange={e => setCanSelectAllArticles(e.target.checked)}
+                    style={{ width: 'auto', margin: 0 }}
+                  />
+                  <label htmlFor="canSelectAllArticles" style={{ margin: 0, fontWeight: 500, fontSize: '0.85rem', cursor: 'pointer' }}>
+                    Allow "Select All" Articles in Mobile App (Bulk WhatsApp Share)
+                  </label>
+                </div>
               </div>
             )}
 
@@ -675,6 +694,11 @@ export default function Users({ token }: UsersProps) {
                       {u.can_manage_proforma && u.role !== 'superadmin' && (
                         <span className="badge" style={{ background: 'rgba(194, 155, 56, 0.15)', color: '#d97706', border: '1px solid rgba(194, 155, 56, 0.3)', fontSize: '0.65rem' }}>
                           P.I. Access
+                        </span>
+                      )}
+                      {u.can_select_all_articles && u.role !== 'superadmin' && (
+                        <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.65rem' }}>
+                          Select All Enabled
                         </span>
                       )}
                     </div>
