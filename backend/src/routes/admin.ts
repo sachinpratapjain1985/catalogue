@@ -372,9 +372,9 @@ router.post('/users', requireRole(['superadmin']), async (req: Request, res: Res
 
     // Insert user
     const insertRes = await query(
-      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma`,
+      `INSERT INTO users (username, password_hash, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, can_select_all_articles)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, can_select_all_articles`,
       [
         username,
         hash,
@@ -427,7 +427,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
 
     let updateQuery = `
       UPDATE users 
-      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, can_access_real_images = $6, can_manage_proforma = $7, updated_at = CURRENT_TIMESTAMP
+      SET role = $1, status = $2, working_hours_start = $3, working_hours_end = $4, can_edit_rates = $5, can_access_real_images = $6, can_manage_proforma = $7, can_select_all_articles = $8, updated_at = CURRENT_TIMESTAMP
     `;
     const params: any[] = [
       role || user.role,
@@ -449,7 +449,7 @@ router.put('/users/:id', requireRole(['superadmin']), async (req: Request, res: 
       paramIndex++;
     }
 
-    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma`;
+    updateQuery += ` WHERE id = $${paramIndex} RETURNING id, username, role, status, working_hours_start, working_hours_end, can_edit_rates, can_access_real_images, can_manage_proforma, can_select_all_articles`;
     params.push(userId);
 
     const updatedUserRes = await query(updateQuery, params);
