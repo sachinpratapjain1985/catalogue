@@ -56,6 +56,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontStyle
 import android.widget.Toast
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -188,13 +192,23 @@ fun StockistDashboard(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(
-                        text = selectedCategory?.name ?: "Stock Folders",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column {
+                        Text(
+                            text = selectedCategory?.name ?: "Stock Folders",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (selectedCategory != null) {
+                            Text(
+                                text = "A-${selectedCategory!!.active_count}  OS-${selectedCategory!!.os_count}  NA-${selectedCategory!!.na_count}  (Total: ${selectedCategory!!.sku_count})",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     if (selectedCategory != null) {
@@ -327,8 +341,8 @@ fun StockistDashboard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
-                                contentPadding = PaddingValues(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(globalSearchItems, key = { it.id }) { item ->
                                     StockItemCard(
@@ -416,52 +430,73 @@ fun StockistDashboard(
             } else {
                 // SKU Stock Management Screen
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Search Bar
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { 
-                            searchQuery = it 
-                            loadItems(selectedCategory!!, 1)
-                        },
-                        placeholder = { Text("Search SKU ID...") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
+                    var isSearchExpanded by remember { mutableStateOf(false) }
+
+                    // Expandable Search Bar (when clicked or active)
+                    if (isSearchExpanded || searchQuery.isNotEmpty()) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { 
+                                searchQuery = it 
+                                loadItems(selectedCategory!!, 1)
+                            },
+                            placeholder = { Text("Search SKU ID...", fontSize = 12.sp) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            trailingIcon = {
                                 IconButton(onClick = { 
                                     searchQuery = "" 
+                                    isSearchExpanded = false
                                     loadItems(selectedCategory!!, 1)
                                 }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
                                 }
-                            } else {
-                                IconButton(onClick = { showVisualSearchDialog = true }) {
-                                    Icon(
-                                        Icons.Default.CameraAlt,
-                                        contentDescription = "Search by Photo",
-                                        tint = Color(0xFFF59E0B)
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .height(44.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
 
-                    // Status Filter Chips
+                    // Ultra-Compact Single Line: [🔍] + [All] [Available] [Out of Stock] [Inactive] + [Filters]
+                    val activeFilterCount = (if (selectedRateRange != null) 1 else 0) + (if (selectedWork != null) 1 else 0)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // Small Expandable Search Button (hidden when search is already open)
+                        if (!isSearchExpanded && searchQuery.isEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable { isSearchExpanded = true }
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = "Search",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Compact One-Line Status Filter Buttons
                         val statuses = listOf(
                             "" to "All",
-                            "A" to "Available (A)",
-                            "OS" to "Out of Stock (OS)",
-                            "NA" to "Inactive (NA)"
+                            "A" to "Available",
+                            "OS" to "Out of Stock",
+                            "NA" to "Inactive"
                         )
                         statuses.forEach { (code, label) ->
                             val isSelected = statusFilter == code
@@ -472,106 +507,92 @@ fun StockistDashboard(
                                         statusFilter = code
                                         loadItems(selectedCategory!!, 1)
                                     },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(6.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     width = 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                                 )
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(vertical = 8.dp)
+                                    modifier = Modifier.padding(vertical = 5.dp)
                                 ) {
                                     Text(
-                                        text = label.substringBefore(" ("),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                        text = label,
+                                        fontSize = 9.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+
+                        // Compact Filter Icon Button (Price & Work)
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (activeFilterCount > 0 || showFiltersExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.clickable { showFiltersExpanded = !showFiltersExpanded }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = "Filter",
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (activeFilterCount > 0) {
+                                    Text(
+                                        text = "$activeFilterCount",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
                         }
                     }
 
-                    // Expandable Filter Toggle Bar (Price & Work)
-                    val activeFilterCount = (if (selectedRateRange != null) 1 else 0) + (if (selectedWork != null) 1 else 0)
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Surface(
-                            modifier = Modifier.clickable { showFiltersExpanded = !showFiltersExpanded },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (activeFilterCount > 0 || showFiltersExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (showFiltersExpanded) "Hide Filters (Price & Work)" else "Filter by Price & Work",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (activeFilterCount > 0) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "$activeFilterCount",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    if (showFiltersExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (activeFilterCount > 0) {
-                            TextButton(
-                                onClick = {
-                                    selectedRateRange = null
-                                    selectedWork = null
-                                    loadItems(selectedCategory!!, 1)
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text("Clear Filters", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-
+                    // Optional Filter Dropdown (Only when expanded)
                     if (showFiltersExpanded) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Filters (Price & Work)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (activeFilterCount > 0) {
+                                TextButton(
+                                    onClick = {
+                                        selectedRateRange = null
+                                        selectedWork = null
+                                        loadItems(selectedCategory!!, 1)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text("Clear All", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+
                         // Price Filter Chips
                         val rateOptions = listOf(
                             "All Prices" to null,
@@ -591,8 +612,8 @@ fun StockistDashboard(
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(horizontal = 8.dp, vertical = 1.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(rateOptions) { (label, range) ->
                                 val isSelected = selectedRateRange == range
@@ -605,7 +626,7 @@ fun StockistDashboard(
                                     label = {
                                         Text(
                                             text = label,
-                                            fontSize = 12.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                         )
                                     }
@@ -618,8 +639,8 @@ fun StockistDashboard(
                             LazyRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    .padding(horizontal = 8.dp, vertical = 1.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 item {
                                     FilterChip(
@@ -633,7 +654,7 @@ fun StockistDashboard(
                                         label = {
                                             Text(
                                                 text = "All Works",
-                                                fontSize = 12.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
                                             )
                                         }
@@ -650,7 +671,7 @@ fun StockistDashboard(
                                         label = {
                                             Text(
                                                 text = w.name,
-                                                fontSize = 12.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                             )
                                         }
@@ -659,15 +680,6 @@ fun StockistDashboard(
                             }
                         }
                     }
-
-                    // Folder active, os, and na counts header
-                    Text(
-                        text = "A-${selectedCategory?.active_count ?: 0}  OS-${selectedCategory?.os_count ?: 0}  NA-${selectedCategory?.na_count ?: 0}  (Total: ${selectedCategory?.sku_count ?: 0} articles)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
 
                     if (items.isEmpty()) {
                         Box(
@@ -703,8 +715,8 @@ fun StockistDashboard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(items, key = { it.id }) { item ->
                                 StockItemCard(
@@ -801,377 +813,368 @@ fun StockItemCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+        shape = RoundedCornerShape(10.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(8.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            // Main Top Content Row: Image + Complete Details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+            // 1. LEFT: Portrait Aspect-Ratio Image (3:4 ratio for full garment showcase!)
+            Box(
+                modifier = Modifier
+                    .width(108.dp)
+                    .height(148.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showZoomDialog = true }
             ) {
-                // High-Performance Thumbnail Preview with Zoom Trigger
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.sku_id,
+                    onError = {
+                        val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
+                        if (imageUrl != fallback) {
+                            imageUrl = fallback
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                // Real Photos / Zoom Hint Badge
                 Box(
                     modifier = Modifier
-                        .size(105.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { showZoomDialog = true }
+                        .align(Alignment.BottomEnd)
+                        .padding(3.dp)
+                        .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(3.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(imageUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = item.sku_id,
-                        onError = {
-                            val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
-                            if (imageUrl != fallback) {
-                                imageUrl = fallback
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Zoom",
+                            tint = Color.White,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = if (sessionManager.canAccessRealImages() && item.real_image_count > 0) "Real (" + item.real_image_count + ")" else "Zoom",
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // 2. RIGHT: Complete SKU Controls & Info alongside the image!
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(148.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Line 1: SKU ID + Status Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = item.sku_id,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    // Real Photos / Zoom Hint Badge
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        contentAlignment = Alignment.Center
+                    // Status pill badge
+                    val statusLabel = when {
+                        !isAvailable -> "Inactive"
+                        sets > 0 -> "Active"
+                        else -> "Out Stock"
+                    }
+                    val statusBg = when {
+                        !isAvailable -> MaterialTheme.colorScheme.errorContainer
+                        sets > 0 -> Color(0xFFD1FAE5) // light green
+                        else -> Color(0xFFFFEDD5) // light orange
+                    }
+                    val statusColor = when {
+                        !isAvailable -> MaterialTheme.colorScheme.error
+                        sets > 0 -> Color(0xFF047857) // dark green
+                        else -> Color(0xFFC2410C) // dark orange
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = statusBg
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Zoom",
-                                tint = Color.White,
-                                modifier = Modifier.size(11.dp)
-                            )
+                        Text(
+                            text = statusLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                        )
+                    }
+                }
+
+                // Line 2: Rate + Pack + Age
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (currentRevisedRate != null && currentRevisedRate!! > 0 && currentRevisedRate != item.rate) {
                             Text(
-                                text = if (sessionManager.canAccessRealImages() && item.real_image_count > 0) "Real (${item.real_image_count})" else "Zoom",
-                                color = Color.White,
-                                fontSize = 9.sp,
+                                text = "₹" + item.rate,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "🔥 ₹" + currentRevisedRate,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFD97706)
+                            )
+                        } else {
+                            Text(
+                                text = "₹" + item.rate,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = " • " + item.pieces_per_set + "pcs/set",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Text(
+                        text = age.toString() + "d old",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ageColor
+                    )
+                }
+
+                // Line 3: Fabric / Work (compact single line)
+                val fabricOrWork = when {
+                    !item.material.isNullOrBlank() && !item.work.isNullOrBlank() -> item.material + " • " + item.work
+                    !item.material.isNullOrBlank() -> item.material
+                    !item.work.isNullOrBlank() -> item.work
+                    else -> item.description ?: ""
+                }
+                if (fabricOrWork.isNotBlank()) {
+                    Text(
+                        text = fabricOrWork,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Line 4: Sets counter stepper + Active toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Minus button
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+                                .clickable { if (sets > 0) sets-- },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("-", fontWeight = FontWeight.Black, fontSize = 16.sp)
+                        }
+
+                        Text(
+                            text = sets.toString() + " sets",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        // Plus button
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+                                .clickable { sets++ },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+
+                        Text(
+                            text = "(" + totalQty + ")",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Active / Inactive Quick Toggle Pill
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isAvailable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.clickable { isAvailable = !isAvailable }
+                    ) {
+                        Text(
+                            text = if (isAvailable) "✓ Active" else "✕ Inactive",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                // Line 5: Base / Offer Rate Inputs + Save Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (sessionManager.canEditRates()) {
+                        // Base rate input (ultra compact)
+                        BasicTextField(
+                            value = rateText,
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                    rateText = newValue
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 11.sp, 
+                                fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(28.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 4.dp, vertical = 5.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (rateText.isEmpty()) Text("Base", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    innerTextField()
+                                }
+                            }
+                        )
+
+                        // Offer rate input (ultra compact)
+                        BasicTextField(
+                            value = revisedRateText,
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                    revisedRateText = newValue
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 11.sp, 
+                                fontWeight = FontWeight.Bold, 
+                                color = Color(0xFFD97706),
+                                textAlign = TextAlign.Center
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(28.dp)
+                                .border(1.dp, if (revisedRateText.isNotEmpty()) Color(0xFFD97706) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 4.dp, vertical = 5.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (revisedRateText.isEmpty()) Text("Offer", fontSize = 10.sp, color = Color(0xFFD97706).copy(alpha = 0.7f))
+                                    innerTextField()
+                                }
+                            }
+                        )
+                    }
+
+                    // Save Button (compact)
+                    Button(
+                        onClick = {
+                            isUpdating = true
+                            isSuccess = false
+                            scope.launch {
+                                try {
+                                    val canEdit = sessionManager.canEditRates()
+                                    val parsedBase = rateText.toIntOrNull() ?: item.rate
+                                    val parsedRev = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
+                                    
+                                    val finalRate = if (canEdit && parsedBase != item.rate) parsedBase else null
+                                    val finalRevised = if (canEdit && parsedRev != item.revised_rate) parsedRev else null
+
+                                    val response = apiService.updateStock(
+                                        item.id,
+                                        StockUpdateRequest(
+                                            setsCount = sets, 
+                                            isAvailable = isAvailable, 
+                                            rate = finalRate,
+                                            revisedRate = finalRevised
+                                        )
+                                    )
+                                    currentRevisedRate = response.revised_rate
+                                    isSuccess = true
+                                    Toast.makeText(context, item.sku_id + " saved", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    val msg = e.message ?: ("Failed to save " + item.sku_id)
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isUpdating = false
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .height(28.dp)
+                            .then(if (sessionManager.canEditRates()) Modifier.width(62.dp) else Modifier.fillMaxWidth()),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                        ),
+                        enabled = !isUpdating
+                    ) {
+                        if (isUpdating) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                text = if (isSuccess) "✓ Saved" else "Save",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // SKU Details Column (Full width without being squished!)
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = item.sku_id,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        // Status pill badge
-                        val statusLabel = when {
-                            !isAvailable -> "Inactive"
-                            sets > 0 -> "Active"
-                            else -> "Out Stock"
-                        }
-                        val statusBg = when {
-                            !isAvailable -> MaterialTheme.colorScheme.errorContainer
-                            sets > 0 -> Color(0xFFD1FAE5) // light green
-                            else -> Color(0xFFFFEDD5) // light orange
-                        }
-                        val statusColor = when {
-                            !isAvailable -> MaterialTheme.colorScheme.error
-                            sets > 0 -> Color(0xFF047857) // dark green
-                            else -> Color(0xFFC2410C) // dark orange
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = statusBg,
-                            modifier = Modifier.padding(start = 4.dp)
-                        ) {
-                            Text(
-                                text = statusLabel,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = statusColor,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-
-                    // Pack details
-                    Text(
-                        text = "Pack: ${item.pieces_per_set} pcs/set",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 1.dp)
-                    )
-
-                    // Fabric / Material (Visible now!)
-                    if (!item.material.isNullOrBlank()) {
-                        Text(
-                            text = "Fabric: ${item.material}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Work Details
-                    if (!item.work.isNullOrBlank()) {
-                        Text(
-                            text = "✨ Work: ${item.work}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Description / Notes (Visible now!)
-                    if (!item.description.isNullOrBlank()) {
-                        Text(
-                            text = item.description,
-                            fontSize = 11.sp,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 1.dp)
-                        )
-                    }
-
-                    // Pricing & Age Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Rate / Offer display
-                        if (currentRevisedRate != null && currentRevisedRate!! > 0 && currentRevisedRate != item.rate) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "₹${item.rate}",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "🔥 ₹$currentRevisedRate",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFD97706)
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = "Rate: ₹${item.rate}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        // Stock Age Badge
-                        Text(
-                            text = "$age days old",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ageColor
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Action Row 1: Sets Counter + Total Pieces + Active Switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Sets counter increment / decrement
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    IconButton(
-                        onClick = { if (sets > 0) sets-- },
-                        modifier = Modifier.size(30.dp),
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Text("-", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    }
-
-                    Text(
-                        text = "$sets sets",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    IconButton(
-                        onClick = { sets++ },
-                        modifier = Modifier.size(30.dp),
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                    }
-
-                    Text(
-                        text = "($totalQty pcs)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 2.dp)
-                    )
-                }
-
-                // Active / Inactive Switch
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = if (isAvailable) "Active" else "Inactive",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                    Switch(
-                        checked = isAvailable,
-                        onCheckedChange = { isAvailable = it },
-                        modifier = Modifier.scale(0.75f)
-                    )
-                }
-            }
-
-            // Action Row 2: Rate Editing (if permitted) & Save Button
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (sessionManager.canEditRates()) {
-                    OutlinedTextField(
-                        value = rateText,
-                        onValueChange = { newValue ->
-                            if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                                rateText = newValue
-                            }
-                        },
-                        label = { Text("Base (₹)", fontSize = 9.sp) },
-                        modifier = Modifier
-                            .width(85.dp)
-                            .height(50.dp),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = revisedRateText,
-                        onValueChange = { newValue ->
-                            if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                                revisedRateText = newValue
-                            }
-                        },
-                        label = { Text("Offer (₹)", fontSize = 9.sp, color = Color(0xFFD97706)) },
-                        placeholder = { Text("None", fontSize = 9.sp) },
-                        modifier = Modifier
-                            .width(85.dp)
-                            .height(50.dp),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            fontSize = 12.sp, 
-                            fontWeight = FontWeight.Bold,
-                            color = if (revisedRateText.isNotEmpty()) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface
-                        ),
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                }
-
-                // Save Button
-                Button(
-                    onClick = {
-                        isUpdating = true
-                        isSuccess = false
-                        scope.launch {
-                            try {
-                                val canEdit = sessionManager.canEditRates()
-                                val parsedBase = rateText.toIntOrNull() ?: item.rate
-                                val parsedRev = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
-                                
-                                // Only pass rates if user has permission AND they actually changed
-                                val finalRate = if (canEdit && parsedBase != item.rate) parsedBase else null
-                                val finalRevised = if (canEdit && parsedRev != item.revised_rate) parsedRev else null
-
-                                val response = apiService.updateStock(
-                                    item.id,
-                                    StockUpdateRequest(
-                                        setsCount = sets, 
-                                        isAvailable = isAvailable, 
-                                        rate = finalRate,
-                                        revisedRate = finalRevised
-                                    )
-                                )
-                                currentRevisedRate = response.revised_rate
-                                isSuccess = true
-                                Toast.makeText(context, "${item.sku_id} saved successfully", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                val msg = e.message ?: "Failed to save ${item.sku_id}"
-                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                            } finally {
-                                isUpdating = false
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp),
-                    enabled = !isUpdating,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    if (isUpdating) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp, 
-                            color = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else if (isSuccess) {
-                        Icon(Icons.Default.Check, contentDescription = "Saved", modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Saved", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    } else {
-                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
