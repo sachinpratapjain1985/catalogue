@@ -68,13 +68,16 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
       'SELECT SUM(sets_count) as total_sets, SUM(total_pieces) as total_pieces FROM stock WHERE is_available = true'
     );
     const activeCount = await query(
-      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count > 0'
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count > 0 AND (s.is_permanent_inactive IS NOT TRUE)'
     );
     const outofstockCount = await query(
-      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count = 0'
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = true AND s.sets_count = 0 AND (s.is_permanent_inactive IS NOT TRUE)'
     );
     const inactiveCount = await query(
-      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = false'
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_available = false AND (s.is_permanent_inactive IS NOT TRUE)'
+    );
+    const permanentInactiveCount = await query(
+      'SELECT COUNT(*) FROM items i JOIN stock s ON s.item_id = i.id WHERE s.is_permanent_inactive = true'
     );
 
     // Aging Stock count (older than 60 days)
@@ -136,6 +139,7 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response): Promi
         activeSkus: parseInt(activeCount.rows[0].count),
         outofstockSkus: parseInt(outofstockCount.rows[0].count),
         inactiveSkus: parseInt(inactiveCount.rows[0].count),
+        permanentInactiveSkus: parseInt(permanentInactiveCount.rows[0].count),
         totalSets: parseInt(stockStats.rows[0].total_sets || '0'),
         totalPieces: parseInt(stockStats.rows[0].total_pieces || '0'),
         agingCount: parseInt(agingCount.rows[0].count),
@@ -798,7 +802,7 @@ router.get('/items', async (req: Request, res: Response) => {
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
               COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
-              s.sets_count, s.total_pieces, s.is_available, s.updated_at as stock_updated_at,
+              s.sets_count, s.total_pieces, s.is_available, COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive, s.updated_at as stock_updated_at,
               u.username as updated_by_user,
               COALESCE(ri.real_count, 0) as real_image_count
        FROM items i
@@ -971,7 +975,7 @@ router.post('/items', upload.fields([{ name: 'image', maxCount: 1 }, { name: 're
       `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at, i.created_at,
               COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
-              s.sets_count, s.total_pieces, s.is_available
+              s.sets_count, s.total_pieces, s.is_available, COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive
        FROM items i
        JOIN categories c ON i.category_id = c.id
        LEFT JOIN stock s ON s.item_id = i.id
@@ -1042,14 +1046,14 @@ router.delete('/items/:id', requireRole(['superadmin']), async (req: Request, re
 router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const itemId = parseInt(req.params.id);
   const userId = req.user?.id || 1;
-  const { skuId, categoryId, piecesPerSet, description, material, work, stitcherName, rate, revisedRate, setsCount, isAvailable, originalCreatedAt } = req.body;
+  const { skuId, categoryId, piecesPerSet, description, material, work, stitcherName, rate, revisedRate, setsCount, isAvailable, isPermanentInactive, originalCreatedAt } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
   const primaryFile = files?.['image']?.[0];
 
   try {
     // 1. Get current item and stock state
     const currentRes = await query(
-      `SELECT i.*, s.sets_count, s.total_pieces, s.is_available 
+      `SELECT i.*, s.sets_count, s.total_pieces, s.is_available, COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive 
        FROM items i
        LEFT JOIN stock s ON s.item_id = i.id
        WHERE i.id = $1`,
@@ -1269,15 +1273,22 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
     }
 
     // 5. Update stock levels if provided
+    let targetPermanentInactive = item.is_permanent_inactive;
+    if (isPermanentInactive !== undefined) {
+      targetPermanentInactive = isPermanentInactive === true || isPermanentInactive === 'true';
+    }
+    let targetAvailable = isAvailable !== undefined ? (isAvailable === true || isAvailable === 'true') : item.is_available;
+    if (targetPermanentInactive) {
+      targetAvailable = false;
+    }
     const targetSets = setsCount !== undefined ? parseInt(setsCount) : item.sets_count;
-    const targetAvailable = isAvailable !== undefined ? (isAvailable === true || isAvailable === 'true') : item.is_available;
     const piecesPerSetVal = piecesPerSet !== undefined ? parseInt(piecesPerSet) : item.pieces_per_set;
     const targetPieces = targetSets * piecesPerSetVal;
 
     const setsDiff = targetSets - item.sets_count;
     const piecesDiff = targetPieces - item.total_pieces;
 
-    if (setsDiff !== 0 || targetAvailable !== item.is_available) {
+    if (setsDiff !== 0 || targetAvailable !== item.is_available || targetPermanentInactive !== item.is_permanent_inactive) {
       let logType: 'addition' | 'reduction' | 'status_change' = 'status_change';
       if (setsDiff > 0) {
         logType = 'addition';
@@ -1287,9 +1298,9 @@ router.put('/items/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async 
 
       await query(
         `UPDATE stock 
-         SET sets_count = $1, total_pieces = $2, is_available = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
-         WHERE item_id = $5`,
-        [targetSets, targetPieces, targetAvailable, userId, itemId]
+         SET sets_count = $1, total_pieces = $2, is_available = $3, is_permanent_inactive = $4, updated_at = CURRENT_TIMESTAMP, updated_by = $5
+         WHERE item_id = $6`,
+        [targetSets, targetPieces, targetAvailable, targetPermanentInactive, userId, itemId]
       );
 
       await query(

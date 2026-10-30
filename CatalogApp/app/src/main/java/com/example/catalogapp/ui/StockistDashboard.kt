@@ -202,7 +202,7 @@ fun StockistDashboard(
                         )
                         if (selectedCategory != null) {
                             Text(
-                                text = "A-${selectedCategory!!.active_count}  OS-${selectedCategory!!.os_count}  NA-${selectedCategory!!.na_count}  (Total: ${selectedCategory!!.sku_count})",
+                                text = "AV-${selectedCategory!!.active_count}  OS-${selectedCategory!!.os_count}  INA-${selectedCategory!!.na_count}  P-INA-${selectedCategory!!.pina_count}  (Total: ${selectedCategory!!.sku_count})",
                                 fontSize = 10.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.SemiBold
@@ -390,7 +390,7 @@ fun StockistDashboard(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "A-${category.active_count}  OS-${category.os_count}  NA-${category.na_count}  (Total: ${category.sku_count})",
+                                            text = "AV-${category.active_count}  OS-${category.os_count}  INA-${category.na_count}  P-INA-${category.pina_count}  (Total: ${category.sku_count})",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -493,10 +493,11 @@ fun StockistDashboard(
 
                         // Compact One-Line Status Filter Buttons
                         val statuses = listOf(
-                            "" to "All",
-                            "A" to "Available",
-                            "OS" to "Out of Stock",
-                            "NA" to "Inactive"
+                            "" to "ALL",
+                            "A" to "AV",
+                            "OS" to "OS",
+                            "NA" to "INA",
+                            "PINA" to "P-INA"
                         )
                         statuses.forEach { (code, label) ->
                             val isSelected = statusFilter == code
@@ -791,6 +792,7 @@ fun StockItemCard(
     // Current stock and rate states
     var sets by remember { mutableStateOf(item.sets_count) }
     var isAvailable by remember { mutableStateOf(item.is_available) }
+    var isPermanentInactive by remember { mutableStateOf(item.is_permanent_inactive) }
     var rateText by remember { mutableStateOf(item.rate.toString()) }
     var revisedRateText by remember { mutableStateOf(item.revised_rate?.toString() ?: "") }
     var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
@@ -898,18 +900,21 @@ fun StockItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    // Status pill badge
+                    // Status pill badge (AV, OS, INA, P-INA)
                     val statusLabel = when {
-                        !isAvailable -> "Inactive"
-                        sets > 0 -> "Active"
-                        else -> "Out Stock"
+                        isPermanentInactive -> "P-INA"
+                        !isAvailable -> "INA"
+                        sets > 0 -> "AV"
+                        else -> "OS"
                     }
                     val statusBg = when {
+                        isPermanentInactive -> Color(0xFFF3E8FF)
                         !isAvailable -> MaterialTheme.colorScheme.errorContainer
                         sets > 0 -> Color(0xFFD1FAE5) // light green
                         else -> Color(0xFFFFEDD5) // light orange
                     }
                     val statusColor = when {
+                        isPermanentInactive -> Color(0xFF7E22CE)
                         !isAvailable -> MaterialTheme.colorScheme.error
                         sets > 0 -> Color(0xFF047857) // dark green
                         else -> Color(0xFFC2410C) // dark orange
@@ -1034,17 +1039,47 @@ fun StockItemCard(
                         )
                     }
 
-                    // Active / Inactive Quick Toggle Pill
+                    // 3-State Quick Toggle Pill (AV -> INA -> P-INA -> AV)
+                    val toggleLabel = when {
+                        isPermanentInactive -> "🚫 P-INA"
+                        !isAvailable -> "✕ INA"
+                        else -> "✓ AV"
+                    }
+                    val toggleBg = when {
+                        isPermanentInactive -> Color(0xFFF3E8FF)
+                        !isAvailable -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.primaryContainer
+                    }
+                    val toggleColor = when {
+                        isPermanentInactive -> Color(0xFF7E22CE)
+                        !isAvailable -> MaterialTheme.colorScheme.onErrorContainer
+                        else -> MaterialTheme.colorScheme.onPrimaryContainer
+                    }
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = if (isAvailable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier.clickable { isAvailable = !isAvailable }
+                        color = toggleBg,
+                        modifier = Modifier.clickable {
+                            when {
+                                isPermanentInactive -> {
+                                    isPermanentInactive = false
+                                    isAvailable = true
+                                }
+                                isAvailable -> {
+                                    isAvailable = false
+                                    isPermanentInactive = false
+                                }
+                                else -> {
+                                    isAvailable = false
+                                    isPermanentInactive = true
+                                }
+                            }
+                        }
                     ) {
                         Text(
-                            text = if (isAvailable) "✓ Active" else "✕ Inactive",
+                            text = toggleLabel,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                            color = toggleColor,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
@@ -1137,11 +1172,14 @@ fun StockItemCard(
                                         StockUpdateRequest(
                                             setsCount = sets, 
                                             isAvailable = isAvailable, 
+                                            isPermanentInactive = isPermanentInactive,
                                             rate = finalRate,
                                             revisedRate = finalRevised
                                         )
                                     )
                                     currentRevisedRate = response.revised_rate
+                                    isAvailable = response.is_available
+                                    isPermanentInactive = response.is_permanent_inactive
                                     isSuccess = true
                                     Toast.makeText(context, item.sku_id + " saved", Toast.LENGTH_SHORT).show()
                                 } catch (e: Exception) {

@@ -33,7 +33,8 @@ data class CatalogStatsResponse(
     val total: Int,
     val available: Int,
     val outofstock: Int,
-    val inactive: Int
+    val inactive: Int,
+    val permanent_inactive: Int = 0
 )
 
 data class CategoryDto(
@@ -42,7 +43,8 @@ data class CategoryDto(
     val sku_count: Int,
     val active_count: Int = 0,
     val os_count: Int = 0,
-    val na_count: Int = 0
+    val na_count: Int = 0,
+    val pina_count: Int = 0
 )
 
 data class WorkDto(
@@ -63,6 +65,7 @@ data class SKUItemDto(
     val sets_count: Int,
     val total_pieces: Int,
     val is_available: Boolean,
+    val is_permanent_inactive: Boolean = false,
     val rate: Int = 0,
     val revised_rate: Int? = null,
     val original_created_at: String? = null,
@@ -121,6 +124,7 @@ data class SKUItemDto(
 data class StockUpdateRequest(
     val setsCount: Int?,
     val isAvailable: Boolean?,
+    val isPermanentInactive: Boolean? = null,
     val rate: Int? = null,
     val revisedRate: Int? = null
 )
@@ -130,6 +134,7 @@ data class StockUpdateResponse(
     val sets_count: Int,
     val total_pieces: Int,
     val is_available: Boolean,
+    val is_permanent_inactive: Boolean = false,
     val rate: Int? = null,
     val revised_rate: Int? = null,
     val updated_by: Int

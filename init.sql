@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS stock (
     sets_count INTEGER NOT NULL DEFAULT 0 CHECK (sets_count >= 0),
     total_pieces INTEGER NOT NULL DEFAULT 0 CHECK (total_pieces >= 0),
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    is_permanent_inactive BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
 );

@@ -252,6 +252,11 @@ export const runMigrations = async () => {
     await pool.query("UPDATE items SET description = '' WHERE description = 'DESUKA by VS FASHION Gandhi Nagar Delhi.'");
     console.log('[Migration] Cleared default descriptions from existing items.');
 
+    // 6.5 Permanent Inactive migration on stock table
+    await pool.query('ALTER TABLE stock ADD COLUMN IF NOT EXISTS is_permanent_inactive BOOLEAN NOT NULL DEFAULT FALSE');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_stock_is_permanent_inactive ON stock(is_permanent_inactive)');
+    console.log('[Migration] is_permanent_inactive column verified on stock table.');
+
     // 7. Showcase Feature (24-Hour VIP Client Links)
     await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS is_in_showcase BOOLEAN NOT NULL DEFAULT FALSE');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_is_in_showcase ON items(is_in_showcase)');

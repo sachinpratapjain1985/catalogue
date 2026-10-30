@@ -24,15 +24,17 @@ router.use(authenticateToken);
 router.get('/stats', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const totalRes = await query('SELECT COUNT(*) FROM items');
-    const availableRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count > 0');
-    const osRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count = 0');
-    const inactiveRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = false');
+    const availableRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count > 0 AND (is_permanent_inactive IS NOT TRUE)');
+    const osRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = true AND sets_count = 0 AND (is_permanent_inactive IS NOT TRUE)');
+    const inactiveRes = await query('SELECT COUNT(*) FROM stock WHERE is_available = false AND (is_permanent_inactive IS NOT TRUE)');
+    const permanentInactiveRes = await query('SELECT COUNT(*) FROM stock WHERE is_permanent_inactive = true');
 
     res.json({
       total: parseInt(totalRes.rows[0].count || '0'),
       available: parseInt(availableRes.rows[0].count || '0'),
       outofstock: parseInt(osRes.rows[0].count || '0'),
-      inactive: parseInt(inactiveRes.rows[0].count || '0')
+      inactive: parseInt(inactiveRes.rows[0].count || '0'),
+      permanent_inactive: parseInt(permanentInactiveRes.rows[0].count || '0')
     });
   } catch (error) {
     console.error('Get catalog stats error:', error);
@@ -71,6 +73,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<
               c.name as category_name,
               (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
               s.sets_count, s.total_pieces, s.is_available,
+              COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive,
               COALESCE(ri.real_count, 0) as real_image_count
        FROM items i
        JOIN categories c ON i.category_id = c.id
@@ -84,7 +87,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<
     `;
 
     if (role === 'sales') {
-      queryStr += ` AND s.is_available = TRUE`;
+      queryStr += ` AND s.is_available = TRUE AND (s.is_permanent_inactive IS NOT TRUE)`;
     }
 
     queryStr += ` ${categoryCondition}`;
@@ -111,7 +114,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<
       params.push(maxRate);
     }
 
-    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+    queryStr += ` ORDER BY s.is_permanent_inactive ASC, s.is_available DESC, (s.sets_count > 0) DESC, 
       CASE 
         WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
         WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
@@ -240,9 +243,10 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
       result = await query(
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count,
-                CAST(SUM(CASE WHEN s.is_available = FALSE THEN 1 ELSE 0 END) AS INTEGER) as na_count
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as active_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as os_count,
+                CAST(SUM(CASE WHEN s.is_available = FALSE AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as na_count,
+                CAST(SUM(CASE WHEN s.is_permanent_inactive = TRUE THEN 1 ELSE 0 END) AS INTEGER) as pina_count
          FROM categories c
          JOIN user_categories uc ON uc.category_id = c.id
          LEFT JOIN items i ON i.category_id = c.id
@@ -257,9 +261,10 @@ router.get('/categories', async (req: AuthenticatedRequest, res: Response): Prom
       result = await query(
         `SELECT c.id, c.name, 
                 CAST(COUNT(i.id) AS INTEGER) as sku_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 THEN 1 ELSE 0 END) AS INTEGER) as active_count,
-                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 THEN 1 ELSE 0 END) AS INTEGER) as os_count,
-                CAST(SUM(CASE WHEN s.is_available = FALSE THEN 1 ELSE 0 END) AS INTEGER) as na_count
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count > 0 AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as active_count,
+                CAST(SUM(CASE WHEN s.is_available = TRUE AND s.sets_count = 0 AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as os_count,
+                CAST(SUM(CASE WHEN s.is_available = FALSE AND (s.is_permanent_inactive IS NOT TRUE) THEN 1 ELSE 0 END) AS INTEGER) as na_count,
+                CAST(SUM(CASE WHEN s.is_permanent_inactive = TRUE THEN 1 ELSE 0 END) AS INTEGER) as pina_count
          FROM categories c
          LEFT JOIN items i ON i.category_id = c.id
          LEFT JOIN stock s ON s.item_id = i.id
@@ -315,6 +320,7 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
               c.name as category_name,
               (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
               s.sets_count, s.total_pieces, s.is_available,
+              COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive,
               COALESCE(ri.real_count, 0) as real_image_count
        FROM items i
        JOIN categories c ON i.category_id = c.id
@@ -328,7 +334,7 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
     `;
 
     if (role === 'sales') {
-      queryStr += ` AND s.is_available = TRUE`;
+      queryStr += ` AND s.is_available = TRUE AND (s.is_permanent_inactive IS NOT TRUE)`;
     }
 
     queryStr += ` ${categoryCondition}`;
@@ -354,7 +360,7 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
       params.push(maxRate);
     }
 
-    queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+    queryStr += ` ORDER BY s.is_permanent_inactive ASC, s.is_available DESC, (s.sets_count > 0) DESC, 
       CASE 
         WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' OR UPPER(c.name) LIKE '%PLAZO%' OR UPPER(c.name) LIKE '%PALAZZO%' THEN 1
         WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' OR UPPER(c.name) LIKE '%ANARKALI%' THEN 2
@@ -460,7 +466,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
              FROM item_real_images 
              GROUP BY item_id
          ) ri ON ri.item_id = i.id
-         WHERE i.category_id = $1 AND s.is_available = TRUE
+         WHERE i.category_id = $1 AND s.is_available = TRUE AND (s.is_permanent_inactive IS NOT TRUE)
       `;
       if (search) {
         paramCount++;
@@ -513,6 +519,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
                 COALESCE(s.sets_count, 0) as sets_count, 
                 COALESCE(s.total_pieces, 0) as total_pieces, 
                 COALESCE(s.is_available, true) as is_available,
+                COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive,
                 COALESCE(ri.real_count, 0) as real_image_count
          FROM items i
          LEFT JOIN stock s ON s.item_id = i.id
@@ -529,12 +536,14 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         params.push(`%${search}%`);
       }
       if (status) {
-        if (status === 'A') {
-          queryStr += ` AND s.is_available = TRUE AND s.sets_count > 0`;
+        if (status === 'A' || status === 'AV') {
+          queryStr += ` AND s.is_available = TRUE AND s.sets_count > 0 AND (s.is_permanent_inactive IS NOT TRUE)`;
         } else if (status === 'OS') {
-          queryStr += ` AND s.is_available = TRUE AND s.sets_count = 0`;
-        } else if (status === 'NA') {
-          queryStr += ` AND s.is_available = FALSE`;
+          queryStr += ` AND s.is_available = TRUE AND s.sets_count = 0 AND (s.is_permanent_inactive IS NOT TRUE)`;
+        } else if (status === 'NA' || status === 'INA') {
+          queryStr += ` AND s.is_available = FALSE AND (s.is_permanent_inactive IS NOT TRUE)`;
+        } else if (status === 'PINA' || status === 'P-INA') {
+          queryStr += ` AND s.is_permanent_inactive = TRUE`;
         }
       }
       if (work) {
@@ -552,7 +561,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
         queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
-      queryStr += ` ORDER BY s.is_available DESC, (s.sets_count > 0) DESC, 
+      queryStr += ` ORDER BY s.is_permanent_inactive ASC, s.is_available DESC, (s.sets_count > 0) DESC, 
         CASE 
           WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'PL' THEN 1
           WHEN UPPER(TRIM(substring(TRIM(i.sku_id) from '^[a-zA-Z]+'))) = 'AK' THEN 2
@@ -615,7 +624,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   const userId = req.user?.id || 0;
   const role = req.user?.role;
   const baseRole = req.user?.baseRole;
-  const { setsCount, isAvailable, rate, revisedRate } = req.body;
+  const { setsCount, isAvailable, isPermanentInactive, rate, revisedRate } = req.body;
 
   if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager' && role !== 'both') {
     res.status(403).json({ error: 'Only stockists, managers or admins can modify stock levels or rates' });
@@ -628,7 +637,8 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, 
               COALESCE(s.sets_count, 0) as sets_count, 
               COALESCE(s.total_pieces, 0) as total_pieces, 
-              COALESCE(s.is_available, true) as is_available 
+              COALESCE(s.is_available, true) as is_available, 
+              COALESCE(s.is_permanent_inactive, false) as is_permanent_inactive 
        FROM items i
        LEFT JOIN stock s ON s.item_id = i.id
        WHERE i.id = $1`,
@@ -710,8 +720,15 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
     }
 
     // Determine updates
+    let targetPermanentInactive = item.is_permanent_inactive;
+    if (isPermanentInactive !== undefined) {
+      targetPermanentInactive = isPermanentInactive === true || isPermanentInactive === 'true';
+    }
+    let targetAvailable = isAvailable !== undefined ? !!isAvailable : item.is_available;
+    if (targetPermanentInactive) {
+      targetAvailable = false;
+    }
     const targetSets = setsCount !== undefined ? parseInt(setsCount) : item.sets_count;
-    const targetAvailable = isAvailable !== undefined ? !!isAvailable : item.is_available;
     const targetPieces = targetSets * item.pieces_per_set;
 
     const setsDiff = targetSets - item.sets_count;
@@ -726,19 +743,20 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
 
     // Upsert into stock table so missing rows never block saving
     await query(
-      `INSERT INTO stock (item_id, sets_count, total_pieces, is_available, updated_by, updated_at)
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+      `INSERT INTO stock (item_id, sets_count, total_pieces, is_available, is_permanent_inactive, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
        ON CONFLICT (item_id) DO UPDATE 
        SET sets_count = EXCLUDED.sets_count, 
            total_pieces = EXCLUDED.total_pieces, 
            is_available = EXCLUDED.is_available, 
+           is_permanent_inactive = EXCLUDED.is_permanent_inactive, 
            updated_at = CURRENT_TIMESTAMP, 
            updated_by = EXCLUDED.updated_by`,
-      [itemId, targetSets, targetPieces, targetAvailable, userId]
+      [itemId, targetSets, targetPieces, targetAvailable, targetPermanentInactive, userId]
     );
 
     // Only log if something actually changed
-    if (setsDiff !== 0 || targetAvailable !== item.is_available) {
+    if (setsDiff !== 0 || targetAvailable !== item.is_available || targetPermanentInactive !== item.is_permanent_inactive) {
       await query(
         `INSERT INTO stock_logs (item_id, user_id, change_type, sets_changed, pieces_changed, 
                                  previous_sets, new_sets, previous_available, new_available)
@@ -762,6 +780,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       sets_count: targetSets,
       total_pieces: targetPieces,
       is_available: targetAvailable,
+      is_permanent_inactive: targetPermanentInactive,
       rate: updatedRate,
       revised_rate: updatedRevisedRate,
       updated_by: userId,

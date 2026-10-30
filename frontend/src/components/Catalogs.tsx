@@ -53,6 +53,7 @@ interface SKUItem {
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
+  is_permanent_inactive?: boolean;
   is_in_showcase?: boolean;
   original_created_at?: string;
   created_at: string;
@@ -113,6 +114,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editRevisedRate, setEditRevisedRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
+  const [editIsPermanentInactive, setEditIsPermanentInactive] = useState(false);
   const [editDescription, setEditDescription] = useState('');
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
@@ -824,6 +826,7 @@ ${clientUrl}
     setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
     setEditSetsCount(item.sets_count);
     setEditIsAvailable(item.is_available);
+    setEditIsPermanentInactive(!!item.is_permanent_inactive);
     setEditDescription(item.description || '');
     setEditImageFile(null);
     setEditImagePreview(item.image_path);
@@ -855,6 +858,7 @@ ${clientUrl}
         }
         formData.append('setsCount', editSetsCount.toString());
         formData.append('isAvailable', editIsAvailable ? 'true' : 'false');
+        formData.append('isPermanentInactive', editIsPermanentInactive ? 'true' : 'false');
         formData.append('description', editDescription);
         formData.append('image', editImageFile);
 
@@ -883,6 +887,7 @@ ${clientUrl}
             revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
             setsCount: editSetsCount,
             isAvailable: editIsAvailable,
+            isPermanentInactive: editIsPermanentInactive,
             description: editDescription
           })
         });
@@ -1142,9 +1147,10 @@ ${clientUrl}
       }
 
       const matchesStatus = filterStatus === '' || 
-        (filterStatus === 'A' && item.is_available && item.sets_count > 0) ||
-        (filterStatus === 'OS' && item.is_available && item.sets_count === 0) ||
-        (filterStatus === 'NA' && !item.is_available);
+        (filterStatus === 'A' && item.is_available && item.sets_count > 0 && !item.is_permanent_inactive) ||
+        (filterStatus === 'OS' && item.is_available && item.sets_count === 0 && !item.is_permanent_inactive) ||
+        (filterStatus === 'NA' && !item.is_available && !item.is_permanent_inactive) ||
+        (filterStatus === 'PINA' && !!item.is_permanent_inactive);
 
       let matchesRate = true;
       if (filterRateRange) {
@@ -1166,6 +1172,13 @@ ${clientUrl}
       return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers && matchesShowcase;
     })
     .sort((a, b) => {
+      // Permanent Inactive (P-INA) always sorted to the bottom
+      const aPina = !!a.is_permanent_inactive;
+      const bPina = !!b.is_permanent_inactive;
+      if (aPina !== bPina) {
+        return aPina ? 1 : -1;
+      }
+
       // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
       const aAvailable = a.is_available && a.sets_count > 0;
       const bAvailable = b.is_available && b.sets_count > 0;
@@ -1201,9 +1214,10 @@ ${clientUrl}
   const paginatedItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
   const totalDesigns = items.length;
-  const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0).length;
-  const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0).length;
-  const inactiveDesigns = items.filter(item => !item.is_available).length;
+  const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+  const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+  const inactiveDesigns = items.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+  const permanentInactiveDesigns = items.filter(item => item.is_permanent_inactive).length;
   const revisedDesigns = items.filter(item => item.revised_rate && item.revised_rate > 0).length;
   const showcaseDesignsCount = items.filter(item => item.is_in_showcase).length;
 
@@ -1276,10 +1290,20 @@ ${clientUrl}
 
         <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244, 63, 94, 0.2)' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', textTransform: 'uppercase', fontWeight: 600 }}>Unavailable Designs</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', textTransform: 'uppercase', fontWeight: 600 }}>Inactive (INA)</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)', marginTop: '0.25rem' }}>{inactiveDesigns}</div>
           </div>
           <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)' }}>
+            <XCircle size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#c084fc', textTransform: 'uppercase', fontWeight: 600 }}>Permanent Inactive (P-INA)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>{permanentInactiveDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(168, 85, 247, 0.15)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#c084fc' }}>
             <XCircle size={20} />
           </div>
         </div>
@@ -1459,12 +1483,13 @@ ${clientUrl}
                   <option value="">Select Folder</option>
                   {categories.map(c => {
                     const catItems = items.filter(item => item.category_id === c.id);
-                    const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
-                    const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
-                    const naCount = catItems.filter(item => !item.is_available).length;
+                    const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+                    const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+                    const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+                    const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
                     return (
                       <option key={c.id} value={c.id}>
-                        {c.name} (A-{activeCount} OS-{osCount} NA-{naCount})
+                        {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
                       </option>
                     );
                   })}
@@ -1684,12 +1709,13 @@ ${clientUrl}
                 <option value="">All Folders</option>
                 {categories.map(c => {
                   const catItems = items.filter(item => item.category_id === c.id);
-                  const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0).length;
-                  const osCount = catItems.filter(item => item.is_available && item.sets_count === 0).length;
-                  const naCount = catItems.filter(item => !item.is_available).length;
+                  const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+                  const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+                  const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+                  const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
                   return (
                     <option key={c.id} value={c.id}>
-                      {c.name} (A-{activeCount} OS-{osCount} NA-{naCount})
+                      {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
                     </option>
                   );
                 })}
@@ -1722,9 +1748,10 @@ ${clientUrl}
                 style={{ padding: '0.6rem 1rem' }}
               >
                 <option value="">All Statuses</option>
-                <option value="A">Available (A)</option>
+                <option value="A">Available (AV)</option>
                 <option value="OS">Out of Stock (OS)</option>
-                <option value="NA">Inactive (NA)</option>
+                <option value="NA">Inactive (INA)</option>
+                <option value="PINA">Permanent Inactive (P-INA)</option>
               </select>
             </div>
 
@@ -1932,20 +1959,25 @@ ${clientUrl}
                         <ZoomIn size={12} color="#60a5fa" /> Zoom
                       </div>
                       <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', zIndex: 10 }}>
-                        {!item.is_available ? (
-                          <span className="badge badge-danger" title="Inactive (Not Available)">
+                        {item.is_permanent_inactive ? (
+                          <span className="badge" style={{ background: 'rgba(124, 58, 237, 0.25)', color: '#c084fc', border: '1px solid rgba(124, 58, 237, 0.45)' }} title="Permanent Inactive (Never Restock)">
                             <XCircle size={12} style={{ marginRight: '4px' }} />
-                            Inactive (NA)
+                            P-INA
+                          </span>
+                        ) : !item.is_available ? (
+                          <span className="badge badge-danger" title="Inactive (Temporary Out of Stock)">
+                            <XCircle size={12} style={{ marginRight: '4px' }} />
+                            INA
                           </span>
                         ) : item.sets_count > 0 ? (
                           <span className="badge badge-success" title="Active & Available">
                             <CheckCircle size={12} style={{ marginRight: '4px' }} />
-                            Available (A)
+                            AV
                           </span>
                         ) : (
                           <span className="badge badge-warning" title="Active but Out of Stock">
-                            <XCircle size={12} style={{ marginRight: '4px' }} />
-                            Out of Stock (OS)
+                            <AlertCircle size={12} style={{ marginRight: '4px' }} />
+                            OS
                           </span>
                         )}
                         
@@ -2396,11 +2428,29 @@ ${clientUrl}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600 }}>
                     <input 
                       type="checkbox"
-                      checked={editIsAvailable}
+                      checked={editIsAvailable && !editIsPermanentInactive}
+                      disabled={editIsPermanentInactive}
                       onChange={e => setEditIsAvailable(e.target.checked)}
                       style={{ width: '18px', height: '18px' }}
                     />
-                    Available in Stock
+                    Available (AV)
+                  </label>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600, color: editIsPermanentInactive ? '#c084fc' : undefined }}>
+                    <input 
+                      type="checkbox"
+                      checked={editIsPermanentInactive}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setEditIsPermanentInactive(checked);
+                        if (checked) {
+                          setEditIsAvailable(false);
+                        }
+                      }}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                    Permanent Inactive (P-INA)
                   </label>
                 </div>
               </div>

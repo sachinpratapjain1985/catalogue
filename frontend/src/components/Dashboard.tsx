@@ -22,6 +22,7 @@ interface DashboardData {
     activeSkus: number;
     outofstockSkus: number;
     inactiveSkus: number;
+    permanentInactiveSkus?: number;
     totalSets: number;
     totalPieces: number;
     addedToday: { sets: number; pieces: number };
@@ -316,7 +317,7 @@ export default function Dashboard({ token }: DashboardProps) {
 
         <div className="glass-card stat-card" style={{ borderColor: 'rgba(16, 185, 129, 0.2)' }}>
           <div>
-            <div className="stat-title" style={{ color: 'var(--color-success)' }}>Available (In Stock)</div>
+            <div className="stat-title" style={{ color: 'var(--color-success)' }}>Available (AV)</div>
             <div className="stat-value" style={{ color: 'var(--color-success)' }}>{data.summary.activeSkus}</div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Available &amp; &gt; 0 sets</p>
           </div>
@@ -327,7 +328,7 @@ export default function Dashboard({ token }: DashboardProps) {
 
         <div className="glass-card stat-card" style={{ borderColor: 'rgba(245, 158, 11, 0.2)' }}>
           <div>
-            <div className="stat-title" style={{ color: 'var(--color-warning)' }}>Available (Out of Stock)</div>
+            <div className="stat-title" style={{ color: 'var(--color-warning)' }}>Out of Stock (OS)</div>
             <div className="stat-value" style={{ color: 'var(--color-warning)' }}>{data.summary.outofstockSkus}</div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Available but 0 sets</p>
           </div>
@@ -338,11 +339,22 @@ export default function Dashboard({ token }: DashboardProps) {
 
         <div className="glass-card stat-card" style={{ borderColor: 'rgba(244, 63, 94, 0.2)' }}>
           <div>
-            <div className="stat-title" style={{ color: 'var(--color-danger)' }}>Unavailable Designs</div>
+            <div className="stat-title" style={{ color: 'var(--color-danger)' }}>Inactive (INA)</div>
             <div className="stat-value" style={{ color: 'var(--color-danger)' }}>{data.summary.inactiveSkus}</div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Disabled/No Stock</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Temporary Disabled</p>
           </div>
           <div className="stat-icon" style={{ color: 'var(--color-danger)' }}>
+            <XCircle size={24} />
+          </div>
+        </div>
+
+        <div className="glass-card stat-card" style={{ borderColor: 'rgba(168, 85, 247, 0.2)' }}>
+          <div>
+            <div className="stat-title" style={{ color: '#c084fc' }}>Permanent Inactive (P-INA)</div>
+            <div className="stat-value" style={{ color: '#c084fc' }}>{data.summary.permanentInactiveSkus ?? 0}</div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Retired / Never Restock</p>
+          </div>
+          <div className="stat-icon" style={{ color: '#c084fc' }}>
             <XCircle size={24} />
           </div>
         </div>
