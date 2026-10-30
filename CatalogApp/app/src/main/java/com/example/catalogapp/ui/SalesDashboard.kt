@@ -405,9 +405,10 @@ fun SalesDashboard(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Send Description",
+                                        text = "Send Description & Fabric",
                                         fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = if (shareDescription) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (shareDescription) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }

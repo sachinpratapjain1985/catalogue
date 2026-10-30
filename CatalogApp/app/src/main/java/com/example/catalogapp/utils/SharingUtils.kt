@@ -1,5 +1,7 @@
 package com.example.catalogapp.utils
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -9,6 +11,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.net.Uri
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.catalogapp.data.SKUItemDto
 import com.example.catalogapp.data.SessionManager
@@ -38,6 +41,61 @@ object SharingUtils {
             .replace("old", "", ignoreCase = true)
             .replace("new", "", ignoreCase = true)
             .trim()
+    }
+
+    /**
+     * Builds comprehensive article details text (SKU ID, Fabric, Work, Description, Pack Details)
+     * for WhatsApp sharing when "Send Description" is checked.
+     */
+    fun buildShareDescription(selectedItems: List<SKUItemDto>): String {
+        if (selectedItems.isEmpty()) return ""
+
+        if (selectedItems.size == 1) {
+            val item = selectedItems[0]
+            val lines = mutableListOf<String>()
+            lines.add("Design SKU: ${item.sku_id}")
+            val fabric = item.material?.trim() ?: ""
+            if (fabric.isNotEmpty()) {
+                lines.add("Fabric: $fabric")
+            }
+            val work = item.work?.trim() ?: ""
+            if (work.isNotEmpty()) {
+                lines.add("Work: $work")
+            }
+            val desc = sanitizeDescription(item.description)
+            if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
+                lines.add("Description: $desc")
+            }
+            if (item.pieces_per_set > 0) {
+                lines.add("Pack Details: ${item.pieces_per_set} pcs/set")
+            }
+            lines.add("\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+            return lines.joinToString("\n").trim()
+        } else {
+            return buildString {
+                append("Designs from Desuka Catalogue:\n\n")
+                selectedItems.forEachIndexed { index, item ->
+                    append("${index + 1}. SKU: ${item.sku_id}\n")
+                    val fabric = item.material?.trim() ?: ""
+                    if (fabric.isNotEmpty()) {
+                        append("   Fabric: $fabric\n")
+                    }
+                    val work = item.work?.trim() ?: ""
+                    if (work.isNotEmpty()) {
+                        append("   Work: $work\n")
+                    }
+                    val desc = sanitizeDescription(item.description)
+                    if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
+                        append("   Description: $desc\n")
+                    }
+                    if (item.pieces_per_set > 0) {
+                        append("   Pack Details: ${item.pieces_per_set} pcs/set\n")
+                    }
+                    append("\n")
+                }
+                append("Shared via Desuka Catalog\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+            }.trim()
+        }
     }
 
     /**
@@ -510,18 +568,33 @@ object SharingUtils {
 
                 withContext(Dispatchers.Main) { onProgress("Opening WhatsApp...") }
 
+                val shareText = if (shareDescription) buildShareDescription(selectedItems) else ""
+
+                // If user requested to share description and we have text, copy it to clipboard as well
+                if (shareDescription && shareText.isNotEmpty()) {
+                    try {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = ClipData.newPlainText("Article Details", shareText)
+                        clipboard?.setPrimaryClip(clip)
+                        if (selectedItems.size > 1) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Descriptions copied to clipboard — paste in WhatsApp", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
                 // Helper to create intent configured for sharing images
                 fun createShareIntent(targetPackage: String?): Intent {
                     val intent = if (uris.size == 1) {
                         Intent(Intent.ACTION_SEND).apply {
                             type = "image/*"
                             putExtra(Intent.EXTRA_STREAM, uris[0])
-                            if (shareDescription) {
-                                val item = selectedItems[0]
-                                val desc = sanitizeDescription(item.description)
-                                if (desc.isNotEmpty()) {
-                                    putExtra(Intent.EXTRA_TEXT, desc)
-                                }
+                            if (shareText.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_TITLE, shareText)
                             }
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
@@ -529,18 +602,9 @@ object SharingUtils {
                         Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                             type = "image/*"
                             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                            if (shareDescription) {
-                                val detailsText = buildString {
-                                    selectedItems.forEach { item ->
-                                        val desc = sanitizeDescription(item.description)
-                                        if (desc.isNotEmpty()) {
-                                            append("• SKU: ${item.sku_id}: $desc\n")
-                                        }
-                                    }
-                                }
-                                if (detailsText.isNotEmpty()) {
-                                    putExtra(Intent.EXTRA_TEXT, detailsText)
-                                }
+                            if (shareText.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_TITLE, shareText)
                             }
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
