@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
@@ -282,17 +283,24 @@ fun SalesDashboard(
 
     var showShareChoiceModal by remember { mutableStateOf(false) }
     var imagesPerItem by remember { mutableIntStateOf(1) }
+    var targetSharePlatform by remember { mutableStateOf(SharingUtils.SharePlatform.WHATSAPP) }
 
-    fun executeShare(shareReal: Boolean) {
+    fun executeShare(shareReal: Boolean, platform: SharingUtils.SharePlatform = targetSharePlatform) {
+        val userRole = sessionManager.getUserRole()
+        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+        val maxLimit = if (canSelectAll) 100 else 20
+        val itemsToShare = if (selectedItems.size > maxLimit) selectedItems.take(maxLimit) else selectedItems.toList()
+
         isSharing = true
         coroutineScope.launch {
             SharingUtils.downloadAndShareImages(
                 context = context,
-                selectedItems = selectedItems.toList(),
+                selectedItems = itemsToShare,
                 sessionManager = sessionManager,
                 shareDescription = shareDescription,
                 shareRealImages = shareReal,
                 imagesPerItem = imagesPerItem,
+                platform = platform,
                 onProgress = { shareProgressMsg = it },
                 onError = {
                     isSharing = false
@@ -370,6 +378,10 @@ fun SalesDashboard(
         },
         bottomBar = {
             if (selectedItems.isNotEmpty()) {
+                val userRole = sessionManager.getUserRole()
+                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                val maxLimit = if (canSelectAll) 100 else 20
+
                 Surface(
                     tonalElevation = 8.dp,
                     shadowElevation = 8.dp,
@@ -378,69 +390,112 @@ fun SalesDashboard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        // Top row of bottomBar: Item count, Description check, and Share Button
+                        // Top row of bottomBar: Item count & Description checkbox
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column {
-                                Text(
-                                    text = "${selectedItems.size} items selected",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .clickable { shareDescription = !shareDescription }
-                                        .padding(top = 2.dp)
-                                ) {
-                                    Checkbox(
-                                        checked = shareDescription,
-                                        onCheckedChange = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Send Description & Fabric",
-                                        fontSize = 11.sp,
-                                        fontWeight = if (shareDescription) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (shareDescription) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
-                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
-                                        showShareChoiceModal = true
-                                    } else {
-                                        executeShare(shareReal = false)
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                            Text(
+                                text = "${selectedItems.size}/$maxLimit selected",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { shareDescription = !shareDescription }
+                                    .padding(vertical = 2.dp)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Share to WhatsApp", fontWeight = FontWeight.Bold)
+                                Checkbox(
+                                    checked = shareDescription,
+                                    onCheckedChange = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Send Description & Fabric",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (shareDescription) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (shareDescription) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
 
-                        // Bottom row of bottomBar: Images per SKU selector (1 default, 2, 3, All)
+                        // Middle row: WhatsApp and Telegram Share Buttons
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // WhatsApp Share Button (WhatsApp Brand Green)
+                            Button(
+                                onClick = {
+                                    targetSharePlatform = SharingUtils.SharePlatform.WHATSAPP
+                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                        showShareChoiceModal = true
+                                    } else {
+                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.WHATSAPP)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF25D366),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("WhatsApp", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            }
+
+                            // Telegram Share Button (Telegram Brand Blue)
+                            Button(
+                                onClick = {
+                                    targetSharePlatform = SharingUtils.SharePlatform.TELEGRAM
+                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                        showShareChoiceModal = true
+                                    } else {
+                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.TELEGRAM)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF229ED9),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            }
+                        }
+
+                        // Bottom row: Photos per SKU selector (1 default, 2, 3, All)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = "Photos/design:",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -452,11 +507,11 @@ fun SalesDashboard(
                                     label = {
                                         Text(
                                             text = label,
-                                            fontSize = 10.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                         )
                                     },
-                                    modifier = Modifier.height(28.dp)
+                                    modifier = Modifier.height(26.dp)
                                 )
                             }
                         }
@@ -467,12 +522,13 @@ fun SalesDashboard(
     ) { paddingValues ->
         // Share Type Choice Dialog Modal
         if (showShareChoiceModal) {
+            val platformLabel = if (targetSharePlatform == SharingUtils.SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
             AlertDialog(
                 onDismissRequest = { showShareChoiceModal = false },
-                title = { Text("Select Photos to Share") },
+                title = { Text("Share to $platformLabel") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Choose which type of photos to share for selected designs:")
+                        Text("Choose which type of photos to share to $platformLabel:")
 
                         // Images per design selector in modal as well
                         Row(
@@ -505,7 +561,7 @@ fun SalesDashboard(
                         Button(
                             onClick = {
                                 showShareChoiceModal = false
-                                executeShare(shareReal = false)
+                                executeShare(shareReal = false, platform = targetSharePlatform)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -514,7 +570,7 @@ fun SalesDashboard(
                         Button(
                             onClick = {
                                 showShareChoiceModal = false
-                                executeShare(shareReal = true)
+                                executeShare(shareReal = true, platform = targetSharePlatform)
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -643,18 +699,27 @@ fun SalesDashboard(
                             )
                             val userRole = sessionManager.getUserRole()
                             val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                            val maxLimit = if (canSelectAll) 100 else 20
                             if (canSelectAll && globalSearchItems.isNotEmpty()) {
-                                val allSelected = globalSearchItems.all { item -> selectedItems.any { it.id == item.id } }
+                                val allSelected = globalSearchItems.isNotEmpty() && globalSearchItems.all { item -> selectedItems.any { it.id == item.id } }
                                 Surface(
                                     modifier = Modifier.clickable {
                                         if (allSelected) {
                                             val currentIds = globalSearchItems.map { it.id }.toSet()
                                             selectedItems.removeAll { currentIds.contains(it.id) }
                                         } else {
+                                            var hitLimit = false
                                             for (item in globalSearchItems) {
                                                 if (!selectedItems.any { it.id == item.id }) {
+                                                    if (selectedItems.size >= maxLimit) {
+                                                        hitLimit = true
+                                                        break
+                                                    }
                                                     selectedItems.add(item)
                                                 }
+                                            }
+                                            if (hitLimit) {
+                                                Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     },
@@ -662,7 +727,7 @@ fun SalesDashboard(
                                     color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
                                 ) {
                                     Text(
-                                        text = if (allSelected) "Deselect All" else "Select All (${globalSearchItems.size})",
+                                        text = if (allSelected) "Deselect All" else "Select All (${minOf(globalSearchItems.size, maxLimit)})",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -706,7 +771,14 @@ fun SalesDashboard(
                                             if (isSelected) {
                                                 selectedItems.removeAll { it.id == item.id }
                                             } else {
-                                                selectedItems.add(item)
+                                                val userRole = sessionManager.getUserRole()
+                                                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                                                val maxLimit = if (canSelectAll) 100 else 20
+                                                if (selectedItems.size >= maxLimit) {
+                                                    Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    selectedItems.add(item)
+                                                }
                                             }
                                         }
                                     )
@@ -1070,18 +1142,27 @@ fun SalesDashboard(
                         )
                         val userRole = sessionManager.getUserRole()
                         val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                        val maxLimit = if (canSelectAll) 100 else 20
                         if (canSelectAll && items.isNotEmpty()) {
-                            val allSelected = items.all { item -> selectedItems.any { it.id == item.id } }
+                            val allSelected = items.isNotEmpty() && items.all { item -> selectedItems.any { it.id == item.id } }
                             Surface(
                                 modifier = Modifier.clickable {
                                     if (allSelected) {
                                         val currentIds = items.map { it.id }.toSet()
                                         selectedItems.removeAll { currentIds.contains(it.id) }
                                     } else {
+                                        var hitLimit = false
                                         for (item in items) {
                                             if (!selectedItems.any { it.id == item.id }) {
+                                                if (selectedItems.size >= maxLimit) {
+                                                    hitLimit = true
+                                                    break
+                                                }
                                                 selectedItems.add(item)
                                             }
+                                        }
+                                        if (hitLimit) {
+                                            Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 },
@@ -1089,7 +1170,7 @@ fun SalesDashboard(
                                 color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
-                                    text = if (allSelected) "Deselect All" else "Select All (${items.size})",
+                                    text = if (allSelected) "Deselect All" else "Select All (${minOf(items.size, maxLimit)})",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -1148,7 +1229,14 @@ fun SalesDashboard(
                                         if (isSelected) {
                                             selectedItems.removeAll { it.id == item.id }
                                         } else {
-                                            selectedItems.add(item)
+                                            val userRole = sessionManager.getUserRole()
+                                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                                            val maxLimit = if (canSelectAll) 100 else 20
+                                            if (selectedItems.size >= maxLimit) {
+                                                Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                selectedItems.add(item)
+                                            }
                                         }
                                     }
                                 )

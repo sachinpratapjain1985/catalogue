@@ -398,8 +398,13 @@ object SharingUtils {
         return mutableBitmap
     }
 
+    enum class SharePlatform {
+        WHATSAPP,
+        TELEGRAM
+    }
+
     /**
-     * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp.
+     * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp or Telegram.
      */
     suspend fun downloadAndShareImages(
         context: Context,
@@ -408,6 +413,7 @@ object SharingUtils {
         shareDescription: Boolean = false,
         shareRealImages: Boolean = false,
         imagesPerItem: Int = 1,
+        platform: SharePlatform = SharePlatform.WHATSAPP,
         onProgress: (String) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -566,7 +572,8 @@ object SharingUtils {
                     return@withContext
                 }
 
-                withContext(Dispatchers.Main) { onProgress("Opening WhatsApp...") }
+                val platformLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
+                withContext(Dispatchers.Main) { onProgress("Opening $platformLabel...") }
 
                 val shareText = if (shareDescription) buildShareDescription(selectedItems) else ""
 
@@ -578,7 +585,8 @@ object SharingUtils {
                         clipboard?.setPrimaryClip(clip)
                         if (selectedItems.size > 1) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "Descriptions copied to clipboard — paste in WhatsApp", Toast.LENGTH_SHORT).show()
+                                val appLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
+                                Toast.makeText(context, "Descriptions copied to clipboard — paste in $appLabel", Toast.LENGTH_SHORT).show()
                             }
                         }
                     } catch (e: Exception) {
@@ -616,10 +624,19 @@ object SharingUtils {
                 }
 
                 val pm = context.packageManager
-                val whatsappPackages = listOf("com.whatsapp", "com.whatsapp.w4b")
+                val targetPackages = if (platform == SharePlatform.TELEGRAM) {
+                    listOf(
+                        "org.telegram.messenger",
+                        "org.thunderdog.challegram",
+                        "org.telegram.messenger.web",
+                        "org.telegram.messenger.beta"
+                    )
+                } else {
+                    listOf("com.whatsapp", "com.whatsapp.w4b")
+                }
                 val availableIntents = ArrayList<Intent>()
 
-                for (pkg in whatsappPackages) {
+                for (pkg in targetPackages) {
                     try {
                         pm.getPackageInfo(pkg, 0)
                         availableIntents.add(createShareIntent(pkg))
@@ -630,22 +647,22 @@ object SharingUtils {
 
                 val launchIntent = when {
                     availableIntents.isEmpty() -> {
-                        // Fallback: Neither is installed -> open system chooser
-                        Intent.createChooser(createShareIntent(null), "Share Catalogue via").apply {
+                        // Fallback: None installed -> open system chooser
+                        Intent.createChooser(createShareIntent(null), "Share via $platformLabel").apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                     }
                     availableIntents.size == 1 -> {
-                        // Only one WhatsApp variant installed -> launch directly
+                        // Only one variant installed -> launch directly
                         availableIntents[0].apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                     }
                     else -> {
-                        // Both WhatsApp and WhatsApp Business are installed -> show chooser with both options
+                        // Multiple variants installed -> show chooser
                         val firstIntent = availableIntents.removeAt(0)
-                        Intent.createChooser(firstIntent, "Select WhatsApp / Business").apply {
+                        Intent.createChooser(firstIntent, "Select $platformLabel").apply {
                             putExtra(Intent.EXTRA_INITIAL_INTENTS, availableIntents.toTypedArray())
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
