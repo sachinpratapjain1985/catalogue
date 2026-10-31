@@ -207,6 +207,18 @@ fun StockistDashboard(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.SemiBold
                             )
+                        } else if (categories.isNotEmpty()) {
+                            val totalAv = categories.sumOf { it.active_count }
+                            val totalOs = categories.sumOf { it.os_count }
+                            val totalIna = categories.sumOf { it.na_count }
+                            val totalPina = categories.sumOf { it.pina_count }
+                            val totalSkus = categories.sumOf { it.sku_count }
+                            Text(
+                                text = "AV-$totalAv  OS-$totalOs  INA-$totalIna  P-NA-$totalPina  (Total: $totalSkus)",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 },

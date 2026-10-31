@@ -132,27 +132,38 @@ fun RoleSelectionScreen(
                     } else if (stats != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             StatItem(
                                 label = "Total",
                                 count = stats!!.total.toString(),
-                                countColor = Color.White
+                                countColor = Color.White,
+                                modifier = Modifier.weight(1f)
                             )
                             StatItem(
-                                label = "Available",
+                                label = "AV",
                                 count = stats!!.available.toString(),
-                                countColor = Color(0xFF10B981)
+                                countColor = Color(0xFF10B981),
+                                modifier = Modifier.weight(1f)
                             )
                             StatItem(
                                 label = "OS",
                                 count = stats!!.outofstock.toString(),
-                                countColor = Color(0xFFF59E0B)
+                                countColor = Color(0xFFF59E0B),
+                                modifier = Modifier.weight(1f)
                             )
                             StatItem(
-                                label = "Inactive",
+                                label = "INA",
                                 count = stats!!.inactive.toString(),
-                                countColor = Color(0xFFEF4444)
+                                countColor = Color(0xFFEF4444),
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatItem(
+                                label = "P-NA",
+                                count = stats!!.permanent_inactive.toString(),
+                                countColor = Color(0xFFC084FC),
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     } else {
@@ -421,25 +432,29 @@ fun RoleSelectionScreen(
 fun StatItem(
     label: String,
     count: String,
-    countColor: Color
+    countColor: Color,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(70.dp)
+        modifier = modifier
     ) {
         Text(
             text = count,
-            fontSize = 22.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = countColor
+            color = countColor,
+            maxLines = 1
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
             fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
             color = Color(0xFF94A3B8),
             textAlign = TextAlign.Center,
-            lineHeight = 13.sp
+            lineHeight = 13.sp,
+            maxLines = 1
         )
     }
 }
