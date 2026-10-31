@@ -6,7 +6,6 @@ import { query } from '../db';
 export const SALES_CONTACTS = [
   { name: 'VS FASHION Sales Desk 1', phone: '+918796333844', rawPhone: '8796333844' },
   { name: 'VS FASHION Sales Desk 2', phone: '+918796893844', rawPhone: '8796893844' },
-  { name: 'VS FASHION Sales Desk 3', phone: '+918796443844', rawPhone: '8796443844' },
 ];
 
 export const CALL_CONTACTS = [

@@ -3492,7 +3492,7 @@ ${clientUrl}
                 <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
                   <li><strong>Zero Price Exposure:</strong> Rates and revised rates are strictly hidden from clients.</li>
                   <li><strong>Zero Quantity Exposure:</strong> Set pieces, total sets, and stock counts are completely hidden.</li>
-                  <li><strong>24-Hour Lifetime:</strong> After 24 hours, clients see randomized WhatsApp sales desk buttons (8796333844, 8796893844, 8796443844), direct call (9718503340), community link, and full social profiles.</li>
+                  <li><strong>24-Hour Lifetime:</strong> After 24 hours, clients see randomized WhatsApp sales desk buttons (8796333844, 8796893844), direct call (9718503340), community link, and full social profiles.</li>
                 </ul>
               </div>
             </div>
