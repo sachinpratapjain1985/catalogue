@@ -68,6 +68,7 @@ data class SKUItemDto(
     val is_permanent_inactive: Boolean = false,
     val rate: Int = 0,
     val revised_rate: Int? = null,
+    val hike_rate: Int? = null,
     val original_created_at: String? = null,
     val age_in_days: Int? = null,
     val real_image_count: Int = 0,
@@ -78,7 +79,12 @@ data class SKUItemDto(
 ) {
     // Helper to get effective price for display and sharing
     fun getEffectiveRate(): Int {
-        return if (revised_rate != null && revised_rate > 0) revised_rate else rate
+        return if (hike_rate != null && hike_rate > 0) hike_rate else if (revised_rate != null && revised_rate > 0) revised_rate else rate
+    }
+
+    // Helper to check if item price is hiked
+    fun isHiked(): Boolean {
+        return hike_rate != null && hike_rate > 0
     }
 
     // Helper to check if item is currently on offer / revised price
@@ -126,7 +132,8 @@ data class StockUpdateRequest(
     val isAvailable: Boolean?,
     val isPermanentInactive: Boolean? = null,
     val rate: Int? = null,
-    val revisedRate: Int? = null
+    val revisedRate: Int? = null,
+    val hikeRate: Int? = null
 )
 
 data class StockUpdateResponse(
@@ -137,6 +144,7 @@ data class StockUpdateResponse(
     val is_permanent_inactive: Boolean = false,
     val rate: Int? = null,
     val revised_rate: Int? = null,
+    val hike_rate: Int? = null,
     val updated_by: Int
 )
 

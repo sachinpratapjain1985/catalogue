@@ -257,6 +257,11 @@ export const runMigrations = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_stock_is_permanent_inactive ON stock(is_permanent_inactive)');
     console.log('[Migration] is_permanent_inactive column verified on stock table.');
 
+    // 6.6 Hike Rate migration on items table
+    await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS hike_rate INTEGER DEFAULT NULL');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_items_hike_rate ON items(hike_rate) WHERE hike_rate IS NOT NULL');
+    console.log('[Migration] hike_rate column verified on items table.');
+
     // 7. Showcase Feature (24-Hour VIP Client Links)
     await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS is_in_showcase BOOLEAN NOT NULL DEFAULT FALSE');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_is_in_showcase ON items(is_in_showcase)');

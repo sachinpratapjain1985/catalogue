@@ -68,7 +68,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     let queryStr = `
-       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.hike_rate, i.original_created_at,
               COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
@@ -105,12 +105,12 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response): Promise<
     }
     if (minRate !== null && !isNaN(minRate)) {
       paramCount++;
-      queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+      queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) >= $${paramCount}`;
       params.push(minRate);
     }
     if (maxRate !== null && !isNaN(maxRate)) {
       paramCount++;
-      queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+      queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) <= $${paramCount}`;
       params.push(maxRate);
     }
 
@@ -315,7 +315,7 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
     }
 
     let queryStr = `
-       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+       SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.hike_rate, i.original_created_at,
               COALESCE(i.is_in_showcase, false) as is_in_showcase,
               c.name as category_name,
               (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
@@ -351,12 +351,12 @@ router.get('/revised-items', async (req: AuthenticatedRequest, res: Response): P
     }
     if (minRate !== null && !isNaN(minRate)) {
       paramCount++;
-      queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+      queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) >= $${paramCount}`;
       params.push(minRate);
     }
     if (maxRate !== null && !isNaN(maxRate)) {
       paramCount++;
-      queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+      queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) <= $${paramCount}`;
       params.push(maxRate);
     }
 
@@ -454,7 +454,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     if (role === 'sales') {
       // Sales user only sees available stock items
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.hike_rate, i.original_created_at,
                 COALESCE(i.is_in_showcase, false) as is_in_showcase,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 s.sets_count, s.total_pieces, s.is_available,
@@ -480,12 +480,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;
-        queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) >= $${paramCount}`;
         params.push(minRate);
       }
       if (maxRate !== null && !isNaN(maxRate)) {
         paramCount++;
-        queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
       queryStr += ` ORDER BY (s.sets_count > 0) DESC, 
@@ -513,7 +513,7 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
     } else {
       // Stockists and Admins see all items to maintain stock
       let queryStr = `
-         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.original_created_at,
+         SELECT i.id, i.sku_id, i.category_id, i.image_path, i.pieces_per_set, i.description, i.material, i.work, i.stitcher_name, i.rate, i.revised_rate, i.hike_rate, i.original_created_at,
                 COALESCE(i.is_in_showcase, false) as is_in_showcase,
                 (CURRENT_DATE - DATE(i.original_created_at)) as age_in_days,
                 COALESCE(s.sets_count, 0) as sets_count, 
@@ -553,12 +553,12 @@ router.get('/categories/:id/items', async (req: AuthenticatedRequest, res: Respo
       }
       if (minRate !== null && !isNaN(minRate)) {
         paramCount++;
-        queryStr += ` AND COALESCE(i.revised_rate, i.rate) >= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) >= $${paramCount}`;
         params.push(minRate);
       }
       if (maxRate !== null && !isNaN(maxRate)) {
         paramCount++;
-        queryStr += ` AND COALESCE(i.revised_rate, i.rate) <= $${paramCount}`;
+        queryStr += ` AND COALESCE(i.hike_rate, i.revised_rate, i.rate) <= $${paramCount}`;
         params.push(maxRate);
       }
       queryStr += ` ORDER BY s.is_permanent_inactive ASC, s.is_available DESC, (s.sets_count > 0) DESC, 
@@ -624,7 +624,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   const userId = req.user?.id || 0;
   const role = req.user?.role;
   const baseRole = req.user?.baseRole;
-  const { setsCount, isAvailable, isPermanentInactive, rate, revisedRate } = req.body;
+  const { setsCount, isAvailable, isPermanentInactive, rate, revisedRate, hikeRate } = req.body;
 
   if (role !== 'stockist' && role !== 'superadmin' && role !== 'manager' && role !== 'both') {
     res.status(403).json({ error: 'Only stockists, managers or admins can modify stock levels or rates' });
@@ -634,7 +634,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
   try {
     // Get current item and stock state (LEFT JOIN so missing stock row doesn't block saving)
     const currentRes = await query(
-      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, 
+      `SELECT i.id, i.category_id, i.pieces_per_set, i.rate, i.revised_rate, i.hike_rate, 
               COALESCE(s.sets_count, 0) as sets_count, 
               COALESCE(s.total_pieces, 0) as total_pieces, 
               COALESCE(s.is_available, true) as is_available, 
@@ -719,6 +719,33 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       }
     }
 
+    // Handle optional hike rate update (only verify permission if hikeRate is actually changing)
+    let updatedHikeRate = item.hike_rate;
+    if (hikeRate !== undefined) {
+      const parsedHike = (hikeRate === null || hikeRate === '' || parseInt(hikeRate) <= 0) ? null : parseInt(hikeRate);
+      if (parsedHike !== item.hike_rate) {
+        const userCheck = await query('SELECT role, can_edit_rates FROM users WHERE id = $1', [userId]);
+        const userRecord = userCheck.rows[0];
+        const canUserEditRates = userRecord && (userRecord.role === 'superadmin' || userRecord.role === 'manager' || !!userRecord.can_edit_rates);
+
+        if (!canUserEditRates) {
+          res.status(403).json({ error: 'You are not authorized to update pricing rates.' });
+          return;
+        }
+
+        await query(
+          'UPDATE items SET hike_rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [parsedHike, itemId]
+        );
+        await query(
+          'INSERT INTO rate_logs (item_id, user_id, old_rate, new_rate) VALUES ($1, $2, $3, $4)',
+          [itemId, userId, item.hike_rate ?? item.rate, parsedHike ?? item.rate]
+        );
+        updatedHikeRate = parsedHike;
+        console.log(`[Rate Log] Hike Rate for item ${itemId} changed to ${parsedHike} by user ${userId} via mobile/catalog route`);
+      }
+    }
+
     // Determine updates
     let targetPermanentInactive = item.is_permanent_inactive;
     if (isPermanentInactive !== undefined) {
@@ -783,6 +810,7 @@ router.post('/items/:id/stock', async (req: AuthenticatedRequest, res: Response)
       is_permanent_inactive: targetPermanentInactive,
       rate: updatedRate,
       revised_rate: updatedRevisedRate,
+      hike_rate: updatedHikeRate,
       updated_by: userId,
     });
   } catch (error) {

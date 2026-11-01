@@ -365,7 +365,7 @@ adminShowcaseRouter.delete('/links/:token', async (req: AuthenticatedRequest, re
 adminShowcaseRouter.get('/items', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const result = await query(
-      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.work, i.stitcher_name, i.rate, i.revised_rate,
+      `SELECT i.id, i.sku_id, i.category_id, i.image_path, i.work, i.stitcher_name, i.rate, i.revised_rate, i.hike_rate,
               c.name as category_name,
               s.sets_count, s.is_available,
               i.is_in_showcase

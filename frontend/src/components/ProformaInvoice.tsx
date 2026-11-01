@@ -30,6 +30,7 @@ interface CatalogItem {
   pieces_per_set: number;
   rate: number;
   revised_rate?: number | null;
+  hike_rate?: number | null;
   work?: string;
   material?: string;
   description?: string;
@@ -370,7 +371,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               const matchedCatalog = catalogItems.find(c => c.sku_id.toLowerCase() === (it.article_number || '').trim().toLowerCase());
               const defaultPcs = matchedCatalog ? (matchedCatalog.pieces_per_set || 3) : 3;
               const pcs = parseInt(it.pieces_per_set) || 1;
-              const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
+              const defaultRate = matchedCatalog ? ((matchedCatalog.hike_rate && matchedCatalog.hike_rate > 0) ? matchedCatalog.hike_rate : (matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
               const rt = parseFloat(it.rate) || 0;
               const isInactive = matchedCatalog ? matchedCatalog.is_available === false : false;
               const isOutOfStock = matchedCatalog ? (matchedCatalog.is_available !== false && ((matchedCatalog.sets_count ?? 0) <= 0)) : false;
@@ -441,7 +442,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
               const matchedCatalog = catalogItems.find(c => c.sku_id.toLowerCase() === (it.article_number || '').trim().toLowerCase());
               const defaultPcs = matchedCatalog ? (matchedCatalog.pieces_per_set || 3) : 3;
               const pcs = parseInt(it.pieces_per_set) || 1;
-              const defaultRate = matchedCatalog ? ((matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
+              const defaultRate = matchedCatalog ? ((matchedCatalog.hike_rate && matchedCatalog.hike_rate > 0) ? matchedCatalog.hike_rate : (matchedCatalog.revised_rate && matchedCatalog.revised_rate > 0) ? matchedCatalog.revised_rate : matchedCatalog.rate) : 0;
               const rt = parseFloat(it.rate) || 0;
               const isInactive = matchedCatalog ? matchedCatalog.is_available === false : false;
               const isOutOfStock = matchedCatalog ? (matchedCatalog.is_available !== false && ((matchedCatalog.sets_count ?? 0) <= 0)) : false;
@@ -530,7 +531,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
           item.original_pieces_per_set = defaultPcs;
           item.is_manual_pcs = false;
 
-          const chosenRate = found.revised_rate && found.revised_rate > 0 ? found.revised_rate : found.rate;
+          const chosenRate = found.hike_rate && found.hike_rate > 0 ? found.hike_rate : (found.revised_rate && found.revised_rate > 0 ? found.revised_rate : found.rate);
           item.rate = chosenRate || 0;
           item.original_rate = chosenRate || 0;
           item.is_manual_rate = false;
@@ -1411,7 +1412,7 @@ export default function ProformaInvoice({ token, user: _user }: Props) {
                                   : `[Stock: ${c.sets_count ?? 0} sets]`;
                               return (
                                 <option key={c.id} value={c.sku_id}>
-                                  {c.sku_id} • {tag} • {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.revised_rate || c.rate})
+                                  {c.sku_id} • {tag} • {c.category_name} ({c.pieces_per_set} pcs/set @ ₹{c.hike_rate || c.revised_rate || c.rate})
                                 </option>
                               );
                             })}

@@ -267,6 +267,103 @@ object SharingUtils {
     }
 
     /**
+     * Renders a fully opaque luxury rate badge in the bottom-left corner of the catalog image
+     * to completely overwrite and mask the existing marka / printed rate.
+     */
+    fun addBottomLeftHikeRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // Scaled typography based on canvas width
+        val labelFontSize = (width / 38f).coerceIn(16f, 32f)
+        val amountFontSize = (width / 24f).coerceIn(24f, 54f)
+
+        val paddingHorizontal = amountFontSize * 0.45f
+        val paddingVertical = labelFontSize * 0.35f
+        val lineSpacing = labelFontSize * 0.20f
+        val cornerRadius = labelFontSize * 0.35f
+
+        val marginLeft = width * 0.030f
+        val marginBottom = height * 0.035f
+
+        val labelText = "RATE"
+        val amountText = if (rateText.startsWith("₹")) rateText else "₹$rateText"
+
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(245, 158, 11) // Luxury gold
+            textSize = labelFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.12f
+            textAlign = Paint.Align.CENTER
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = amountFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+
+        val labelBounds = android.graphics.Rect()
+        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
+        val labelWidth = labelPaint.measureText(labelText)
+        val labelHeight = labelBounds.height().toFloat()
+
+        val amountBounds = android.graphics.Rect()
+        amountPaint.getTextBounds(amountText, 0, amountText.length, amountBounds)
+        val amountWidth = amountPaint.measureText(amountText)
+        val amountHeight = amountBounds.height().toFloat()
+
+        val contentWidth = maxOf(labelWidth, amountWidth)
+        // Ensure badge is wide and tall enough to cover any legacy marka stamp completely
+        val badgeWidth = (contentWidth + (paddingHorizontal * 2f)).coerceAtLeast(width * 0.18f)
+        val badgeHeight = (labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)).coerceAtLeast(height * 0.065f)
+
+        val left = marginLeft
+        val right = left + badgeWidth
+        val bottom = height - marginBottom
+        val top = bottom - badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Drop shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(140, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val shadowRect = android.graphics.RectF(left + 3f, top + 3f, right + 3f, bottom + 3f)
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        // 100% Opaque Solid Dark Background to completely conceal the underlying marka
+        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(17, 24, 39) // Solid dark #111827
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
+
+        // Gold luxury border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(245, 158, 11) // Luxury gold
+            style = Paint.Style.STROKE
+            strokeWidth = (labelFontSize * 0.08f).coerceAtLeast(2.0f)
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
+
+        val centerX = badgeRect.centerX()
+        // Draw Label "RATE"
+        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
+        canvas.drawText(labelText, centerX, labelY, labelPaint)
+
+        // Draw Amount "₹{hike_rate}"
+        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
+        canvas.drawText(amountText, centerX, amountY, amountPaint)
+
+        return mutableBitmap
+    }
+
+    /**
      * Renders a small, sleek SKU-ID and coded price reference badge in the top-left corner for RAW images.
      */
     fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String, priceCode: String = ""): Bitmap {
@@ -433,6 +530,7 @@ object SharingUtils {
                     val targetFile: File,
                     val isRealImage: Boolean,
                     val hasRevisedRate: Boolean,
+                    val hasHikeRate: Boolean,
                     val hasStitcher: Boolean,
                     val suffix: String
                 )
@@ -456,6 +554,7 @@ object SharingUtils {
                                 targetFile = file,
                                 isRealImage = shareRealImages && item.real_images.isNotEmpty(),
                                 hasRevisedRate = item.revised_rate != null && item.revised_rate > 0,
+                                hasHikeRate = item.hike_rate != null && item.hike_rate > 0,
                                 hasStitcher = !item.stitcher_name.isNullOrBlank(),
                                 suffix = suffix
                             )
@@ -483,7 +582,7 @@ object SharingUtils {
                             val body = response.body ?: throw Exception("Empty body for ${task.item.sku_id}")
                             val bytes = body.bytes()
 
-                            if (task.isRealImage || task.hasRevisedRate || task.hasStitcher) {
+                            if (task.isRealImage || task.hasRevisedRate || task.hasHikeRate || task.hasStitcher) {
                                 val decodeOptions = BitmapFactory.Options().apply {
                                     inPreferredConfig = Bitmap.Config.ARGB_8888
                                     inScaled = false
@@ -502,7 +601,7 @@ object SharingUtils {
                                         processedBitmap = wmBitmap
 
                                         // 2. Add SKU-ID and coded price in Left corner for RAW images
-                                        val activeRate = if (task.item.revised_rate != null && task.item.revised_rate > 0) task.item.revised_rate else task.item.rate
+                                        val activeRate = if (task.item.hike_rate != null && task.item.hike_rate > 0) task.item.hike_rate else if (task.item.revised_rate != null && task.item.revised_rate > 0) task.item.revised_rate else task.item.rate
                                         val priceCode = encodePriceCode(activeRate)
                                         val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, task.item.sku_id, priceCode)
                                         if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
@@ -518,6 +617,15 @@ object SharingUtils {
                                             processedBitmap.recycle()
                                         }
                                         processedBitmap = rateBadgeBitmap
+                                    }
+
+                                    // 3.5 Apply HIKE RATE bottom-left watermark badge to overwrite old marka if hike rate exists
+                                    if (task.hasHikeRate && task.item.hike_rate != null && task.item.hike_rate > 0) {
+                                        val hikeBadgeBitmap = addBottomLeftHikeRateBadge(processedBitmap, "₹${task.item.hike_rate}")
+                                        if (processedBitmap != rawBitmap && processedBitmap != hikeBadgeBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = hikeBadgeBitmap
                                     }
 
                                     // 4. Apply Stitcher Name in bottom center (small, discreet, not highlighted) if present

@@ -1326,6 +1326,7 @@ fun SalesItemCard(
     var showEditRateDialog by remember { mutableStateOf(false) }
     var currentRate by remember { mutableStateOf(item.rate) }
     var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
+    var currentHikeRate by remember { mutableStateOf(item.hike_rate) }
 
     Card(
         modifier = Modifier
@@ -1452,7 +1453,22 @@ fun SalesItemCard(
                         showEditRateDialog = true
                     }
                 ) {
-                    if (currentRevisedRate != null && currentRevisedRate!! > 0) {
+                    if (currentHikeRate != null && currentHikeRate!! > 0) {
+                        Column {
+                            Text(
+                                text = "▲ HIKE",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFEF4444)
+                            )
+                            Text(
+                                text = "₹$currentHikeRate",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFEF4444)
+                            )
+                        }
+                    } else if (currentRevisedRate != null && currentRevisedRate!! > 0) {
                         Column {
                             Text(
                                 text = "🔥 OFFER",
@@ -1524,6 +1540,7 @@ fun SalesItemCard(
     if (showEditRateDialog) {
         var editBaseRate by remember { mutableStateOf(currentRate.toString()) }
         var editRevisedRate by remember { mutableStateOf(currentRevisedRate?.toString() ?: "") }
+        var editHikeRate by remember { mutableStateOf(currentHikeRate?.toString() ?: "") }
         var isSaving by remember { mutableStateOf(false) }
         var saveError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
@@ -1561,6 +1578,15 @@ fun SalesItemCard(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    OutlinedTextField(
+                        value = editHikeRate,
+                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editHikeRate = it },
+                        label = { Text("▲ Hike Price (₹)") },
+                        placeholder = { Text("Leave blank to remove hike") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     if (saveError != null) {
                         Text(
                             text = saveError!!,
@@ -1579,17 +1605,20 @@ fun SalesItemCard(
                             try {
                                 val baseVal = editBaseRate.toIntOrNull() ?: currentRate
                                 val revVal = if (editRevisedRate.isBlank()) null else editRevisedRate.toIntOrNull()
+                                val hikeVal = if (editHikeRate.isBlank()) null else editHikeRate.toIntOrNull()
                                 val response = apiService.updateStock(
                                     item.id,
                                     StockUpdateRequest(
                                         setsCount = null,
                                         isAvailable = null,
                                         rate = baseVal,
-                                        revisedRate = revVal
+                                        revisedRate = revVal,
+                                        hikeRate = hikeVal
                                     )
                                 )
                                 currentRate = response.rate ?: baseVal
                                 currentRevisedRate = response.revised_rate
+                                currentHikeRate = response.hike_rate
                                 showEditRateDialog = false
                             } catch (e: Exception) {
                                 saveError = e.message ?: "Failed to update pricing"

@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS items (
     description TEXT,
     material VARCHAR(100),
     rate INTEGER NOT NULL DEFAULT 0,
+    revised_rate INTEGER DEFAULT NULL,
+    hike_rate INTEGER DEFAULT NULL,
     original_created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -97,6 +99,8 @@ CREATE INDEX IF NOT EXISTS idx_items_category ON items(category_id);
 CREATE INDEX IF NOT EXISTS idx_devices_uuid ON devices(device_uuid);
 CREATE INDEX IF NOT EXISTS idx_items_original_created_at ON items(original_created_at);
 CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_items_revised_rate ON items(revised_rate) WHERE revised_rate IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_items_hike_rate ON items(hike_rate) WHERE hike_rate IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_rate_logs_item ON rate_logs(item_id);
 
 -- Insert default admin user (username: admin, password: adminpassword)

@@ -808,6 +808,8 @@ fun StockItemCard(
     var rateText by remember { mutableStateOf(item.rate.toString()) }
     var revisedRateText by remember { mutableStateOf(item.revised_rate?.toString() ?: "") }
     var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
+    var hikeRateText by remember { mutableStateOf(item.hike_rate?.toString() ?: "") }
+    var currentHikeRate by remember { mutableStateOf(item.hike_rate) }
     var isUpdating by remember { mutableStateOf(false) }
     var isSuccess by remember { mutableStateOf(false) }
     var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
@@ -952,7 +954,21 @@ fun StockItemCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (currentRevisedRate != null && currentRevisedRate!! > 0 && currentRevisedRate != item.rate) {
+                        if (currentHikeRate != null && currentHikeRate!! > 0 && currentHikeRate != item.rate) {
+                            Text(
+                                text = "₹" + item.rate,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "▲ ₹" + currentHikeRate,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEF4444)
+                            )
+                        } else if (currentRevisedRate != null && currentRevisedRate!! > 0 && currentRevisedRate != item.rate) {
                             Text(
                                 text = "₹" + item.rate,
                                 fontSize = 10.sp,
@@ -1163,6 +1179,36 @@ fun StockItemCard(
                                 }
                             }
                         )
+
+                        // Hike rate input (ultra compact)
+                        BasicTextField(
+                            value = hikeRateText,
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                    hikeRateText = newValue
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 11.sp, 
+                                fontWeight = FontWeight.Bold, 
+                                color = Color(0xFFEF4444),
+                                textAlign = TextAlign.Center
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(28.dp)
+                                .border(1.dp, if (hikeRateText.isNotEmpty()) Color(0xFFEF4444) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 4.dp, vertical = 5.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (hikeRateText.isEmpty()) Text("Hike", fontSize = 10.sp, color = Color(0xFFEF4444).copy(alpha = 0.7f))
+                                    innerTextField()
+                                }
+                            }
+                        )
                     }
 
                     // Save Button (compact)
@@ -1175,9 +1221,11 @@ fun StockItemCard(
                                     val canEdit = sessionManager.canEditRates()
                                     val parsedBase = rateText.toIntOrNull() ?: item.rate
                                     val parsedRev = if (revisedRateText.isBlank()) null else revisedRateText.toIntOrNull()
-                                    
+                                    val parsedHike = if (hikeRateText.isBlank()) null else hikeRateText.toIntOrNull()
+
                                     val finalRate = if (canEdit && parsedBase != item.rate) parsedBase else null
                                     val finalRevised = if (canEdit && parsedRev != item.revised_rate) parsedRev else null
+                                    val finalHike = if (canEdit && parsedHike != item.hike_rate) parsedHike else null
 
                                     val response = apiService.updateStock(
                                         item.id,
@@ -1186,10 +1234,12 @@ fun StockItemCard(
                                             isAvailable = isAvailable, 
                                             isPermanentInactive = isPermanentInactive,
                                             rate = finalRate,
-                                            revisedRate = finalRevised
+                                            revisedRate = finalRevised,
+                                            hikeRate = finalHike
                                         )
                                     )
                                     currentRevisedRate = response.revised_rate
+                                    currentHikeRate = response.hike_rate
                                     isAvailable = response.is_available
                                     isPermanentInactive = response.is_permanent_inactive
                                     isSuccess = true

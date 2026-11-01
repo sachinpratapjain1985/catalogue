@@ -50,6 +50,7 @@ interface SKUItem {
   stitcher_name?: string | null;
   rate: number;
   revised_rate?: number | null;
+  hike_rate?: number | null;
   sets_count: number;
   total_pieces: number;
   is_available: boolean;
@@ -112,6 +113,7 @@ export default function Catalogs({ token, user }: CatalogsProps) {
   const [editStitcherName, setEditStitcherName] = useState('');
   const [editRate, setEditRate] = useState('');
   const [editRevisedRate, setEditRevisedRate] = useState('');
+  const [editHikeRate, setEditHikeRate] = useState('');
   const [editSetsCount, setEditSetsCount] = useState(0);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
   const [editIsPermanentInactive, setEditIsPermanentInactive] = useState(false);
@@ -824,6 +826,7 @@ ${clientUrl}
     setEditStitcherName(item.stitcher_name || '');
     setEditRate(item.rate.toString());
     setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
+    setEditHikeRate(item.hike_rate ? item.hike_rate.toString() : '');
     setEditSetsCount(item.sets_count);
     setEditIsAvailable(item.is_available);
     setEditIsPermanentInactive(!!item.is_permanent_inactive);
@@ -856,6 +859,11 @@ ${clientUrl}
         } else {
           formData.append('revisedRate', '');
         }
+        if (editHikeRate.trim() !== '') {
+          formData.append('hikeRate', editHikeRate.trim());
+        } else {
+          formData.append('hikeRate', '');
+        }
         formData.append('setsCount', editSetsCount.toString());
         formData.append('isAvailable', editIsAvailable ? 'true' : 'false');
         formData.append('isPermanentInactive', editIsPermanentInactive ? 'true' : 'false');
@@ -885,6 +893,7 @@ ${clientUrl}
             stitcherName: editStitcherName.trim(),
             rate: editRate,
             revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
+            hikeRate: editHikeRate.trim() === '' ? null : editHikeRate.trim(),
             setsCount: editSetsCount,
             isAvailable: editIsAvailable,
             isPermanentInactive: editIsPermanentInactive,
@@ -2128,7 +2137,17 @@ ${clientUrl}
                           <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
                           <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Qty: <strong>{item.total_pieces}</strong></span>
                         </div>
-                        {item.revised_rate && item.revised_rate > 0 ? (
+                        {item.hike_rate && item.hike_rate > 0 ? (
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.65rem', background: '#ef4444', color: '#fff', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
+                              ▲ HIKE PRICE
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
+                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ef4444' }}>₹{item.hike_rate}</span>
+                            </div>
+                          </div>
+                        ) : item.revised_rate && item.revised_rate > 0 ? (
                           <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: '0.65rem', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
                               🔥 NEW OFFER PRICE
@@ -2380,7 +2399,7 @@ ${clientUrl}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
                 <div className="form-group">
                   <label>Base Rate (₹)</label>
                   <input 
@@ -2399,6 +2418,17 @@ ${clientUrl}
                     value={editRevisedRate}
                     onChange={e => setEditRevisedRate(e.target.value)}
                     style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ color: '#f43f5e', fontWeight: 600 }}>▲ Hike Price (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 520 (or blank)"
+                    value={editHikeRate}
+                    onChange={e => setEditHikeRate(e.target.value)}
+                    style={{ borderColor: editHikeRate ? '#f43f5e' : undefined }}
                   />
                 </div>
 

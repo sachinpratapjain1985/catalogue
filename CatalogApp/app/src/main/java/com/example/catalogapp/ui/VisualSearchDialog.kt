@@ -606,7 +606,23 @@ fun VisualMatchCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    if (item.isRevised()) {
+                    if (item.isHiked()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "₹${item.hike_rate}",
+                                color = Color(0xFFEF4444),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "₹${item.rate}",
+                                color = Color(0xFF64748B),
+                                fontSize = 11.sp,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            )
+                        }
+                    } else if (item.isRevised()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "₹${item.revised_rate}",
