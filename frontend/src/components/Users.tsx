@@ -138,7 +138,7 @@ export default function Users({ token }: UsersProps) {
       canAccessRealImages,
       canManageProforma,
       canSelectAllArticles,
-      categoryIds: (role === 'stockist' || role === 'both' || role === 'manager') ? selectedCatIds : []
+      categoryIds: role !== 'superadmin' ? selectedCatIds : []
     };
 
     try {
@@ -715,7 +715,7 @@ export default function Users({ token }: UsersProps) {
                     </div>
                   </td>
                   <td style={{ maxWidth: '240px', fontSize: '0.85rem' }}>
-                    {(u.role === 'stockist' || u.role === 'both' || u.role === 'manager') ? (
+                    {u.role !== 'superadmin' ? (
                       u.assignedCategories.length === 0 ? (
                         <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>No folders assigned</span>
                       ) : (
@@ -728,7 +728,7 @@ export default function Users({ token }: UsersProps) {
                         </div>
                       )
                     ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>All Folders (Inherited)</span>
+                      <span style={{ color: 'var(--text-muted)' }}>All Folders (Superadmin)</span>
                     )}
                   </td>
                   <td>
