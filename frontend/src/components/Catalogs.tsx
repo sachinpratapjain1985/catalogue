@@ -1,3814 +1,3823 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  FolderPlus, 
-  Upload, 
-  Trash2, 
-  Search, 
-  Filter, 
-  Image as ImageIcon,
-  CheckCircle,
-  XCircle,
-  Edit2,
-  Check,
-  X,
-  AlertCircle,
-  Share2,
-  Copy,
-  Download,
-  Camera,
-  Sparkles,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Star,
-  Link,
-  Mail,
-  ExternalLink,
-  AlertOctagon
-} from 'lucide-react';
-import { getPatternInfo } from './ShowcaseView';
-
-interface Category {
-  id: number;
-  name: string;
-}
-
-interface Work {
-  id: number;
-  name: string;
-}
-
-interface SKUItem {
-  id: number;
-  sku_id: string;
-  category_id: number;
-  image_path: string;
-  pieces_per_set: number;
-  description: string;
-  material: string;
-  work?: string;
-  stitcher_name?: string | null;
-  rate: number;
-  revised_rate?: number | null;
-  hike_rate?: number | null;
-  sets_count: number;
-  total_pieces: number;
-  is_available: boolean;
-  is_permanent_inactive?: boolean;
-  is_in_showcase?: boolean;
-  original_created_at?: string;
-  created_at: string;
-  category_name?: string;
-  real_image_count?: number;
-  real_images?: string[];
-}
-
-interface UserProfile {
-  id: number;
-  username: string;
-  role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
-}
-
-interface CatalogsProps {
-  token: string;
-  user: UserProfile | null;
-}
-
-export default function Catalogs({ token, user }: CatalogsProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [works, setWorks] = useState<Work[]>([]);
-  const [items, setItems] = useState<SKUItem[]>([]);
-  
-  // Category creation states
-  const [newCatName, setNewCatName] = useState('');
-
-  // Work Master management states
-  const [showWorksModal, setShowWorksModal] = useState(false);
-  const [newWorkName, setNewWorkName] = useState('');
-  const [editingWorkId, setEditingWorkId] = useState<number | null>(null);
-  const [editingWorkName, setEditingWorkName] = useState('');
-  
-  // SKU creation states
-  const [skuId, setSkuId] = useState('');
-  const [selectedCatId, setSelectedCatId] = useState('');
-  const [piecesPerSet, setPiecesPerSet] = useState(4);
-  const [description, setDescription] = useState('');
-  const [material, setMaterial] = useState('');
-  const [work, setWork] = useState('');
-  const [stitcherName, setStitcherName] = useState('');
-  const [rate, setRate] = useState('');
-  const [stockType, setStockType] = useState<'new' | 'old'>('new');
-  const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  
-  // Modal Edit states
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<SKUItem | null>(null);
-  const [editSkuId, setEditSkuId] = useState('');
-  const [editCategoryId, setEditCategoryId] = useState('');
-  const [editPiecesPerSet, setEditPiecesPerSet] = useState(4);
-  const [editMaterial, setEditMaterial] = useState('');
-  const [editWork, setEditWork] = useState('');
-  const [editStitcherName, setEditStitcherName] = useState('');
-  const [editRate, setEditRate] = useState('');
-  const [editRevisedRate, setEditRevisedRate] = useState('');
-  const [editHikeRate, setEditHikeRate] = useState('');
-  const [editSetsCount, setEditSetsCount] = useState(0);
-  const [editIsAvailable, setEditIsAvailable] = useState(true);
-  const [editIsPermanentInactive, setEditIsPermanentInactive] = useState(false);
-  const [editDescription, setEditDescription] = useState('');
-  const [editImageFile, setEditImageFile] = useState<File | null>(null);
-  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
-  const editFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Folder/Category editing states
-  const [editingCatId, setEditingCatId] = useState<number | null>(null);
-  const [editingCatName, setEditingCatName] = useState('');
-
-  // WhatsApp Web multi-share states
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [sharePhone, setSharePhone] = useState('');
-  const [webSendDescription, setWebSendDescription] = useState(false);
-  const [webShareRealImages, setWebShareRealImages] = useState(false);
-  const [shareImagesPerItem, setShareImagesPerItem] = useState<number>(1);
-  const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
-  const [previewLightboxTitle, setPreviewLightboxTitle] = useState<string | null>(null);
-  const [previewLightboxItem, setPreviewLightboxItem] = useState<SKUItem | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [copiedText, setCopiedText] = useState(false);
-  const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
-
-  // RAW Real Images states
-  const [realImagesFiles, setRealImagesFiles] = useState<File[]>([]);
-  const [realImagesPreviews, setRealImagesPreviews] = useState<string[]>([]);
-  const [realImagesModalItem, setRealImagesModalItem] = useState<SKUItem | null>(null);
-  const [realImagesList, setRealImagesList] = useState<Array<{ id: number; item_id: number; image_path: string; watermarked_path: string }>>([]);
-  const [uploadingRealImages, setUploadingRealImages] = useState(false);
-  const [modalSelectedFiles, setModalSelectedFiles] = useState<File[]>([]);
-  const [modalSelectedPreviews, setModalSelectedPreviews] = useState<string[]>([]);
-  const [modalSuccessMsg, setModalSuccessMsg] = useState('');
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  
-  // Filters/Search
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCatId, setFilterCatId] = useState('');
-  const [filterWork, setFilterWork] = useState('');
-  const [filterAgeLimit, setFilterAgeLimit] = useState(false);
-  const [filterOffersOnly, setFilterOffersOnly] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterRateRange, setFilterRateRange] = useState('');
-  const [filterShowcaseOnly, setFilterShowcaseOnly] = useState(false);
-
-  // 24-Hour Showcase management states
-  const [showcaseModalOpen, setShowcaseModalOpen] = useState(false);
-  const [showcaseActiveLink, setShowcaseActiveLink] = useState<{ token: string; url: string; expires_at: string; item_count: number } | null>(null);
-  const [showcaseGenerating, setShowcaseGenerating] = useState(false);
-  const [showcaseSendingEmail, setShowcaseSendingEmail] = useState(false);
-  const [showcaseEmailRecipient, setShowcaseEmailRecipient] = useState('wholesale@desukafashion.com');
-  const [showcaseSuccessMsg, setShowcaseSuccessMsg] = useState('');
-  const [showcaseErrorMsg, setShowcaseErrorMsg] = useState('');
-  const [copiedShowcaseText, setCopiedShowcaseText] = useState(false);
-  const [showcaseSuspending, setShowcaseSuspending] = useState(false);
-
-  // Messages
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const hasSetInitialFolder = useRef(false);
-
-  useEffect(() => {
-    fetchCategories();
-    fetchWorks();
-    fetchSKUs();
-    fetchShowcaseSummary();
-  }, []);
-
-  useEffect(() => {
-    if (categories.length > 0) {
-      if (!hasSetInitialFolder.current) {
-        setFilterCatId(categories[0].id.toString());
-        hasSetInitialFolder.current = true;
-      } else {
-        // If selected folder is deleted, fallback to the first folder
-        setFilterCatId(prev => {
-          if (prev === '') return prev; // Keep "All Folders" if explicitly selected
-          const exists = categories.some(c => c.id.toString() === prev);
-          return exists ? prev : categories[0].id.toString();
-        });
-      }
-    }
-  }, [categories]);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/catalog/categories', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
-    } catch (e) {
-      console.error('Failed to load categories', e);
-    }
-  };
-
-  const fetchWorks = async () => {
-    try {
-      const response = await fetch('/api/catalog/works', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setWorks(data);
-      }
-    } catch (e) {
-      console.error('Failed to load works', e);
-    }
-  };
-
-  const fetchShowcaseSummary = async () => {
-    try {
-      const response = await fetch('/api/admin/showcase/summary', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setShowcaseActiveLink(data.activeLink || null);
-        if (data.settings?.daily_email_recipient) {
-          setShowcaseEmailRecipient(data.settings.daily_email_recipient);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load showcase summary', e);
-    }
-  };
-
-  const handleToggleShowcase = async (item: SKUItem) => {
-    const nextState = !item.is_in_showcase;
-    // Optimistic instant state update
-    setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: nextState } : it));
-    showSuccess(nextState ? `Added ${item.sku_id} to 24h Showcase!` : `Removed ${item.sku_id} from Showcase`);
-
-    try {
-      const res = await fetch('/api/admin/showcase/toggle', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ itemId: item.id, state: nextState })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: data.item.is_in_showcase } : it));
-      } else {
-        // Rollback on failure
-        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
-        showError('Failed to save showcase selection on server');
-      }
-    } catch (err) {
-      console.error('Failed to toggle showcase', err);
-      setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
-      showError('Network error updating showcase');
-    }
-  };
-
-  const handleBulkToggleShowcase = async (add: boolean) => {
-    if (selectedItems.length === 0) return;
-    const targets = [...selectedItems];
-    // Optimistic instant UI update
-    setItems(prev => prev.map(it => targets.includes(it.id) ? { ...it, is_in_showcase: add } : it));
-    showSuccess(`${targets.length} designs ${add ? 'added to' : 'removed from'} 24h showcase!`);
-
-    try {
-      const res = await fetch('/api/admin/showcase/bulk-toggle', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ itemIds: targets, state: add })
-      });
-      if (!res.ok) {
-        showError('Server error while saving bulk showcase update');
-        fetchSKUs();
-      }
-    } catch (err) {
-      console.error('Failed bulk showcase toggle', err);
-      showError('Network error updating showcase');
-      fetchSKUs();
-    }
-  };
-
-  const handleGenerateShowcase = async () => {
-    try {
-      setShowcaseGenerating(true);
-      setShowcaseErrorMsg('');
-      setShowcaseSuccessMsg('');
-
-      // Combine designs already in showcase PLUS any designs currently checked on screen
-      const currentShowcaseIds = items.filter(it => it.is_in_showcase).map(it => it.id);
-      const combinedIds = Array.from(new Set([...currentShowcaseIds, ...selectedItems]));
-
-      const res = await fetch('/api/admin/showcase/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          itemIds: combinedIds.length > 0 ? combinedIds : undefined
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // Also persist flagged state locally if checked items were added
-        if (selectedItems.length > 0) {
-          setItems(prev => prev.map(it => combinedIds.includes(it.id) ? { ...it, is_in_showcase: true } : it));
-        }
-
-        const clientUrl = `${window.location.origin}/showcase/${data.token}`;
-        setShowcaseActiveLink({
-          token: data.token,
-          url: clientUrl,
-          expires_at: data.expires_at,
-          item_count: data.count
-        });
-        setShowcaseSuccessMsg(`Fresh 24-hour showcase link generated successfully with ${data.count} designs!`);
-      } else {
-        setShowcaseErrorMsg(data.error || 'Failed to generate showcase link');
-      }
-    } catch (err: any) {
-      setShowcaseErrorMsg(err.message || 'Server error');
-    } finally {
-      setShowcaseGenerating(false);
-    }
-  };
-
-  const handleSendShowcaseEmail = async () => {
-    try {
-      setShowcaseSendingEmail(true);
-      setShowcaseErrorMsg('');
-      setShowcaseSuccessMsg('');
-      const res = await fetch('/api/admin/showcase/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          token: showcaseActiveLink?.token,
-          email: showcaseEmailRecipient
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowcaseSuccessMsg(data.message || `Email sent successfully to ${showcaseEmailRecipient}!`);
-      } else {
-        setShowcaseErrorMsg(data.message || 'Failed to send email');
-      }
-    } catch (err: any) {
-      setShowcaseErrorMsg(err.message || 'Server error sending email');
-    } finally {
-      setShowcaseSendingEmail(false);
-    }
-  };
-
-  const handleSaveEmailRecipient = async () => {
-    try {
-      await fetch('/api/admin/showcase/settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ daily_email_recipient: showcaseEmailRecipient })
-      });
-      setShowcaseSuccessMsg('Daily 7:00 AM email recipient updated successfully!');
-      setTimeout(() => setShowcaseSuccessMsg(''), 3000);
-    } catch (err) {
-      console.error('Failed to update email recipient', err);
-    }
-  };
-
-  const handleCopyShowcaseWhatsAppText = () => {
-    if (!showcaseActiveLink) return;
-    const clientUrl = `${window.location.origin}/showcase/${showcaseActiveLink.token}`;
-    const shareText = 
-`*DESUKA by VS FASHION — Exclusive Wholesale Showcase*
-
-Check out our latest curated wholesale collection (Valid for limited time):
-${clientUrl}
-
-📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
-🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)
-📞 Daytime Desk: +91 9240202545 | +91 9718503340
-🌐 https://www.desukafashion.com`;
-
-    navigator.clipboard.writeText(shareText);
-    setCopiedShowcaseText(true);
-    setTimeout(() => setCopiedShowcaseText(false), 2500);
-  };
-
-  const handleSuspendShowcase = async () => {
-    if (!showcaseActiveLink) return;
-    if (!window.confirm('Suspend this showcase link immediately? Customers will be blocked from viewing catalog designs and shown the latest catalog contact notice.')) {
-      return;
-    }
-    try {
-      setShowcaseSuspending(true);
-      setShowcaseErrorMsg('');
-      const res = await fetch(`/api/admin/showcase/links/${showcaseActiveLink.token}/suspend`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to suspend link');
-
-      setShowcaseSuccessMsg('Showcase link suspended immediately. Customer access is now blocked.');
-      setShowcaseActiveLink(null);
-      setTimeout(() => setShowcaseSuccessMsg(''), 4000);
-      fetchShowcaseSummary();
-    } catch (err: any) {
-      setShowcaseErrorMsg(err.message || 'Error suspending link');
-      setTimeout(() => setShowcaseErrorMsg(''), 4000);
-    } finally {
-      setShowcaseSuspending(false);
-    }
-  };
-
-  const handleCreateWork = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWorkName.trim()) return;
-
-    try {
-      const response = await fetch('/api/admin/works', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: newWorkName.trim() })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setWorks([...works, data].sort((a, b) => a.name.localeCompare(b.name)));
-        setNewWorkName('');
-        showSuccess('Work type created successfully');
-      } else {
-        showError(data.error || 'Failed to create work type');
-      }
-    } catch (err) {
-      showError('Network error');
-    }
-  };
-
-  const handleRenameWork = async (workId: number) => {
-    if (!editingWorkName.trim()) return;
-
-    try {
-      const response = await fetch(`/api/admin/works/${workId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: editingWorkName.trim() })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setWorks(works.map(w => w.id === workId ? data : w).sort((a, b) => a.name.localeCompare(b.name)));
-        setEditingWorkId(null);
-        fetchSKUs();
-        showSuccess('Work type renamed successfully');
-      } else {
-        showError(data.error || 'Failed to rename work type');
-      }
-    } catch (err) {
-      showError('Network error');
-    }
-  };
-
-  const handleDeleteWork = async (workId: number, workName: string) => {
-    if (!window.confirm(`Are you sure you want to delete work type "${workName}"? Existing items with this work will have their work field cleared.`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/works/${workId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setWorks(works.filter(w => w.id !== workId));
-        fetchSKUs();
-        showSuccess('Work type deleted');
-      } else {
-        const data = await response.json();
-        showError(data.error || 'Failed to delete work type');
-      }
-    } catch (e) {
-      showError('Network error');
-    }
-  };
-
-  const fetchSKUs = async () => {
-    try {
-      const response = await fetch('/api/admin/items', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setItems(data);
-      }
-    } catch (e) {
-      console.error('Failed to load SKU items', e);
-    }
-  };
-
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatName.trim()) return;
-
-    try {
-      const response = await fetch('/api/admin/categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: newCatName })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setCategories([...categories, data].sort((a, b) => a.name.localeCompare(b.name)));
-        setNewCatName('');
-        showSuccess('Folder created successfully');
-      } else {
-        showError(data.error || 'Failed to create folder');
-      }
-    } catch (err) {
-      showError('Network error');
-    }
-  };
-
-  const handleDeleteCategory = async (catId: number, catName: string) => {
-    if (!window.confirm(`Are you sure you want to delete category "${catName}"? This will delete ALL image files and SKU designs associated with it!`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/categories/${catId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setCategories(categories.filter(c => c.id !== catId));
-        fetchSKUs(); // reload SKUs since some might be deleted
-        showSuccess('Category folder deleted');
-      } else {
-        const data = await response.json();
-        showError(data.error || 'Failed to delete category');
-      }
-    } catch (e) {
-      showError('Network error');
-    }
-  };
-
-  const handleRenameCategory = async (catId: number) => {
-    if (!editingCatName.trim()) return;
-
-    try {
-      const response = await fetch(`/api/admin/categories/${catId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: editingCatName.trim() })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setCategories(categories.map(c => c.id === catId ? data : c).sort((a, b) => a.name.localeCompare(b.name)));
-        setEditingCatId(null);
-        showSuccess('Folder renamed successfully');
-      } else {
-        showError(data.error || 'Failed to rename folder');
-      }
-    } catch (err) {
-      showError('Network error');
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setFilePreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleRealImagesFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const filesArr = Array.from(e.target.files).slice(0, 5);
-      setRealImagesFiles(filesArr);
-      setRealImagesPreviews(filesArr.map(f => URL.createObjectURL(f)));
-    }
-  };
-
-  const fetchRealImagesForItem = async (item: SKUItem) => {
-    setRealImagesModalItem(item);
-    setModalSelectedFiles([]);
-    setModalSuccessMsg('');
-    try {
-      const response = await fetch(`/api/admin/items/${item.id}/real-images`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRealImagesList(data);
-      }
-    } catch (e) {
-      console.error('Failed to load real images', e);
-    }
-  };
-
-  const handleSelectModalRealFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const filesArr = Array.from(e.target.files).slice(0, 5);
-      setModalSelectedFiles(filesArr);
-      setModalSelectedPreviews(filesArr.map(f => URL.createObjectURL(f)));
-      setModalSuccessMsg('');
-    }
-  };
-
-  const handleRemoveModalSelectedFile = (index: number) => {
-    const newFiles = modalSelectedFiles.filter((_, i) => i !== index);
-    const newPreviews = modalSelectedPreviews.filter((_, i) => i !== index);
-    setModalSelectedFiles(newFiles);
-    setModalSelectedPreviews(newPreviews);
-  };
-
-  const handleSaveModalRealImages = async () => {
-    if (!realImagesModalItem || modalSelectedFiles.length === 0) return;
-    
-    setUploadingRealImages(true);
-    setModalSuccessMsg('');
-    const formData = new FormData();
-    modalSelectedFiles.forEach(file => {
-      formData.append('real_images', file);
-    });
-
-    try {
-      const response = await fetch(`/api/admin/items/${realImagesModalItem.id}/real-images`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      if (response.ok) {
-        const newImgs = await response.json();
-        const updatedList = [...realImagesList, ...newImgs];
-        setRealImagesList(updatedList);
-        setModalSelectedFiles([]);
-        setModalSelectedPreviews([]);
-        setModalSuccessMsg(`✅ ${newImgs.length} Real Photo(s) Uploaded Successfully for ${realImagesModalItem.sku_id}!`);
-        setItems(prevItems => prevItems.map(it => {
-          if (it.id === realImagesModalItem.id) {
-            return {
-              ...it,
-              real_image_count: updatedList.length,
-              real_images: updatedList.map(img => img.watermarked_path)
-            };
-          }
-          return it;
-        }));
-        setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
-        showSuccess('Real photos uploaded successfully');
-        fetchSKUs();
-      } else {
-        const data = await response.json();
-        showError(data.error || 'Failed to upload real images');
-      }
-    } catch (err) {
-      showError('Network error');
-    } finally {
-      setUploadingRealImages(false);
-    }
-  };
-
-  const handleDeleteRealImage = async (imageId: number) => {
-    if (!window.confirm('Are you sure you want to delete this real photo?')) return;
-    try {
-      const response = await fetch(`/api/admin/items/real-images/${imageId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const updatedList = realImagesList.filter(img => img.id !== imageId);
-        setRealImagesList(updatedList);
-        if (realImagesModalItem) {
-          setItems(prevItems => prevItems.map(it => {
-            if (it.id === realImagesModalItem.id) {
-              return {
-                ...it,
-                real_image_count: updatedList.length,
-                real_images: updatedList.map(img => img.watermarked_path)
-              };
-            }
-            return it;
-          }));
-          setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
-        }
-        showSuccess('Real photo deleted');
-        fetchSKUs();
-      } else {
-        const data = await response.json();
-        showError(data.error || 'Failed to delete real image');
-      }
-    } catch (e) {
-      showError('Network error');
-    }
-  };
-
-  const handleUploadSKU = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!skuId.trim() || !selectedCatId || !selectedFile) {
-      showError('Please fill all SKU details and select an image');
-      return;
-    }
-
-    setLoading(true);
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    const formData = new FormData();
-    formData.append('skuId', skuId.trim());
-    formData.append('categoryId', selectedCatId);
-    formData.append('piecesPerSet', piecesPerSet.toString());
-    formData.append('description', description.trim());
-    formData.append('material', material.trim());
-    formData.append('work', work.trim());
-    formData.append('stitcherName', stitcherName.trim());
-    formData.append('rate', rate.trim() || '0');
-    formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
-    formData.append('image', selectedFile);
-
-    if (realImagesFiles.length > 0) {
-      realImagesFiles.forEach(file => {
-        formData.append('real_images', file);
-      });
-    }
-
-    try {
-      const response = await fetch('/api/admin/items', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setItems([data, ...items]);
-        
-        // Reset form
-        setSkuId('');
-        setPiecesPerSet(4);
-        setDescription('');
-        setMaterial('');
-        setWork('');
-        setStitcherName('');
-        setRate('');
-        setStockType('new');
-        setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
-        setSelectedFile(null);
-        setFilePreview(null);
-        setRealImagesFiles([]);
-        setRealImagesPreviews([]);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        
-        showSuccess(`SKU ${data.sku_id} created successfully`);
-      } else {
-        showError(data.error || 'Failed to upload SKU');
-      }
-    } catch (err) {
-      showError('Upload failed due to connection error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openEditModal = (item: SKUItem) => {
-    setEditingItem(item);
-    setEditSkuId(item.sku_id);
-    setEditCategoryId(item.category_id.toString());
-    setEditPiecesPerSet(item.pieces_per_set);
-    setEditMaterial(item.material || '');
-    setEditWork(item.work || '');
-    setEditStitcherName(item.stitcher_name || '');
-    setEditRate(item.rate.toString());
-    setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
-    setEditHikeRate(item.hike_rate ? item.hike_rate.toString() : '');
-    setEditSetsCount(item.sets_count);
-    setEditIsAvailable(item.is_available);
-    setEditIsPermanentInactive(!!item.is_permanent_inactive);
-    setEditDescription(item.description || '');
-    setEditImageFile(null);
-    setEditImagePreview(item.image_path);
-    if (editFileInputRef.current) editFileInputRef.current.value = '';
-    setIsEditModalOpen(true);
-  };
-
-  const handleUpdateSKU = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingItem) return;
-
-    try {
-      setLoading(true);
-      let response;
-
-      if (editImageFile) {
-        const formData = new FormData();
-        formData.append('skuId', editSkuId);
-        formData.append('categoryId', editCategoryId);
-        formData.append('piecesPerSet', editPiecesPerSet.toString());
-        formData.append('material', editMaterial);
-        formData.append('work', editWork);
-        formData.append('stitcherName', editStitcherName.trim());
-        formData.append('rate', editRate);
-        if (editRevisedRate.trim() !== '') {
-          formData.append('revisedRate', editRevisedRate.trim());
-        } else {
-          formData.append('revisedRate', '');
-        }
-        if (editHikeRate.trim() !== '') {
-          formData.append('hikeRate', editHikeRate.trim());
-        } else {
-          formData.append('hikeRate', '');
-        }
-        formData.append('setsCount', editSetsCount.toString());
-        formData.append('isAvailable', editIsAvailable ? 'true' : 'false');
-        formData.append('isPermanentInactive', editIsPermanentInactive ? 'true' : 'false');
-        formData.append('description', editDescription);
-        formData.append('image', editImageFile);
-
-        response = await fetch(`/api/admin/items/${editingItem.id}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        });
-      } else {
-        response = await fetch(`/api/admin/items/${editingItem.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            skuId: editSkuId,
-            categoryId: editCategoryId,
-            piecesPerSet: editPiecesPerSet,
-            material: editMaterial,
-            work: editWork,
-            stitcherName: editStitcherName.trim(),
-            rate: editRate,
-            revisedRate: editRevisedRate.trim() === '' ? null : editRevisedRate.trim(),
-            hikeRate: editHikeRate.trim() === '' ? null : editHikeRate.trim(),
-            setsCount: editSetsCount,
-            isAvailable: editIsAvailable,
-            isPermanentInactive: editIsPermanentInactive,
-            description: editDescription
-          })
-        });
-      }
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setItems(prevItems => prevItems.map(item => item.id === editingItem.id ? { ...item, ...data } : item));
-        setIsEditModalOpen(false);
-        setEditingItem(null);
-        setEditImageFile(null);
-        setEditImagePreview(null);
-        setEditStitcherName('');
-        if (editFileInputRef.current) editFileInputRef.current.value = '';
-        showSuccess('SKU updated successfully');
-      } else {
-        showError(data.error || 'Failed to update SKU');
-      }
-    } catch (err) {
-      showError('Failed to save update');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteSKU = async (itemId: number, skuCode: string) => {
-    if (!window.confirm(`Are you sure you want to delete SKU design "${skuCode}"?`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/items/${itemId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setItems(items.filter(item => item.id !== itemId));
-        showSuccess('SKU design deleted');
-      } else {
-        const data = await response.json();
-        showError(data.error || 'Failed to delete SKU');
-      }
-    } catch (e) {
-      showError('Network error');
-    }
-  };
-
-  const showError = (msg: string) => {
-    setErrorMsg(msg);
-    setTimeout(() => setErrorMsg(''), 5000);
-  };
-
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 5000);
-  };
-
-  const getThumbnailUrl = (imagePath: string) => {
-    if (!imagePath) return '';
-    const lastDotIndex = imagePath.lastIndexOf('.');
-    if (lastDotIndex !== -1 && !imagePath.includes('-thumb.')) {
-      return imagePath.substring(0, lastDotIndex) + '-thumb' + imagePath.substring(lastDotIndex);
-    }
-    return imagePath;
-  };
-
-  const handleToggleSelect = (itemId: number) => {
-    setSelectedItems(prev => {
-      if (prev.includes(itemId)) {
-        return prev.filter(id => id !== itemId);
-      } else {
-        if (user?.role === 'sales' && prev.length >= 6) {
-          showError('Sales users can only select up to 6 designs at a time.');
-          return prev;
-        }
-        return [...prev, itemId];
-      }
-    });
-  };
-
-  const handleToggleSelectAll = () => {
-    const allVisibleIds = filteredItems.map(item => item.id);
-    const allSelected = allVisibleIds.every(id => selectedItems.includes(id));
-    
-    if (allSelected) {
-      setSelectedItems(prev => prev.filter(id => !allVisibleIds.includes(id)));
-    } else {
-      setSelectedItems(prev => {
-        if (user?.role === 'sales') {
-          const remainingSlots = 6 - prev.length;
-          if (remainingSlots <= 0) {
-            showError('Sales users can only select up to 6 designs at a time.');
-            return prev;
-          }
-          const toAdd = allVisibleIds.filter(id => !prev.includes(id)).slice(0, remainingSlots);
-          if (toAdd.length < allVisibleIds.filter(id => !prev.includes(id)).length) {
-            showError(`Sales users can only select up to 6 designs. Selected first ${toAdd.length} items.`);
-          }
-          return [...prev, ...toAdd];
-        }
-        const unique = new Set([...prev, ...allVisibleIds]);
-        return Array.from(unique);
-      });
-    }
-  };
-
-  const generateShareText = () => {
-    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
-    let text = '';
-    if (selectedItemsData.length === 1) {
-      const item = selectedItemsData[0];
-      text += `Design SKU: ${item.sku_id}\n`;
-      if (item.material) {
-        text += `Work/Material: ${item.material}\n`;
-      }
-      if (webSendDescription && item.description) {
-        text += `Description: ${item.description}\n`;
-      }
-      text += `\nShared via Desuka Catalog`;
-    } else {
-      text += `Designs from Desuka Catalogue:\n\n`;
-      selectedItemsData.forEach(item => {
-        text += `• SKU: ${item.sku_id}\n`;
-        if (item.material) {
-          text += `  Work/Material: ${item.material}\n`;
-        }
-        if (webSendDescription && item.description) {
-          text += `  Description: ${item.description}\n`;
-        }
-        text += `\n`;
-      });
-      text += `Shared via Desuka Catalog`;
-    }
-    return text;
-  };
-
-  const handleCopyDetails = () => {
-    const text = generateShareText();
-    navigator.clipboard.writeText(text);
-    setCopiedText(true);
-    setTimeout(() => setCopiedText(false), 2000);
-  };
-
-  const handleDownloadSelectedImages = () => {
-    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
-    if (user?.role === 'sales' && selectedItemsData.length > 6) {
-      showError('Sales users can only download up to 6 designs at a time.');
-      return;
-    }
-    
-    let downloadDelay = 0;
-    selectedItemsData.forEach(item => {
-      if (webShareRealImages && item.real_images && item.real_images.length > 0) {
-        const targetRealImages = item.real_images.slice(0, shareImagesPerItem);
-        targetRealImages.forEach((realPath, rIdx) => {
-          setTimeout(() => {
-            const link = document.createElement('a');
-            link.href = realPath;
-            const rExt = realPath.substring(realPath.lastIndexOf('.')) || '.jpg';
-            link.download = `${item.sku_id}-real-${rIdx + 1}${rExt}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }, downloadDelay);
-          downloadDelay += 300;
-        });
-      } else {
-        setTimeout(() => {
-          const link = document.createElement('a');
-          link.href = item.image_path;
-          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
-          link.download = `${item.sku_id}${ext}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }, downloadDelay);
-        downloadDelay += 300;
-      }
-    });
-  };
-
-  const handleShareWhatsAppWeb = () => {
-    const text = generateShareText();
-    const cleanNum = sharePhone.trim().replace(/\D/g, '');
-    const url = cleanNum 
-      ? `https://web.whatsapp.com/send?phone=${cleanNum}&text=${encodeURIComponent(text)}`
-      : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
-  };
-
-  const handleCopyImageToClipboard = async (imagePath: string, itemId: number) => {
-    try {
-      setCopyingImgId(itemId);
-      
-      const imagePromise = new Promise<Blob>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = imagePath;
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Could not get canvas context'));
-            return;
-          }
-          ctx.drawImage(img, 0, 0);
-          canvas.toBlob((blob) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to convert image format'));
-            }
-          }, 'image/png');
-        };
-        
-        img.onerror = () => {
-          reject(new Error('Failed to load image'));
-        };
-      });
-
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': imagePromise
-        })
-      ]);
-
-      showSuccess('Photo copied to clipboard! Paste it into WhatsApp.');
-      setTimeout(() => setCopyingImgId(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy image to clipboard:', err);
-      showError('Browser blocked copying. Right-click the thumbnail and select "Copy Image".');
-      setCopyingImgId(null);
-    }
-  };
-
-
-  // Filter items including age limitation (>60 days), status, and sort them
-  const filteredItems = items
-    .filter(item => {
-      const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = filterShowcaseOnly || filterCatId === '' || item.category_id === parseInt(filterCatId);
-      
-      let matchesAge = true;
-      if (filterAgeLimit) {
-        const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
-        matchesAge = ageInDays >= 60;
-      }
-
-      let matchesOffers = true;
-      if (filterOffersOnly) {
-        matchesOffers = !!(item.revised_rate && item.revised_rate > 0);
-      }
-
-      const matchesStatus = filterStatus === '' || 
-        (filterStatus === 'A' && item.is_available && item.sets_count > 0 && !item.is_permanent_inactive) ||
-        (filterStatus === 'OS' && item.is_available && item.sets_count === 0 && !item.is_permanent_inactive) ||
-        (filterStatus === 'NA' && !item.is_available && !item.is_permanent_inactive) ||
-        (filterStatus === 'PINA' && !!item.is_permanent_inactive);
-
-      let matchesRate = true;
-      if (filterRateRange) {
-        const [minStr, maxStr] = filterRateRange.split('-');
-        const minVal = parseInt(minStr);
-        const maxVal = parseInt(maxStr);
-        const itemRate = item.rate || 0;
-        if (!isNaN(minVal)) matchesRate = matchesRate && itemRate >= minVal;
-        if (!isNaN(maxVal)) matchesRate = matchesRate && itemRate <= maxVal;
-      }
-
-      const matchesWork = filterWork === '' || (item.work || '') === filterWork;
-      const matchesShowcase = !filterShowcaseOnly || !!item.is_in_showcase;
-      
-      // Ensure item belongs to one of the user's permitted categories
-      const allowedCatIds = categories.map(c => c.id);
-      const isPermittedCategory = allowedCatIds.includes(item.category_id);
-
-      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers && matchesShowcase;
-    })
-    .sort((a, b) => {
-      // Permanent Inactive (P-INA) always sorted to the bottom
-      const aPina = !!a.is_permanent_inactive;
-      const bPina = !!b.is_permanent_inactive;
-      if (aPina !== bPina) {
-        return aPina ? 1 : -1;
-      }
-
-      // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
-      const aAvailable = a.is_available && a.sets_count > 0;
-      const bAvailable = b.is_available && b.sets_count > 0;
-      if (aAvailable !== bAvailable) {
-        return aAvailable ? -1 : 1;
-      }
-      
-      const aOS = a.is_available && a.sets_count === 0;
-      const bOS = b.is_available && b.sets_count === 0;
-      if (aOS !== bOS) {
-        return aOS ? -1 : 1;
-      }
-      
-      // Secondary sort: pattern hierarchy (PL -> AK -> CTP -> LH -> SKT -> SP)
-      const rankA = getPatternInfo(a.sku_id, a.category_name).rank;
-      const rankB = getPatternInfo(b.sku_id, b.category_name).rank;
-      if (rankA !== rankB) {
-        return rankA - rankB;
-      }
-
-      // Tertiary sort: serial wise (natural sort)
-      return a.sku_id.localeCompare(b.sku_id, undefined, { numeric: true, sensitivity: 'base' });
-    });
-
-  // Reset page when search or filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterCatId, filterAgeLimit, filterOffersOnly, filterStatus, filterRateRange]);
-
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
-
-  const totalDesigns = items.length;
-  const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
-  const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
-  const inactiveDesigns = items.filter(item => !item.is_available && !item.is_permanent_inactive).length;
-  const permanentInactiveDesigns = items.filter(item => item.is_permanent_inactive).length;
-  const revisedDesigns = items.filter(item => item.revised_rate && item.revised_rate > 0).length;
-  const showcaseDesignsCount = items.filter(item => item.is_in_showcase).length;
-
-  return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <div>
-        <h1>Catalog & SKU Management</h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Create folders and upload designs SKU-wise</p>
-      </div>
-
-      {/* Design Counts Summary Ribbon */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total SKU Designs</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '0.25rem' }}>{totalDesigns}</div>
-          </div>
-          <div style={{ background: 'var(--bg-tertiary)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-primary)' }}>
-            <ImageIcon size={20} />
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-success)', textTransform: 'uppercase', fontWeight: 600 }}>Available (In Stock)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)', marginTop: '0.25rem' }}>{activeDesigns}</div>
-          </div>
-          <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-success)' }}>
-            <CheckCircle size={20} />
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-warning)', textTransform: 'uppercase', fontWeight: 600 }}>Available (Out of Stock)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-warning)', marginTop: '0.25rem' }}>{outOfStockDesigns}</div>
-          </div>
-          <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-warning)' }}>
-            <AlertCircle size={20} />
-          </div>
-        </div>
-
-        <div 
-          className="glass-card" 
-          onClick={() => setFilterOffersOnly(!filterOffersOnly)}
-          style={{ 
-            padding: '1rem', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            borderColor: filterOffersOnly ? '#f59e0b' : 'rgba(245, 158, 11, 0.25)',
-            background: filterOffersOnly ? 'rgba(245, 158, 11, 0.15)' : undefined,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          title="Click to view only Revised Offer Price designs"
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 700 }}>
-              🔥 Offers (Revised)
-            </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.25rem' }}>
-              {revisedDesigns}
-            </div>
-          </div>
-          <div style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.35rem 0.55rem', borderRadius: 'var(--radius-sm)', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 800 }}>
-            {filterOffersOnly ? 'ACTIVE' : 'FILTER'}
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244, 63, 94, 0.2)' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', textTransform: 'uppercase', fontWeight: 600 }}>Inactive (INA)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)', marginTop: '0.25rem' }}>{inactiveDesigns}</div>
-          </div>
-          <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)' }}>
-            <XCircle size={20} />
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(168, 85, 247, 0.3)' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#c084fc', textTransform: 'uppercase', fontWeight: 600 }}>Permanent Inactive (P-INA)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>{permanentInactiveDesigns}</div>
-          </div>
-          <div style={{ background: 'rgba(168, 85, 247, 0.15)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#c084fc' }}>
-            <XCircle size={20} />
-          </div>
-        </div>
-
-        <div 
-          className="glass-card" 
-          onClick={() => setShowcaseModalOpen(true)}
-          style={{ 
-            padding: '1rem', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            borderColor: 'rgba(99, 102, 241, 0.4)',
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          title="Click to manage Daily 24h Client Showcase Link & 7AM Auto-Email"
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#a5b4fc', textTransform: 'uppercase', fontWeight: 700 }}>
-              🌟 24h Showcase
-            </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>
-              {showcaseDesignsCount}
-            </div>
-          </div>
-          <div style={{ background: 'rgba(99, 102, 241, 0.25)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#a5b4fc' }}>
-            <Star size={20} />
-          </div>
-        </div>
-      </div>
-
-      {/* Success/Error Alerts */}
-      {successMsg && (
-        <div style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-          {successMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
-          {errorMsg}
-        </div>
-      )}
-
-      {user?.role !== 'sales' && (
-        <div className="grid-2">
-          {/* Create Folder / Category */}
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                <FolderPlus size={20} color="var(--color-primary)" />
-                Create Category Folder
-              </h3>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => setShowWorksModal(true)}
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <Sparkles size={14} color="#c084fc" />
-                Manage Works ({works.length})
-              </button>
-            </div>
-          <form onSubmit={handleCreateCategory} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
-            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-              <label>Folder / Category Name</label>
-              <input 
-                type="text" 
-                placeholder="e.g. CROPTOP NET Regular" 
-                value={newCatName}
-                onChange={e => setNewCatName(e.target.value)}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary">Create</button>
-          </form>
-
-          <hr style={{ border: '0', borderTop: '1px solid var(--glass-border)' }} />
-
-          {/* List of Category Folders */}
-          <label>Active Category Folders</label>
-          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {categories.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No folder categories created yet.</p>
-            ) : (
-              categories.map(cat => {
-                const isEditing = editingCatId === cat.id;
-                const isSuperAdmin = user?.role === 'superadmin';
-
-                return (
-                  <div key={cat.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.02)', minHeight: '44px' }}>
-                    {isEditing ? (
-                      <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
-                        <input 
-                          type="text" 
-                          value={editingCatName}
-                          onChange={e => setEditingCatName(e.target.value)}
-                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
-                        />
-                        <button 
-                          onClick={() => handleRenameCategory(cat.id)}
-                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
-                          title="Save Name"
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button 
-                          onClick={() => setEditingCatId(null)}
-                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
-                          title="Cancel"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span style={{ fontWeight: 600 }}>{cat.name}</span>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          {isSuperAdmin && (
-                            <>
-                              <button 
-                                onClick={() => {
-                                  setEditingCatId(cat.id);
-                                  setEditingCatName(cat.name);
-                                }}
-                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
-                                title="Rename Category Folder"
-                              >
-                                <Edit2 size={15} />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
-                                title="Delete folder and contents"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Upload SKU Form */}
-        <div className="glass-card">
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <Upload size={20} color="var(--color-primary)" />
-            Upload SKU Design
-          </h3>
-          <form onSubmit={handleUploadSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="form-group">
-              <label>SKU ID (Unique Identifier)</label>
-              <input 
-                type="text" 
-                placeholder="e.g. SKU-1002-BLACK" 
-                value={skuId}
-                onChange={e => setSkuId(e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>Folder / Category</label>
-                <select 
-                  value={selectedCatId} 
-                  onChange={e => setSelectedCatId(e.target.value)}
-                  required
-                >
-                  <option value="">Select Folder</option>
-                  {categories.map(c => {
-                    const catItems = items.filter(item => item.category_id === c.id);
-                    const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
-                    const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
-                    const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
-                    const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
-                    return (
-                      <option key={c.id} value={c.id}>
-                        {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>Pieces per Set</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  value={piecesPerSet}
-                  onChange={e => setPiecesPerSet(parseInt(e.target.value) || 4)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Work Type</label>
-                <select 
-                  value={work} 
-                  onChange={e => setWork(e.target.value)}
-                >
-                  <option value="">Select Work (Optional)</option>
-                  {works.map(w => (
-                    <option key={w.id} value={w.name}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Material Details</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Net Cotton, Silk, Georgette" 
-                  value={material}
-                  onChange={e => setMaterial(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Base Rate / Price (₹)</label>
-                <input 
-                  type="number" 
-                  placeholder="e.g. 1495" 
-                  value={rate}
-                  onChange={e => setRate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Stitcher Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. AHM, RASD (Optional)" 
-                  value={stitcherName}
-                  onChange={e => setStitcherName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', alignItems: 'center' }}>
-              <label style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Stock Classification:</label>
-              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                <input 
-                  type="radio" 
-                  name="stockType" 
-                  checked={stockType === 'new'} 
-                  onChange={() => setStockType('new')} 
-                />
-                New Stock
-              </label>
-              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                <input 
-                  type="radio" 
-                  name="stockType" 
-                  checked={stockType === 'old'} 
-                  onChange={() => setStockType('old')} 
-                />
-                Old Stock
-              </label>
-              
-              {stockType === 'old' && (
-                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
-                  <label style={{ margin: 0, fontSize: '0.85rem' }}>Creation Date:</label>
-                  <input 
-                    type="date" 
-                    value={originalCreatedAt} 
-                    onChange={e => setOriginalCreatedAt(e.target.value)}
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', width: 'auto' }}
-                    required
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label>Product Description / Notes</label>
-              <textarea 
-                placeholder="Enter catalog design description notes..." 
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                rows={2}
-                style={{ 
-                  resize: 'vertical', 
-                  background: 'var(--bg-primary)', 
-                  border: '1px solid var(--glass-border)', 
-                  borderRadius: 'var(--radius-md)', 
-                  padding: '0.75rem 1rem', 
-                  color: 'var(--text-primary)', 
-                  fontFamily: 'inherit',
-                  fontSize: '0.95rem'
-                }}
-              />
-            </div>
-
-            {/* Drag & Drop File Selector */}
-            <div 
-              style={{
-                border: '2px dashed var(--glass-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '1.5rem',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: 'rgba(255,255,255,0.01)',
-                position: 'relative'
-              }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept="image/*"
-                style={{ display: 'none' }} 
-              />
-              
-              {filePreview ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                  <img 
-                    src={filePreview} 
-                    alt="Preview" 
-                    style={{ maxHeight: '100px', borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} 
-                  />
-                  <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)' }}>Click to replace image</span>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
-                  <ImageIcon size={32} style={{ opacity: 0.5 }} />
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Click to select catalog design photo</span>
-                  <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>JPG, PNG or WEBP (Max 5MB)</span>
-                </div>
-              )}
-            </div>
-
-            {/* Optional RAW Real Photos Selector */}
-            <div style={{ marginTop: '0.75rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                <Camera size={14} color="var(--color-primary)" />
-                Optional: RAW Real Photos (2-3 photos)
-              </label>
-              <input 
-                type="file" 
-                multiple
-                accept="image/*"
-                onChange={handleRealImagesFilesChange}
-                style={{ fontSize: '0.85rem' }}
-              />
-              {realImagesPreviews.length > 0 && (
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                  {realImagesPreviews.map((src, i) => (
-                    <img key={i} src={src} alt={`Real ${i}`} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }} disabled={loading}>
-              {loading ? 'Uploading File...' : 'Upload Design'}
-            </button>
-          </form>
-        </div>
-      </div>
-      )}
-
-      {/* SKUs Grid section with Search & Filters */}
-      <div className="glass-card">
-        <div className="flex-between" style={{ marginBottom: '1.5rem' }}>
-          <h3>Design Catalog Directory ({filteredItems.length} items)</h3>
-          
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            {/* Search */}
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                placeholder="Search SKU..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                style={{ paddingLeft: '2.25rem', width: '200px' }}
-              />
-            </div>
-            
-            {/* Filter Folder */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Filter size={16} color="var(--text-muted)" />
-              <select 
-                value={filterCatId} 
-                onChange={e => setFilterCatId(e.target.value)}
-                style={{ padding: '0.6rem 1rem' }}
-              >
-                <option value="">All Folders</option>
-                {categories.map(c => {
-                  const catItems = items.filter(item => item.category_id === c.id);
-                  const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
-                  const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
-                  const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
-                  const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            {/* Filter Work */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Sparkles size={16} color="#c084fc" />
-              <select 
-                value={filterWork} 
-                onChange={e => setFilterWork(e.target.value)}
-                style={{ padding: '0.6rem 1rem' }}
-              >
-                <option value="">All Works</option>
-                {works.map(w => (
-                  <option key={w.id} value={w.name}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Filter size={16} color="var(--text-muted)" />
-              <select 
-                value={filterStatus} 
-                onChange={e => setFilterStatus(e.target.value)}
-                style={{ padding: '0.6rem 1rem' }}
-              >
-                <option value="">All Statuses</option>
-                <option value="A">Available (AV)</option>
-                <option value="OS">Out of Stock (OS)</option>
-                <option value="NA">Inactive (INA)</option>
-                <option value="PINA">Permanent Inactive (P-INA)</option>
-              </select>
-            </div>
-
-            {/* Filter Rate / Price Range */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <select 
-                value={filterRateRange} 
-                onChange={e => setFilterRateRange(e.target.value)}
-                style={{ padding: '0.6rem 1rem' }}
-              >
-                <option value="">All Prices</option>
-                <option value="0-1000">Below ₹1,000</option>
-                <option value="0-1500">Below ₹1,500</option>
-                <option value="0-2000">Below ₹2,000</option>
-                <option value="0-2500">Below ₹2,500</option>
-                <option value="1000-1500">₹1,000 - ₹1,500</option>
-                <option value="1000-2000">₹1,000 - ₹2,000</option>
-                <option value="1500-2000">₹1,500 - ₹2,000</option>
-                <option value="2000-3000">₹2,000 - ₹3,000</option>
-                <option value="2000-999999">Above ₹2,000</option>
-                <option value="2500-999999">Above ₹2,500</option>
-                <option value="3000-999999">Above ₹3,000</option>
-              </select>
-            </div>
-
-            {/* Filter Offers Only */}
-            <button 
-              type="button"
-              className={`btn ${filterOffersOnly ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setFilterOffersOnly(!filterOffersOnly)}
-              style={{ 
-                padding: '0.6rem 1.2rem', 
-                fontSize: '0.85rem', 
-                whiteSpace: 'nowrap',
-                background: filterOffersOnly ? '#f59e0b' : undefined,
-                color: filterOffersOnly ? '#000' : '#fbbf24',
-                borderColor: '#f59e0b',
-                fontWeight: 700
-              }}
-              title="Filter to show only articles with New / Revised Offer Price"
-            >
-              🔥 Offers Only ({revisedDesigns})
-            </button>
-
-            {/* Filter Showcase Only */}
-            <button 
-              type="button"
-              className={`btn ${filterShowcaseOnly ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setFilterShowcaseOnly(!filterShowcaseOnly)}
-              style={{ 
-                padding: '0.6rem 1.2rem', 
-                fontSize: '0.85rem', 
-                whiteSpace: 'nowrap',
-                background: filterShowcaseOnly ? '#6366f1' : undefined,
-                color: filterShowcaseOnly ? '#fff' : '#a5b4fc',
-                borderColor: '#6366f1',
-                fontWeight: 700
-              }}
-              title="Filter to show only articles selected for 24h Showcase"
-            >
-              🌟 Showcase ({showcaseDesignsCount})
-            </button>
-
-            {/* Open Showcase Manager Button */}
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowcaseModalOpen(true)}
-              style={{
-                padding: '0.6rem 1.2rem',
-                fontSize: '0.85rem',
-                whiteSpace: 'nowrap',
-                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontWeight: 700,
-                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)'
-              }}
-              title="Generate or share 24-hour showcase link with clients"
-            >
-              <Link size={15} />
-              24h Client Link
-            </button>
-
-            {/* Filter Age */}
-            <button 
-              type="button"
-              className={`btn ${filterAgeLimit ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setFilterAgeLimit(!filterAgeLimit)}
-              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
-            >
-              Older than 60 Days Only
-            </button>
-
-            <button 
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleToggleSelectAll}
-              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
-            >
-              {filteredItems.every(item => selectedItems.includes(item.id)) && filteredItems.length > 0 
-                ? 'Deselect All' 
-                : 'Select All Visible'}
-            </button>
-          </div>
-        </div>
-
-        {/* Catalog items grid */}
-        {filteredItems.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', border: '1px dashed var(--glass-border)', borderRadius: 'var(--radius-md)' }}>
-            No SKU designs match your filters. Upload some designs or adjust filters!
-          </div>
-        ) : (
-          <>
-            <div className="catalog-grid">
-              {paginatedItems.map(item => {
-                const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
-
-                return (
-                  <div key={item.id} className="catalog-card fade-in" style={{
-                    border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
-                  }}>
-                    <div 
-                      className="catalog-image-wrapper"
-                      style={{ cursor: 'pointer', position: 'relative' }}
-                      onClick={() => {
-                        setPreviewLightboxUrl(item.image_path);
-                        setPreviewLightboxTitle(`${item.sku_id} • ${item.category_name || ''} ${item.work ? '• ' + item.work : ''}`);
-                        setPreviewLightboxItem(item);
-                        setZoomLevel(1);
-                      }}
-                      title="Click photo to inspect fabric & zoom in full-resolution"
-                    >
-                      {/* Selection Checkbox */}
-                      <div 
-                        style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input 
-                          type="checkbox"
-                          checked={selectedItems.includes(item.id)}
-                          onChange={() => handleToggleSelect(item.id)}
-                          style={{ 
-                            width: '20px', 
-                            height: '20px', 
-                            cursor: 'pointer',
-                            accentColor: 'var(--color-primary)',
-                            borderRadius: '4px',
-                            border: '2px solid white',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                          }}
-                        />
-                      </div>
-                      {item.is_in_showcase && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '10px',
-                          left: '38px',
-                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))',
-                          color: '#fff',
-                          fontSize: '0.65rem',
-                          fontWeight: 800,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          letterSpacing: '0.5px',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          zIndex: 5
-                        }}>
-                          ★ SHOWCASE
-                        </div>
-                      )}
-                      <img 
-                        src={getThumbnailUrl(item.image_path)} 
-                        alt={item.sku_id} 
-                        className="catalog-image" 
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          if (target.src !== item.image_path) {
-                            target.src = item.image_path;
-                          }
-                        }}
-                      />
-                      {/* Click to Zoom Overlay Pill */}
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '8px',
-                        left: '8px',
-                        background: 'rgba(0, 0, 0, 0.65)',
-                        backdropFilter: 'blur(4px)',
-                        color: '#ffffff',
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        pointerEvents: 'none',
-                        border: '1px solid rgba(255, 255, 255, 0.15)'
-                      }}>
-                        <ZoomIn size={12} color="#60a5fa" /> Zoom
-                      </div>
-                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', zIndex: 10 }}>
-                        {item.is_permanent_inactive ? (
-                          <span className="badge" style={{ background: 'rgba(124, 58, 237, 0.25)', color: '#c084fc', border: '1px solid rgba(124, 58, 237, 0.45)' }} title="Permanent Inactive (Never Restock)">
-                            <XCircle size={12} style={{ marginRight: '4px' }} />
-                            P-INA
-                          </span>
-                        ) : !item.is_available ? (
-                          <span className="badge badge-danger" title="Inactive (Temporary Out of Stock)">
-                            <XCircle size={12} style={{ marginRight: '4px' }} />
-                            INA
-                          </span>
-                        ) : item.sets_count > 0 ? (
-                          <span className="badge badge-success" title="Active & Available">
-                            <CheckCircle size={12} style={{ marginRight: '4px' }} />
-                            AV
-                          </span>
-                        ) : (
-                          <span className="badge badge-warning" title="Active but Out of Stock">
-                            <AlertCircle size={12} style={{ marginRight: '4px' }} />
-                            OS
-                          </span>
-                        )}
-                        
-                        {ageInDays >= 60 && (
-                          <span className="badge badge-danger" style={{ background: '#f43f5e', border: 'none', color: '#fff' }}>
-                            OLD STOCK ({ageInDays}d)
-                          </span>
-                        )}
-
-                        {/* Direct Edit Button on Image */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditModal(item);
-                          }}
-                          style={{
-                            background: 'rgba(15, 23, 42, 0.88)',
-                            backdropFilter: 'blur(6px)',
-                            border: '1px solid rgba(255, 255, 255, 0.25)',
-                            color: '#ffffff',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
-                            marginTop: '2px'
-                          }}
-                          title="Edit SKU Details & Replace Photo"
-                        >
-                          <Edit2 size={11} color="#a5b4fc" /> Edit SKU
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="catalog-details">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                        <span className="sku-tag" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{item.sku_id}</span>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleShowcase(item);
-                            }}
-                            style={{ 
-                              border: item.is_in_showcase ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)', 
-                              background: item.is_in_showcase ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.06)', 
-                              color: item.is_in_showcase ? '#34d399' : '#cbd5e1', 
-                              cursor: 'pointer', 
-                              fontSize: '0.72rem', 
-                              fontWeight: 600, 
-                              padding: '3px 7px', 
-                              borderRadius: '4px', 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '3px' 
-                            }}
-                            title={item.is_in_showcase ? 'Remove design from 24h Showcase' : 'Add design to 24h Showcase'}
-                          >
-                            <Star size={11} fill={item.is_in_showcase ? '#34d399' : 'none'} />
-                            {item.is_in_showcase ? 'Showcase' : '+ Showcase'}
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fetchRealImagesForItem(item);
-                            }}
-                            style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
-                            title="Manage RAW Real Photos"
-                          >
-                            <Camera size={11} />
-                            RAW ({item.real_image_count || 0})
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditModal(item);
-                            }}
-                            style={{ 
-                              border: '1px solid rgba(99, 102, 241, 0.4)', 
-                              background: 'rgba(99, 102, 241, 0.15)', 
-                              color: '#a5b4fc', 
-                              cursor: 'pointer', 
-                              fontSize: '0.72rem', 
-                              fontWeight: 600, 
-                              padding: '3px 8px', 
-                              borderRadius: '4px', 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              gap: '4px' 
-                            }}
-                            title="Edit SKU Details & Replace Photo"
-                          >
-                            <Edit2 size={11} />
-                            Edit
-                          </button>
-                          {user?.role === 'superadmin' && (
-                            <button 
-                              onClick={() => handleDeleteSKU(item.id, item.sku_id)}
-                              style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '2px' }}
-                              title="Delete SKU Design"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap', gap: '4px' }}>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span className="folder-tag">{item.category_name}</span>
-                          {item.work && (
-                            <span className="folder-tag" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
-                              ✨ {item.work}
-                            </span>
-                          )}
-                          {item.stitcher_name && (
-                            <span className="folder-tag" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.25)' }} title={`Stitcher: ${item.stitcher_name}`}>
-                              🧵 {item.stitcher_name}
-                            </span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          Age: <strong>{ageInDays} days</strong>
-                        </span>
-                      </div>
-
-                      {item.material && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
-                          Material: {item.material}
-                        </span>
-                      )}
-                      {item.description && (
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
-                          {item.description}
-                        </p>
-                      )}
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem' }}>
-                        <div>
-                          <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
-                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Qty: <strong>{item.total_pieces}</strong></span>
-                        </div>
-                        {item.hike_rate && item.hike_rate > 0 ? (
-                          <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '0.65rem', background: '#ef4444', color: '#fff', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
-                              ▲ HIKE PRICE
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
-                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ef4444' }}>₹{item.hike_rate}</span>
-                            </div>
-                          </div>
-                        ) : item.revised_rate && item.revised_rate > 0 ? (
-                          <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '0.65rem', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
-                              🔥 NEW OFFER PRICE
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
-                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f59e0b' }}>₹{item.revised_rate}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                            ₹{item.rate || 0}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="btn btn-secondary"
-                  style={{ padding: '0.5rem 1rem', opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
-                >
-                  Previous
-                </button>
-                
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`btn ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ padding: '0.5rem 0.8rem', minWidth: '36px' }}
-                  >
-                    {page}
-                  </button>
-                ))}
-                
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="btn btn-secondary"
-                  style={{ padding: '0.5rem 1rem', opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Edit SKU Modal Dialog */}
-      {isEditModalOpen && editingItem && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(5, 8, 16, 0.85)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '1.5rem'
-        }}>
-          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="flex-between">
-              <h3>Edit SKU: {editingItem?.sku_id}</h3>
-              <button 
-                onClick={() => {
-                  setIsEditModalOpen(false);
-                  setEditingItem(null);
-                  setEditImageFile(null);
-                  setEditImagePreview(null);
-                  setEditStitcherName('');
-                  if (editFileInputRef.current) editFileInputRef.current.value = '';
-                }}
-                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold' }}
-              >
-                &times;
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Replace Main Image Section */}
-              <div className="form-group" style={{ marginBottom: '0.25rem' }}>
-                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Main Catalog Image</span>
-                  {editImageFile && (
-                    <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 600 }}>
-                      ✓ New replacement image selected
-                    </span>
-                  )}
-                </label>
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '1rem', 
-                  alignItems: 'center', 
-                  background: 'rgba(255, 255, 255, 0.03)', 
-                  padding: '0.85rem', 
-                  borderRadius: 'var(--radius-md)', 
-                  border: editImageFile ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--glass-border)' 
-                }}>
-                  <div style={{ 
-                    position: 'relative', 
-                    width: '84px', 
-                    height: '108px', 
-                    flexShrink: 0, 
-                    borderRadius: 'var(--radius-sm)', 
-                    overflow: 'hidden', 
-                    border: '1px solid var(--glass-border)', 
-                    background: '#090d16',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {editImagePreview ? (
-                      <img 
-                        src={editImagePreview} 
-                        alt={editSkuId}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>No Image</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
-                    <input 
-                      type="file" 
-                      ref={editFileInputRef}
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setEditImageFile(file);
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setEditImagePreview(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => editFileInputRef.current?.click()}
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
-                      >
-                        <Upload size={14} />
-                        {editImageFile ? 'Choose Different Image' : 'Replace Main Image'}
-                      </button>
-                      {editImageFile && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditImageFile(null);
-                            setEditImagePreview(editingItem?.image_path || null);
-                            if (editFileInputRef.current) editFileInputRef.current.value = '';
-                          }}
-                          className="btn btn-secondary"
-                          style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', color: 'var(--color-danger)' }}
-                        >
-                          Revert to Original
-                        </button>
-                      )}
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
-                      {editImageFile ? (
-                        <span style={{ color: 'var(--text-primary)' }}>File: <strong>{editImageFile.name}</strong></span>
-                      ) : (
-                        'Click "Replace Main Image" to upload an updated catalog photo or fixed poster design.'
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>SKU ID (SKU Number)</label>
-                <input 
-                  type="text" 
-                  value={editSkuId}
-                  onChange={e => setEditSkuId(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label>Folder / Category</label>
-                  <select 
-                    value={editCategoryId} 
-                    onChange={e => setEditCategoryId(e.target.value)}
-                    required
-                  >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Pieces per Set</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    value={editPiecesPerSet}
-                    onChange={e => setEditPiecesPerSet(parseInt(e.target.value) || 4)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label>Work Type</label>
-                  <select 
-                    value={editWork} 
-                    onChange={e => setEditWork(e.target.value)}
-                  >
-                    <option value="">Select Work (Optional)</option>
-                    {works.map(w => (
-                      <option key={w.id} value={w.name}>{w.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Material Details</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Net Cotton, Silk"
-                    value={editMaterial}
-                    onChange={e => setEditMaterial(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
-                <div className="form-group">
-                  <label>Base Rate (₹)</label>
-                  <input 
-                    type="number" 
-                    value={editRate}
-                    onChange={e => setEditRate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 Revised Rate (₹)</label>
-                  <input 
-                    type="number" 
-                    placeholder="e.g. 450 (or blank)"
-                    value={editRevisedRate}
-                    onChange={e => setEditRevisedRate(e.target.value)}
-                    style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined }}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ color: '#f43f5e', fontWeight: 600 }}>▲ Hike Price (₹)</label>
-                  <input 
-                    type="number" 
-                    placeholder="e.g. 520 (or blank)"
-                    value={editHikeRate}
-                    onChange={e => setEditHikeRate(e.target.value)}
-                    style={{ borderColor: editHikeRate ? '#f43f5e' : undefined }}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Stitcher Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. AHM, RASD"
-                    value={editStitcherName}
-                    onChange={e => setEditStitcherName(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'center' }}>
-                <div className="form-group">
-                  <label>Sets Count</label>
-                  <input 
-                    type="number" 
-                    min="0"
-                    value={editSetsCount}
-                    onChange={e => setEditSetsCount(parseInt(e.target.value) || 0)}
-                    required
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600 }}>
-                    <input 
-                      type="checkbox"
-                      checked={editIsAvailable && !editIsPermanentInactive}
-                      disabled={editIsPermanentInactive}
-                      onChange={e => setEditIsAvailable(e.target.checked)}
-                      style={{ width: '18px', height: '18px' }}
-                    />
-                    Available (AV)
-                  </label>
-                </div>
-                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600, color: editIsPermanentInactive ? '#c084fc' : undefined }}>
-                    <input 
-                      type="checkbox"
-                      checked={editIsPermanentInactive}
-                      onChange={e => {
-                        const checked = e.target.checked;
-                        setEditIsPermanentInactive(checked);
-                        if (checked) {
-                          setEditIsAvailable(false);
-                        }
-                      }}
-                      style={{ width: '18px', height: '18px' }}
-                    />
-                    Permanent Inactive (P-INA)
-                  </label>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Product Description / Notes</label>
-                <textarea 
-                  value={editDescription}
-                  onChange={e => setEditDescription(e.target.value)}
-                  rows={3}
-                  style={{ 
-                    resize: 'vertical', 
-                    background: 'var(--bg-primary)', 
-                    border: '1px solid var(--glass-border)', 
-                    borderRadius: 'var(--radius-md)', 
-                    padding: '0.75rem 1rem', 
-                    color: 'var(--text-primary)', 
-                    fontFamily: 'inherit',
-                    fontSize: '0.95rem'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
-                  {loading ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    setIsEditModalOpen(false);
-                    setEditingItem(null);
-                    setEditImageFile(null);
-                    setEditImagePreview(null);
-                    setEditStitcherName('');
-                    if (editFileInputRef.current) editFileInputRef.current.value = '';
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Floating WhatsApp Share Bar */}
-      {selectedItems.length > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          left: '55%',
-          transform: 'translateX(-50%)',
-          width: '80%',
-          maxWidth: '850px',
-          background: 'rgba(18, 20, 24, 0.9)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '16px',
-          padding: '1rem 1.5rem',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          color: 'white',
-          animation: 'slideUp 0.3s ease'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ 
-                background: 'var(--color-primary)', 
-                color: 'white', 
-                padding: '0.25rem 0.6rem', 
-                borderRadius: '50px', 
-                fontSize: '0.85rem',
-                fontWeight: 'bold'
-              }}>
-                {selectedItems.length}
-              </span>
-              <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Designs Selected</span>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button 
-                type="button" 
-                onClick={() => setSelectedItems([])}
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.1)', 
-                  border: 'none', 
-                  color: 'white', 
-                  padding: '0.5rem 1rem', 
-                  borderRadius: '8px', 
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                Clear Selection
-              </button>
-            </div>
-          </div>
-
-          {/* Selected items photo quick-copy drawer */}
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            borderRadius: '12px',
-            padding: '1rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.75rem'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#25D366', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                📸 Quick Copy Photos for WhatsApp (No Downloads)
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
-                Click "Copy Photo" or right-click the thumbnail to copy. Then open WhatsApp and press <strong>Ctrl+V</strong> to paste and send!
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              gap: '1rem',
-              overflowX: 'auto',
-              paddingBottom: '0.5rem',
-              maxHeight: '120px',
-              scrollbarWidth: 'thin'
-            }}>
-              {items.filter(item => selectedItems.includes(item.id)).map(item => (
-                <div 
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    padding: '0.4rem',
-                    gap: '0.5rem',
-                    minWidth: '200px',
-                    flexShrink: 0,
-                    position: 'relative'
-                  }}
-                >
-                  <img 
-                    src={getThumbnailUrl(item.image_path)}
-                    alt={item.sku_id}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      if (target.src !== item.image_path) {
-                        target.src = item.image_path;
-                      }
-                    }}
-                    style={{
-                      width: '45px',
-                      height: '45px',
-                      objectFit: 'cover',
-                      borderRadius: '6px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}
-                    title="Right-click -> Copy Image (as backup)"
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      {item.sku_id}
-                    </span>
-                    {item.material && (
-                      <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {item.material}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyImageToClipboard(item.image_path, item.id)}
-                    style={{
-                      background: copyingImgId === item.id ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                      border: copyingImgId === item.id ? '1px solid #25D366' : '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px',
-                      padding: '0.3rem 0.6rem',
-                      color: copyingImgId === item.id ? '#25D366' : 'white',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {copyingImgId === item.id ? (
-                      <>
-                        <Check size={12} />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={12} />
-                        Copy Photo
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-
-            {/* Phone Number Input */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 200px' }}>
-              <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
-                Customer WhatsApp No. (e.g. 919876543210)
-              </label>
-              <input 
-                type="text" 
-                placeholder="Enter country code + number" 
-                value={sharePhone}
-                onChange={e => setSharePhone(e.target.value)}
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.05)', 
-                  border: '1px solid rgba(255, 255, 255, 0.1)', 
-                  borderRadius: '8px', 
-                  padding: '0.5rem 0.75rem',
-                  color: 'white',
-                  fontSize: '0.9rem',
-                  outline: 'none'
-                }}
-              />
-            </div>
-            
-            {/* Images Per Design Selector & Send Description */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1.2rem', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Photos / SKU:</span>
-                <select 
-                  value={shareImagesPerItem} 
-                  onChange={e => setShareImagesPerItem(parseInt(e.target.value) || 1)}
-                  style={{ 
-                    padding: '0.4rem 0.6rem', 
-                    fontSize: '0.8rem', 
-                    borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#38bdf8',
-                    border: '1px solid rgba(56, 189, 248, 0.4)',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value={1} style={{ background: '#1e293b', color: 'white' }}>1 Photo (Default)</option>
-                  <option value={2} style={{ background: '#1e293b', color: 'white' }}>2 Photos</option>
-                  <option value={3} style={{ background: '#1e293b', color: 'white' }}>3 Photos</option>
-                  <option value={10} style={{ background: '#1e293b', color: 'white' }}>All Photos</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <input 
-                  type="checkbox" 
-                  id="web-send-desc"
-                  checked={webSendDescription}
-                  onChange={e => setWebSendDescription(e.target.checked)}
-                  style={{ 
-                    width: '18px', 
-                    height: '18px', 
-                    cursor: 'pointer',
-                    accentColor: 'var(--color-primary)'
-                  }}
-                />
-                <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
-                  Send Description
-                </label>
-              </div>
-
-              {items.some(it => selectedItems.includes(it.id) && (it.real_image_count || 0) > 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input 
-                    type="checkbox" 
-                    id="web-share-real"
-                    checked={webShareRealImages}
-                    onChange={e => setWebShareRealImages(e.target.checked)}
-                    style={{ 
-                      width: '18px', 
-                      height: '18px', 
-                      cursor: 'pointer',
-                      accentColor: '#3b82f6'
-                    }}
-                  />
-                  <label htmlFor="web-share-real" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', cursor: 'pointer', userSelect: 'none' }}>
-                    📷 RAW Real Photos
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto', flexWrap: 'wrap', marginTop: '1.2rem' }}>
-              <button 
-                type="button" 
-                onClick={() => handleBulkToggleShowcase(true)}
-                className="btn"
-                style={{ 
-                  padding: '0.5rem 0.9rem', 
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  border: '1px solid #10b981',
-                  borderRadius: '8px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  color: '#34d399',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-                title="Add selected designs to 24h Showcase"
-              >
-                <Star size={14} fill="#34d399" />
-                + Showcase
-              </button>
-
-              <button 
-                type="button" 
-                onClick={() => handleBulkToggleShowcase(false)}
-                className="btn"
-                style={{ 
-                  padding: '0.5rem 0.9rem', 
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  border: '1px solid rgba(244, 63, 94, 0.3)',
-                  borderRadius: '8px',
-                  background: 'rgba(244, 63, 94, 0.1)',
-                  color: '#f43f5e',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-                title="Remove selected designs from 24h Showcase"
-              >
-                - Showcase
-              </button>
-
-              <button 
-                type="button" 
-                onClick={handleCopyDetails}
-                className="btn"
-                style={{ 
-                  padding: '0.5rem 1rem', 
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {copiedText ? <Check size={16} color="var(--color-success)" /> : <Copy size={16} />}
-                {copiedText ? 'Copied!' : 'Copy Text'}
-              </button>
-              
-              <button 
-                type="button" 
-                onClick={handleDownloadSelectedImages}
-                className="btn"
-                style={{ 
-                  padding: '0.5rem 1rem', 
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Download size={16} />
-                Download Images
-              </button>
-              
-              <button 
-                type="button" 
-                onClick={handleShareWhatsAppWeb}
-                className="btn"
-                style={{ 
-                  padding: '0.5rem 1.2rem', 
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  border: '1px solid #25D366',
-                  borderRadius: '8px',
-                  background: '#25D366', // WhatsApp Green
-                  color: 'white',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Share2 size={16} />
-                Share via WhatsApp
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RAW Real Images Management Modal */}
-      {realImagesModalItem && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '650px' }}>
-            <div className="modal-header">
-              <h3>📷 Manage RAW Real Photos: {realImagesModalItem.sku_id}</h3>
-              <button className="close-btn" onClick={() => setRealImagesModalItem(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '1.2rem' }}>
-              
-              {/* Task Done Success Notification */}
-              {modalSuccessMsg && (
-                <div style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22c55e', color: '#22c55e', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
-                  {modalSuccessMsg}
-                </div>
-              )}
-
-              {/* Upload Box */}
-              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', color: 'white' }}>
-                  Select & Upload RAW Real Photos:
-                </label>
-                <input 
-                  type="file" 
-                  multiple 
-                  accept="image/*"
-                  onChange={handleSelectModalRealFiles}
-                  disabled={uploadingRealImages}
-                  style={{ fontSize: '0.85rem' }}
-                />
-                
-                {/* Local Previews of newly selected files before uploading */}
-                {modalSelectedFiles.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(255,255,255,0.04)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 600 }}>
-                        📌 Selected to upload ({modalSelectedFiles.length} files):
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setModalSelectedFiles([]);
-                          setModalSelectedPreviews([]);
-                        }}
-                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        Clear All
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', padding: '4px 0' }}>
-                      {modalSelectedFiles.map((file, fIdx) => (
-                        <div key={fIdx} style={{ position: 'relative', width: '70px', height: '70px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
-                          <img 
-                            src={modalSelectedPreviews[fIdx]} 
-                            alt={file.name} 
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveModalSelectedFile(fIdx)}
-                            style={{
-                              position: 'absolute',
-                              top: '2px',
-                              right: '2px',
-                              background: 'rgba(0,0,0,0.75)',
-                              color: '#ef4444',
-                              border: 'none',
-                              borderRadius: '50%',
-                              width: '18px',
-                              height: '18px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              padding: 0
-                            }}
-                            title="Remove file"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-                      <button
-                        type="button"
-                        onClick={handleSaveModalRealImages}
-                        disabled={uploadingRealImages}
-                        className="btn btn-primary"
-                        style={{ padding: '0.45rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                      >
-                        {uploadingRealImages ? 'Uploading...' : '💾 Save & Upload Selected Photos'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {uploadingRealImages && (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-primary)', margin: 0, fontWeight: 600 }}>
-                    ⏳ Task in progress: Uploading and saving real photos...
-                  </p>
-                )}
-              </div>
-
-              {/* Uploaded Photos Grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  Currently Available Real Photos ({realImagesList.length}):
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
-                  {realImagesList.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.01)', borderRadius: '8px' }}>
-                      No RAW real photos uploaded for this design yet.
-                    </p>
-                  ) : (
-                    realImagesList.map((img, idx) => (
-                      <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: '8px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
-                        <div 
-                          style={{ position: 'relative', cursor: 'pointer' }}
-                          onClick={() => setPreviewLightboxUrl(img.watermarked_path || img.image_path)}
-                          title="Click to zoom preview"
-                        >
-                          <img 
-                            src={img.watermarked_path || img.image_path} 
-                            alt={`Real photo ${idx + 1}`} 
-                            style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} 
-                          />
-                          <div style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', borderRadius: '4px', padding: '2px 5px', fontSize: '0.7rem', color: 'white' }}>
-                            🔍 Zoom
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem', background: 'rgba(0,0,0,0.6)', gap: '0.4rem' }}>
-                          <a 
-                            href={img.watermarked_path || img.image_path}
-                            download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '0.75rem', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px' }}
-                            title="Download Photo"
-                          >
-                            <Download size={12} /> Download
-                          </a>
-                          {(user?.role === 'superadmin' || user?.role === 'manager' || user?.role === 'both') && (
-                            <button 
-                              onClick={() => handleDeleteRealImage(img.id)}
-                              style={{ background: 'rgba(239, 68, 68, 0.25)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}
-                              title="Delete photo from article"
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Work Master Management Modal */}
-      {showWorksModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(6px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 10000,
-          padding: '1rem'
-        }}>
-          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '550px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div className="flex-between">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                <Sparkles size={20} color="#c084fc" />
-                Work Master Management
-              </h3>
-              <button 
-                onClick={() => {
-                  setShowWorksModal(false);
-                  setEditingWorkId(null);
-                }}
-                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Create New Work Type */}
-            <form onSubmit={handleCreateWork} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label>Add New Work Type</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Zari Work, Mirror Work, Thread Embroidery" 
-                  value={newWorkName}
-                  onChange={e => setNewWorkName(e.target.value)}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Sparkles size={14} /> Add Work
-              </button>
-            </form>
-
-            <hr style={{ border: '0', borderTop: '1px solid var(--glass-border)', margin: '0.5rem 0' }} />
-
-            {/* List of Existing Works */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Active Work Masters ({works.length})</label>
-              <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingRight: '4px' }}>
-                {works.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '1.5rem' }}>No work types found. Add one above!</p>
-                ) : (
-                  works.map(w => {
-                    const isEditing = editingWorkId === w.id;
-                    const itemsCount = items.filter(it => (it.work || '') === w.name).length;
-
-                    return (
-                      <div key={w.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.05)', minHeight: '44px' }}>
-                        {isEditing ? (
-                          <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
-                            <input 
-                              type="text" 
-                              value={editingWorkName}
-                              onChange={e => setEditingWorkName(e.target.value)}
-                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
-                            />
-                            <button 
-                              onClick={() => handleRenameWork(w.id)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
-                              title="Save Name"
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button 
-                              onClick={() => setEditingWorkId(null)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
-                              title="Cancel"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ fontWeight: 600 }}>{w.name}</span>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '10px' }}>
-                                {itemsCount} items
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                              {(user?.role === 'superadmin' || user?.role === 'manager') && (
-                                <>
-                                  <button 
-                                    onClick={() => {
-                                      setEditingWorkId(w.id);
-                                      setEditingWorkName(w.name);
-                                    }}
-                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
-                                    title="Rename Work Type"
-                                  >
-                                    <Edit2 size={15} />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteWork(w.id, w.name)}
-                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
-                                    title="Delete Work Type"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setShowWorksModal(false);
-                  setEditingWorkId(null);
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 24-Hour VIP Showcase Link & 7AM Auto-Email Manager Modal */}
-      {showcaseModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 10500 }}>
-          <div className="modal-content" style={{ maxWidth: '650px', background: '#0f172a', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-            <div className="modal-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div style={{
-                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                  borderRadius: '8px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff'
-                }}>
-                  <Star size={18} fill="#fff" />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#fff' }}>24-Hour VIP Client Showcase Manager</h3>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
-                    Generate temporary mobile catalogs for WhatsApp Business clients (No Prices, No QTY)
-                  </p>
-                </div>
-              </div>
-              <button 
-                className="close-btn" 
-                onClick={() => {
-                  setShowcaseModalOpen(false);
-                  setShowcaseSuccessMsg('');
-                  setShowcaseErrorMsg('');
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem 0' }}>
-              {/* Feedback Notifications */}
-              {showcaseSuccessMsg && (
-                <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#34d399', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ✓ {showcaseSuccessMsg}
-                </div>
-              )}
-              {showcaseErrorMsg && (
-                <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid #f43f5e', color: '#fb7185', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ⚠ {showcaseErrorMsg}
-                </div>
-              )}
-
-              {/* Status Ribbon */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '12px',
-                padding: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem'
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Current Showcase Selection
-                  </div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a5b4fc', marginTop: '2px' }}>
-                    {showcaseDesignsCount} Designs Selected
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilterShowcaseOnly(true);
-                      setShowcaseModalOpen(false);
-                    }}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '0.5rem 0.85rem' }}
-                  >
-                    View / Curate Designs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleGenerateShowcase}
-                    disabled={showcaseGenerating}
-                    className="btn btn-primary"
-                    style={{
-                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                      fontSize: '0.8rem',
-                      padding: '0.5rem 1rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem'
-                    }}
-                  >
-                    <Sparkles size={15} />
-                    {showcaseGenerating ? 'Generating...' : 'Generate New 24h Link'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Link Box */}
-              {showcaseActiveLink && (
-                <div style={{
-                  background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8))',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                  borderRadius: '12px',
-                  padding: '1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                      Active Client URL (Valid 24 Hours)
-                    </span>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      background: 'rgba(245, 158, 11, 0.15)',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                      color: '#fbbf24',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontWeight: 600
-                    }}>
-                      Expires: {new Date(showcaseActiveLink.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(showcaseActiveLink.expires_at).toLocaleDateString()})
-                    </span>
-                  </div>
-
-                  {/* URL Row */}
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {(() => {
-                      const clientUrl = showcaseActiveLink.token 
-                        ? `${window.location.origin}/showcase/${showcaseActiveLink.token}` 
-                        : (showcaseActiveLink.url || '').replace(/https?:\/\/[^/]+/, window.location.origin);
-                      return (
-                        <>
-                          <input 
-                            type="text" 
-                            readOnly 
-                            value={clientUrl} 
-                            style={{ 
-                              flex: 1, 
-                              background: '#0b0f19', 
-                              border: '1px solid rgba(255, 255, 255, 0.15)', 
-                              padding: '0.6rem 0.85rem',
-                              fontSize: '0.85rem',
-                              color: '#38bdf8',
-                              borderRadius: '6px'
-                            }} 
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(clientUrl);
-                              setShowcaseSuccessMsg('Link copied to clipboard!');
-                              setTimeout(() => setShowcaseSuccessMsg(''), 2500);
-                            }}
-                            className="btn btn-secondary"
-                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <Copy size={14} /> Copy
-                          </button>
-                          <a
-                            href={clientUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-secondary"
-                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
-                          >
-                            <ExternalLink size={14} /> Preview
-                          </a>
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {/* WhatsApp Quick Share Button */}
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={handleCopyShowcaseWhatsAppText}
-                      className="btn"
-                      style={{
-                        background: '#25d366',
-                        color: '#fff',
-                        fontWeight: 700,
-                        fontSize: '0.85rem',
-                        padding: '0.6rem 1rem',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Share2 size={15} />
-                      {copiedShowcaseText ? 'Copied WhatsApp Text!' : 'Copy WhatsApp Share Message'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSendShowcaseEmail}
-                      disabled={showcaseSendingEmail}
-                      className="btn btn-secondary"
-                      style={{
-                        fontSize: '0.85rem',
-                        padding: '0.6rem 1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem'
-                      }}
-                    >
-                      <Mail size={15} />
-                      {showcaseSendingEmail ? 'Sending Email...' : 'Email to Sales Team Now'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSuspendShowcase}
-                      disabled={showcaseSuspending}
-                      className="btn"
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid #ef4444',
-                        color: '#f87171',
-                        fontWeight: 700,
-                        fontSize: '0.85rem',
-                        padding: '0.6rem 1rem',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        cursor: 'pointer'
-                      }}
-                      title="Suspend link immediately before 24h expires"
-                    >
-                      <AlertOctagon size={15} />
-                      {showcaseSuspending ? 'Suspending...' : 'Suspend Before Time'}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
-                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                      To monitor all active client links, live countdown timers & views in real time, check the <strong style={{ color: '#818cf8' }}>Showcase Monitor</strong> tab in the sidebar navigation.
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Daily 7:00 AM Automated Email Configuration */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '12px',
-                padding: '1rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Mail size={16} color="#6366f1" />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
-                    Daily 7:00 AM Scheduled Email Dispatch
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.5 }}>
-                  Every day at <strong>7:00 AM IST</strong>, the system generates a fresh 24-hour showcase link from currently selected items and emails it directly to your sales team to start forwarding to customer leads.
-                </p>
-
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                  <input
-                    type="email"
-                    value={showcaseEmailRecipient}
-                    onChange={e => setShowcaseEmailRecipient(e.target.value)}
-                    placeholder="sales@desukafashion.com"
-                    style={{
-                      flex: 1,
-                      background: '#0b0f19',
-                      border: '1px solid rgba(255, 255, 255, 0.15)',
-                      padding: '0.5rem 0.8rem',
-                      fontSize: '0.85rem',
-                      color: '#fff',
-                      borderRadius: '6px'
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveEmailRecipient}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 600 }}
-                  >
-                    Save Recipient
-                  </button>
-                </div>
-              </div>
-
-              {/* Client Safety Rules Checklist */}
-              <div style={{
-                background: 'rgba(245, 158, 11, 0.08)',
-                border: '1px solid rgba(245, 158, 11, 0.25)',
-                borderRadius: '8px',
-                padding: '0.85rem 1rem',
-                fontSize: '0.75rem',
-                color: '#cbd5e1',
-                lineHeight: 1.6
-              }}>
-                <strong style={{ color: '#fbbf24' }}>🔒 Security & Commercial Rules Enforced:</strong>
-                <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
-                  <li><strong>Zero Price Exposure:</strong> Rates and revised rates are strictly hidden from clients.</li>
-                  <li><strong>Zero Quantity Exposure:</strong> Set pieces, total sets, and stock counts are completely hidden.</li>
-                  <li><strong>24-Hour Lifetime:</strong> After 24 hours, clients see randomized WhatsApp sales desk buttons (8796333844, 8796893844), direct call (9718503340), community link, and full social profiles.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Full-Resolution Interactive Lightbox Zoom Modal */}
-      {previewLightboxUrl && (
-        <div 
-          onClick={() => {
-            setPreviewLightboxUrl(null);
-            setZoomLevel(1);
-            setPreviewLightboxTitle(null);
-            setPreviewLightboxItem(null);
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.92)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 11000,
-            padding: '1rem',
-            userSelect: 'none'
-          }}
-        >
-          {/* Top Floating Control Bar */}
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              top: '16px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 11005,
-              background: 'rgba(18, 24, 38, 0.85)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: '9999px',
-              padding: '6px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
-              maxWidth: '90vw'
-            }}
-          >
-            {/* Title */}
-            {previewLightboxTitle && (
-              <span style={{ 
-                fontSize: '0.85rem', 
-                fontWeight: 700, 
-                color: '#ffffff',
-                fontFamily: 'Outfit',
-                maxWidth: '240px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                borderRight: '1px solid rgba(255, 255, 255, 0.15)',
-                paddingRight: '12px'
-              }}>
-                {previewLightboxTitle}
-              </span>
-            )}
-
-            {/* Zoom Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button 
-                onClick={() => setZoomLevel(z => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
-                disabled={zoomLevel <= 1}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: zoomLevel <= 1 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
-                  cursor: zoomLevel <= 1 ? 'not-allowed' : 'pointer'
-                }}
-                title="Zoom Out"
-              >
-                <ZoomOut size={15} />
-              </button>
-
-              <span style={{ 
-                fontSize: '0.8rem', 
-                fontWeight: 700, 
-                fontFamily: 'Outfit', 
-                color: zoomLevel > 1 ? '#60a5fa' : '#ffffff',
-                minWidth: '42px',
-                textAlign: 'center'
-              }}>
-                {Math.round(zoomLevel * 100)}%
-              </span>
-
-              <button 
-                onClick={() => setZoomLevel(z => Math.min(3.5, Math.round((z + 0.25) * 100) / 100))}
-                disabled={zoomLevel >= 3.5}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: zoomLevel >= 3.5 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
-                  cursor: zoomLevel >= 3.5 ? 'not-allowed' : 'pointer'
-                }}
-                title="Zoom In"
-              >
-                <ZoomIn size={15} />
-              </button>
-
-              {zoomLevel > 1 && (
-                <button 
-                  onClick={() => setZoomLevel(1)}
-                  style={{
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    borderRadius: '12px',
-                    padding: '3px 8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: '#c7d2fe',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                  title="Reset to 100%"
-                >
-                  <RotateCcw size={12} /> Reset
-                </button>
-              )}
-            </div>
-
-            {/* Direct Edit SKU & Replace Image Button from Lightbox */}
-            {previewLightboxItem && (
-              <button 
-                type="button"
-                onClick={() => {
-                  const target = previewLightboxItem;
-                  setPreviewLightboxUrl(null);
-                  setPreviewLightboxTitle(null);
-                  setPreviewLightboxItem(null);
-                  setZoomLevel(1);
-                  openEditModal(target);
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '5px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#ffffff',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
-                }}
-                title="Edit SKU Details or Replace Main Image"
-              >
-                <Edit2 size={13} /> Edit / Replace Photo
-              </button>
-            )}
-
-            <div style={{ height: '18px', width: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
-
-            {/* Download Button */}
-            <a 
-              href={previewLightboxUrl}
-              download="catalog-image.jpg"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                background: 'rgba(16, 185, 129, 0.2)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                borderRadius: '50%',
-                width: '30px',
-                height: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#10b981',
-                textDecoration: 'none'
-              }}
-              title="Download Full-Res Image"
-            >
-              <Download size={15} />
-            </a>
-
-            {/* Close Button */}
-            <button 
-              onClick={() => {
-                setPreviewLightboxUrl(null);
-                setZoomLevel(1);
-                setPreviewLightboxTitle(null);
-                setPreviewLightboxItem(null);
-              }}
-              style={{
-                background: 'rgba(244, 63, 94, 0.2)',
-                border: '1px solid rgba(244, 63, 94, 0.4)',
-                borderRadius: '50%',
-                width: '30px',
-                height: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#f43f5e',
-                cursor: 'pointer'
-              }}
-              title="Close Preview (Esc)"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* Interactive Image Display Container */}
-          <div 
-            onClick={(e) => {
-              e.stopPropagation();
-              // Click image to toggle between 1x and 2x zoom
-              setZoomLevel(prev => prev > 1 ? 1 : 2);
-            }}
-            style={{
-              position: 'relative',
-              maxWidth: '92vw',
-              maxHeight: '82vh',
-              overflow: 'auto',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in',
-              padding: '1rem',
-              borderRadius: '8px'
-            }}
-          >
-            <img 
-              src={previewLightboxUrl} 
-              alt="Zoomed catalog preview" 
-              style={{ 
-                maxWidth: zoomLevel === 1 ? '100%' : 'none',
-                maxHeight: zoomLevel === 1 ? '80vh' : 'none',
-                objectFit: 'contain', 
-                borderRadius: '8px', 
-                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9)',
-                transform: `scale(${zoomLevel})`,
-                transformOrigin: 'center center',
-                transition: 'transform 0.22s cubic-bezier(0.2, 0, 0, 1)'
-              }} 
-            />
-          </div>
-
-          {/* Bottom Helpful Hint Badge */}
-          <div style={{
-            position: 'fixed',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-            color: 'rgba(255, 255, 255, 0.7)',
-            padding: '5px 14px',
-            borderRadius: '9999px',
-            fontSize: '0.75rem',
-            pointerEvents: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}>
-            💡 Click photo to toggle 2x zoom • Use buttons to zoom up to 350% • Scroll to pan
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FolderPlus, 
+  Upload, 
+  Trash2, 
+  Search, 
+  Filter, 
+  Image as ImageIcon,
+  CheckCircle,
+  XCircle,
+  Edit2,
+  Check,
+  X,
+  AlertCircle,
+  Share2,
+  Copy,
+  Download,
+  Camera,
+  Sparkles,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Star,
+  Link,
+  Mail,
+  ExternalLink,
+  AlertOctagon
+} from 'lucide-react';
+import { getPatternInfo } from './ShowcaseView';
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Work {
+  id: number;
+  name: string;
+}
+
+interface SKUItem {
+  id: number;
+  sku_id: string;
+  category_id: number;
+  image_path: string;
+  pieces_per_set: number;
+  description: string;
+  material: string;
+  work?: string;
+  stitcher_name?: string | null;
+  rate: number;
+  revised_rate?: number | null;
+  hike_rate?: number | null;
+  sets_count: number;
+  total_pieces: number;
+  is_available: boolean;
+  is_permanent_inactive?: boolean;
+  is_in_showcase?: boolean;
+  original_created_at?: string;
+  created_at: string;
+  category_name?: string;
+  real_image_count?: number;
+  real_images?: string[];
+}
+
+interface UserProfile {
+  id: number;
+  username: string;
+  role: 'superadmin' | 'manager' | 'both' | 'stockist' | 'sales';
+}
+
+interface CatalogsProps {
+  token: string;
+  user: UserProfile | null;
+}
+
+export default function Catalogs({ token, user }: CatalogsProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [works, setWorks] = useState<Work[]>([]);
+  const [items, setItems] = useState<SKUItem[]>([]);
+  
+  // Category creation states
+  const [newCatName, setNewCatName] = useState('');
+
+  // Work Master management states
+  const [showWorksModal, setShowWorksModal] = useState(false);
+  const [newWorkName, setNewWorkName] = useState('');
+  const [editingWorkId, setEditingWorkId] = useState<number | null>(null);
+  const [editingWorkName, setEditingWorkName] = useState('');
+  
+  // SKU creation states
+  const [skuId, setSkuId] = useState('');
+  const [selectedCatId, setSelectedCatId] = useState('');
+  const [piecesPerSet, setPiecesPerSet] = useState(4);
+  const [description, setDescription] = useState('');
+  const [material, setMaterial] = useState('');
+  const [work, setWork] = useState('');
+  const [stitcherName, setStitcherName] = useState('');
+  const [rate, setRate] = useState('');
+  const [stockType, setStockType] = useState<'new' | 'old'>('new');
+  const [originalCreatedAt, setOriginalCreatedAt] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  
+  // Modal Edit states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<SKUItem | null>(null);
+  const [editSkuId, setEditSkuId] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editPiecesPerSet, setEditPiecesPerSet] = useState(4);
+  const [editMaterial, setEditMaterial] = useState('');
+  const [editWork, setEditWork] = useState('');
+  const [editStitcherName, setEditStitcherName] = useState('');
+  const [editRate, setEditRate] = useState('');
+  const [editRevisedRate, setEditRevisedRate] = useState('');
+  const [editHikeRate, setEditHikeRate] = useState('');
+  const [editSetsCount, setEditSetsCount] = useState(0);
+  const [editIsAvailable, setEditIsAvailable] = useState(true);
+  const [editIsPermanentInactive, setEditIsPermanentInactive] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Folder/Category editing states
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+  const [editingCatName, setEditingCatName] = useState('');
+
+  // WhatsApp Web multi-share states
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [sharePhone, setSharePhone] = useState('');
+  const [webSendDescription, setWebSendDescription] = useState(false);
+  const [webShareRealImages, setWebShareRealImages] = useState(false);
+  const [shareImagesPerItem, setShareImagesPerItem] = useState<number>(1);
+  const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
+  const [previewLightboxTitle, setPreviewLightboxTitle] = useState<string | null>(null);
+  const [previewLightboxItem, setPreviewLightboxItem] = useState<SKUItem | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [copiedText, setCopiedText] = useState(false);
+  const [copyingImgId, setCopyingImgId] = useState<number | null>(null);
+
+  // RAW Real Images states
+  const [realImagesFiles, setRealImagesFiles] = useState<File[]>([]);
+  const [realImagesPreviews, setRealImagesPreviews] = useState<string[]>([]);
+  const [realImagesModalItem, setRealImagesModalItem] = useState<SKUItem | null>(null);
+  const [realImagesList, setRealImagesList] = useState<Array<{ id: number; item_id: number; image_path: string; watermarked_path: string }>>([]);
+  const [uploadingRealImages, setUploadingRealImages] = useState(false);
+  const [modalSelectedFiles, setModalSelectedFiles] = useState<File[]>([]);
+  const [modalSelectedPreviews, setModalSelectedPreviews] = useState<string[]>([]);
+  const [modalSuccessMsg, setModalSuccessMsg] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Filters/Search
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCatId, setFilterCatId] = useState('');
+  const [filterWork, setFilterWork] = useState('');
+  const [filterAgeLimit, setFilterAgeLimit] = useState(false);
+  const [filterOffersOnly, setFilterOffersOnly] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterRateRange, setFilterRateRange] = useState('');
+  const [filterShowcaseOnly, setFilterShowcaseOnly] = useState(false);
+
+  // 24-Hour Showcase management states
+  const [showcaseModalOpen, setShowcaseModalOpen] = useState(false);
+  const [showcaseActiveLink, setShowcaseActiveLink] = useState<{ token: string; url: string; expires_at: string; item_count: number } | null>(null);
+  const [showcaseGenerating, setShowcaseGenerating] = useState(false);
+  const [showcaseSendingEmail, setShowcaseSendingEmail] = useState(false);
+  const [showcaseEmailRecipient, setShowcaseEmailRecipient] = useState('wholesale@desukafashion.com');
+  const [showcaseSuccessMsg, setShowcaseSuccessMsg] = useState('');
+  const [showcaseErrorMsg, setShowcaseErrorMsg] = useState('');
+  const [copiedShowcaseText, setCopiedShowcaseText] = useState(false);
+  const [showcaseSuspending, setShowcaseSuspending] = useState(false);
+
+  // Messages
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasSetInitialFolder = useRef(false);
+
+  useEffect(() => {
+    fetchCategories();
+    fetchWorks();
+    fetchSKUs();
+    fetchShowcaseSummary();
+  }, []);
+
+  useEffect(() => {
+    if (categories.length > 0) {
+      if (!hasSetInitialFolder.current) {
+        setFilterCatId(categories[0].id.toString());
+        hasSetInitialFolder.current = true;
+      } else {
+        // If selected folder is deleted, fallback to the first folder
+        setFilterCatId(prev => {
+          if (prev === '') return prev; // Keep "All Folders" if explicitly selected
+          const exists = categories.some(c => c.id.toString() === prev);
+          return exists ? prev : categories[0].id.toString();
+        });
+      }
+    }
+  }, [categories]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/catalog/categories', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (e) {
+      console.error('Failed to load categories', e);
+    }
+  };
+
+  const fetchWorks = async () => {
+    try {
+      const response = await fetch('/api/catalog/works', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWorks(data);
+      }
+    } catch (e) {
+      console.error('Failed to load works', e);
+    }
+  };
+
+  const fetchShowcaseSummary = async () => {
+    try {
+      const response = await fetch('/api/admin/showcase/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setShowcaseActiveLink(data.activeLink || null);
+        if (data.settings?.daily_email_recipient) {
+          setShowcaseEmailRecipient(data.settings.daily_email_recipient);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load showcase summary', e);
+    }
+  };
+
+  const handleToggleShowcase = async (item: SKUItem) => {
+    const nextState = !item.is_in_showcase;
+    // Optimistic instant state update
+    setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: nextState } : it));
+    showSuccess(nextState ? `Added ${item.sku_id} to 24h Showcase!` : `Removed ${item.sku_id} from Showcase`);
+
+    try {
+      const res = await fetch('/api/admin/showcase/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemId: item.id, state: nextState })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: data.item.is_in_showcase } : it));
+      } else {
+        // Rollback on failure
+        setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
+        showError('Failed to save showcase selection on server');
+      }
+    } catch (err) {
+      console.error('Failed to toggle showcase', err);
+      setItems(prev => prev.map(it => it.id === item.id ? { ...it, is_in_showcase: item.is_in_showcase } : it));
+      showError('Network error updating showcase');
+    }
+  };
+
+  const handleBulkToggleShowcase = async (add: boolean) => {
+    if (selectedItems.length === 0) return;
+    const targets = [...selectedItems];
+    // Optimistic instant UI update
+    setItems(prev => prev.map(it => targets.includes(it.id) ? { ...it, is_in_showcase: add } : it));
+    showSuccess(`${targets.length} designs ${add ? 'added to' : 'removed from'} 24h showcase!`);
+
+    try {
+      const res = await fetch('/api/admin/showcase/bulk-toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemIds: targets, state: add })
+      });
+      if (!res.ok) {
+        showError('Server error while saving bulk showcase update');
+        fetchSKUs();
+      }
+    } catch (err) {
+      console.error('Failed bulk showcase toggle', err);
+      showError('Network error updating showcase');
+      fetchSKUs();
+    }
+  };
+
+  const handleGenerateShowcase = async () => {
+    try {
+      setShowcaseGenerating(true);
+      setShowcaseErrorMsg('');
+      setShowcaseSuccessMsg('');
+
+      // Combine designs already in showcase PLUS any designs currently checked on screen
+      const currentShowcaseIds = items.filter(it => it.is_in_showcase).map(it => it.id);
+      const combinedIds = Array.from(new Set([...currentShowcaseIds, ...selectedItems]));
+
+      const res = await fetch('/api/admin/showcase/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          itemIds: combinedIds.length > 0 ? combinedIds : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Also persist flagged state locally if checked items were added
+        if (selectedItems.length > 0) {
+          setItems(prev => prev.map(it => combinedIds.includes(it.id) ? { ...it, is_in_showcase: true } : it));
+        }
+
+        const clientUrl = `${window.location.origin}/showcase/${data.token}`;
+        setShowcaseActiveLink({
+          token: data.token,
+          url: clientUrl,
+          expires_at: data.expires_at,
+          item_count: data.count
+        });
+        setShowcaseSuccessMsg(`Fresh 24-hour showcase link generated successfully with ${data.count} designs!`);
+      } else {
+        setShowcaseErrorMsg(data.error || 'Failed to generate showcase link');
+      }
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Server error');
+    } finally {
+      setShowcaseGenerating(false);
+    }
+  };
+
+  const handleSendShowcaseEmail = async () => {
+    try {
+      setShowcaseSendingEmail(true);
+      setShowcaseErrorMsg('');
+      setShowcaseSuccessMsg('');
+      const res = await fetch('/api/admin/showcase/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          token: showcaseActiveLink?.token,
+          email: showcaseEmailRecipient
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowcaseSuccessMsg(data.message || `Email sent successfully to ${showcaseEmailRecipient}!`);
+      } else {
+        setShowcaseErrorMsg(data.message || 'Failed to send email');
+      }
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Server error sending email');
+    } finally {
+      setShowcaseSendingEmail(false);
+    }
+  };
+
+  const handleSaveEmailRecipient = async () => {
+    try {
+      await fetch('/api/admin/showcase/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ daily_email_recipient: showcaseEmailRecipient })
+      });
+      setShowcaseSuccessMsg('Daily 7:00 AM email recipient updated successfully!');
+      setTimeout(() => setShowcaseSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error('Failed to update email recipient', err);
+    }
+  };
+
+  const handleCopyShowcaseWhatsAppText = () => {
+    if (!showcaseActiveLink) return;
+    const clientUrl = `${window.location.origin}/showcase/${showcaseActiveLink.token}`;
+    const shareText = 
+`*DESUKA by VS FASHION — Exclusive Wholesale Showcase*
+
+Check out our latest curated wholesale collection (Valid for limited time):
+${clientUrl}
+
+📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
+🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)
+📞 Daytime Desk: +91 9240202545 | +91 9718503340
+🌐 https://www.desukafashion.com`;
+
+    navigator.clipboard.writeText(shareText);
+    setCopiedShowcaseText(true);
+    setTimeout(() => setCopiedShowcaseText(false), 2500);
+  };
+
+  const handleSuspendShowcase = async () => {
+    if (!showcaseActiveLink) return;
+    if (!window.confirm('Suspend this showcase link immediately? Customers will be blocked from viewing catalog designs and shown the latest catalog contact notice.')) {
+      return;
+    }
+    try {
+      setShowcaseSuspending(true);
+      setShowcaseErrorMsg('');
+      const res = await fetch(`/api/admin/showcase/links/${showcaseActiveLink.token}/suspend`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to suspend link');
+
+      setShowcaseSuccessMsg('Showcase link suspended immediately. Customer access is now blocked.');
+      setShowcaseActiveLink(null);
+      setTimeout(() => setShowcaseSuccessMsg(''), 4000);
+      fetchShowcaseSummary();
+    } catch (err: any) {
+      setShowcaseErrorMsg(err.message || 'Error suspending link');
+      setTimeout(() => setShowcaseErrorMsg(''), 4000);
+    } finally {
+      setShowcaseSuspending(false);
+    }
+  };
+
+  const handleCreateWork = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWorkName.trim()) return;
+
+    try {
+      const response = await fetch('/api/admin/works', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: newWorkName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setWorks([...works, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewWorkName('');
+        showSuccess('Work type created successfully');
+      } else {
+        showError(data.error || 'Failed to create work type');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleRenameWork = async (workId: number) => {
+    if (!editingWorkName.trim()) return;
+
+    try {
+      const response = await fetch(`/api/admin/works/${workId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: editingWorkName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setWorks(works.map(w => w.id === workId ? data : w).sort((a, b) => a.name.localeCompare(b.name)));
+        setEditingWorkId(null);
+        fetchSKUs();
+        showSuccess('Work type renamed successfully');
+      } else {
+        showError(data.error || 'Failed to rename work type');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleDeleteWork = async (workId: number, workName: string) => {
+    if (!window.confirm(`Are you sure you want to delete work type "${workName}"? Existing items with this work will have their work field cleared.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/works/${workId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setWorks(works.filter(w => w.id !== workId));
+        fetchSKUs();
+        showSuccess('Work type deleted');
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete work type');
+      }
+    } catch (e) {
+      showError('Network error');
+    }
+  };
+
+  const fetchSKUs = async () => {
+    try {
+      const response = await fetch('/api/admin/items', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setItems(data);
+      }
+    } catch (e) {
+      console.error('Failed to load SKU items', e);
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    try {
+      const response = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: newCatName })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCategories([...categories, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewCatName('');
+        showSuccess('Folder created successfully');
+      } else {
+        showError(data.error || 'Failed to create folder');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleDeleteCategory = async (catId: number, catName: string) => {
+    if (!window.confirm(`Are you sure you want to delete category "${catName}"? This will delete ALL image files and SKU designs associated with it!`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/categories/${catId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setCategories(categories.filter(c => c.id !== catId));
+        fetchSKUs(); // reload SKUs since some might be deleted
+        showSuccess('Category folder deleted');
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete category');
+      }
+    } catch (e) {
+      showError('Network error');
+    }
+  };
+
+  const handleRenameCategory = async (catId: number) => {
+    if (!editingCatName.trim()) return;
+
+    try {
+      const response = await fetch(`/api/admin/categories/${catId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: editingCatName.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCategories(categories.map(c => c.id === catId ? data : c).sort((a, b) => a.name.localeCompare(b.name)));
+        setEditingCatId(null);
+        showSuccess('Folder renamed successfully');
+      } else {
+        showError(data.error || 'Failed to rename folder');
+      }
+    } catch (err) {
+      showError('Network error');
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setFilePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRealImagesFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArr = Array.from(e.target.files).slice(0, 5);
+      setRealImagesFiles(filesArr);
+      setRealImagesPreviews(filesArr.map(f => URL.createObjectURL(f)));
+    }
+  };
+
+  const fetchRealImagesForItem = async (item: SKUItem) => {
+    setRealImagesModalItem(item);
+    setModalSelectedFiles([]);
+    setModalSuccessMsg('');
+    try {
+      const response = await fetch(`/api/admin/items/${item.id}/real-images`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRealImagesList(data);
+      }
+    } catch (e) {
+      console.error('Failed to load real images', e);
+    }
+  };
+
+  const handleSelectModalRealFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const filesArr = Array.from(e.target.files).slice(0, 5);
+      setModalSelectedFiles(filesArr);
+      setModalSelectedPreviews(filesArr.map(f => URL.createObjectURL(f)));
+      setModalSuccessMsg('');
+    }
+  };
+
+  const handleRemoveModalSelectedFile = (index: number) => {
+    const newFiles = modalSelectedFiles.filter((_, i) => i !== index);
+    const newPreviews = modalSelectedPreviews.filter((_, i) => i !== index);
+    setModalSelectedFiles(newFiles);
+    setModalSelectedPreviews(newPreviews);
+  };
+
+  const handleSaveModalRealImages = async () => {
+    if (!realImagesModalItem || modalSelectedFiles.length === 0) return;
+    
+    setUploadingRealImages(true);
+    setModalSuccessMsg('');
+    const formData = new FormData();
+    modalSelectedFiles.forEach(file => {
+      formData.append('real_images', file);
+    });
+
+    try {
+      const response = await fetch(`/api/admin/items/${realImagesModalItem.id}/real-images`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (response.ok) {
+        const newImgs = await response.json();
+        const updatedList = [...realImagesList, ...newImgs];
+        setRealImagesList(updatedList);
+        setModalSelectedFiles([]);
+        setModalSelectedPreviews([]);
+        setModalSuccessMsg(`✅ ${newImgs.length} Real Photo(s) Uploaded Successfully for ${realImagesModalItem.sku_id}!`);
+        setItems(prevItems => prevItems.map(it => {
+          if (it.id === realImagesModalItem.id) {
+            return {
+              ...it,
+              real_image_count: updatedList.length,
+              real_images: updatedList.map(img => img.watermarked_path)
+            };
+          }
+          return it;
+        }));
+        setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
+        showSuccess('Real photos uploaded successfully');
+        fetchSKUs();
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to upload real images');
+      }
+    } catch (err) {
+      showError('Network error');
+    } finally {
+      setUploadingRealImages(false);
+    }
+  };
+
+  const handleDeleteRealImage = async (imageId: number) => {
+    if (!window.confirm('Are you sure you want to delete this real photo?')) return;
+    try {
+      const response = await fetch(`/api/admin/items/real-images/${imageId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const updatedList = realImagesList.filter(img => img.id !== imageId);
+        setRealImagesList(updatedList);
+        if (realImagesModalItem) {
+          setItems(prevItems => prevItems.map(it => {
+            if (it.id === realImagesModalItem.id) {
+              return {
+                ...it,
+                real_image_count: updatedList.length,
+                real_images: updatedList.map(img => img.watermarked_path)
+              };
+            }
+            return it;
+          }));
+          setRealImagesModalItem(prev => prev ? { ...prev, real_image_count: updatedList.length } : null);
+        }
+        showSuccess('Real photo deleted');
+        fetchSKUs();
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete real image');
+      }
+    } catch (e) {
+      showError('Network error');
+    }
+  };
+
+  const handleUploadSKU = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!skuId.trim() || !selectedCatId || !selectedFile) {
+      showError('Please fill all SKU details and select an image');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const formData = new FormData();
+    formData.append('skuId', skuId.trim());
+    formData.append('categoryId', selectedCatId);
+    formData.append('piecesPerSet', piecesPerSet.toString());
+    formData.append('description', description.trim());
+    formData.append('material', material.trim());
+    formData.append('work', work.trim());
+    formData.append('stitcherName', stitcherName.trim());
+    formData.append('rate', rate.trim() || '0');
+    formData.append('originalCreatedAt', stockType === 'old' ? new Date(originalCreatedAt).toISOString() : new Date().toISOString());
+    formData.append('image', selectedFile);
+
+    if (realImagesFiles.length > 0) {
+      realImagesFiles.forEach(file => {
+        formData.append('real_images', file);
+      });
+    }
+
+    try {
+      const response = await fetch('/api/admin/items', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setItems([data, ...items]);
+        
+        // Reset form
+        setSkuId('');
+        setPiecesPerSet(4);
+        setDescription('');
+        setMaterial('');
+        setWork('');
+        setStitcherName('');
+        setRate('');
+        setStockType('new');
+        setOriginalCreatedAt(new Date().toISOString().split('T')[0]);
+        setSelectedFile(null);
+        setFilePreview(null);
+        setRealImagesFiles([]);
+        setRealImagesPreviews([]);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        
+        showSuccess(`SKU ${data.sku_id} created successfully`);
+      } else {
+        showError(data.error || 'Failed to upload SKU');
+      }
+    } catch (err) {
+      showError('Upload failed due to connection error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (item: SKUItem) => {
+    setEditingItem(item);
+    setEditSkuId(item.sku_id);
+    setEditCategoryId(item.category_id.toString());
+    setEditPiecesPerSet(item.pieces_per_set);
+    setEditMaterial(item.material || '');
+    setEditWork(item.work || '');
+    setEditStitcherName(item.stitcher_name || '');
+    setEditRate(item.rate.toString());
+    setEditRevisedRate(item.revised_rate ? item.revised_rate.toString() : '');
+    setEditHikeRate(item.hike_rate ? item.hike_rate.toString() : '');
+    setEditSetsCount(item.sets_count);
+    setEditIsAvailable(item.is_available);
+    setEditIsPermanentInactive(!!item.is_permanent_inactive);
+    setEditDescription(item.description || '');
+    setEditImageFile(null);
+    setEditImagePreview(item.image_path);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateSKU = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    try {
+      setLoading(true);
+      let response;
+
+      if (editImageFile) {
+        const formData = new FormData();
+        formData.append('skuId', editSkuId);
+        formData.append('categoryId', editCategoryId);
+        formData.append('piecesPerSet', editPiecesPerSet.toString());
+        formData.append('material', editMaterial);
+        formData.append('work', editWork);
+        formData.append('stitcherName', editStitcherName.trim());
+        formData.append('rate', editRate);
+        // If hike is available, revised not required
+        if (editHikeRate.trim() !== '' && parseInt(editHikeRate) > 0) {
+          formData.append('hikeRate', editHikeRate.trim());
+          formData.append('revisedRate', '');
+        } else {
+          formData.append('hikeRate', '');
+          if (editRevisedRate.trim() !== '') {
+            formData.append('revisedRate', editRevisedRate.trim());
+          } else {
+            formData.append('revisedRate', '');
+          }
+        }
+        formData.append('setsCount', editSetsCount.toString());
+        formData.append('isAvailable', editIsAvailable ? 'true' : 'false');
+        formData.append('isPermanentInactive', editIsPermanentInactive ? 'true' : 'false');
+        formData.append('description', editDescription);
+        formData.append('image', editImageFile);
+
+        response = await fetch(`/api/admin/items/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+      } else {
+        response = await fetch(`/api/admin/items/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            skuId: editSkuId,
+            categoryId: editCategoryId,
+            piecesPerSet: editPiecesPerSet,
+            material: editMaterial,
+            work: editWork,
+            stitcherName: editStitcherName.trim(),
+            rate: editRate,
+            revisedRate: (editHikeRate.trim() !== '' && parseInt(editHikeRate) > 0) ? null : (editRevisedRate.trim() === '' ? null : editRevisedRate.trim()),
+            hikeRate: editHikeRate.trim() === '' ? null : editHikeRate.trim(),
+            setsCount: editSetsCount,
+            isAvailable: editIsAvailable,
+            isPermanentInactive: editIsPermanentInactive,
+            description: editDescription
+          })
+        });
+      }
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setItems(prevItems => prevItems.map(item => item.id === editingItem.id ? { ...item, ...data } : item));
+        setIsEditModalOpen(false);
+        setEditingItem(null);
+        setEditImageFile(null);
+        setEditImagePreview(null);
+        setEditStitcherName('');
+        if (editFileInputRef.current) editFileInputRef.current.value = '';
+        showSuccess('SKU updated successfully');
+      } else {
+        showError(data.error || 'Failed to update SKU');
+      }
+    } catch (err) {
+      showError('Failed to save update');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSKU = async (itemId: number, skuCode: string) => {
+    if (!window.confirm(`Are you sure you want to delete SKU design "${skuCode}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/items/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setItems(items.filter(item => item.id !== itemId));
+        showSuccess('SKU design deleted');
+      } else {
+        const data = await response.json();
+        showError(data.error || 'Failed to delete SKU');
+      }
+    } catch (e) {
+      showError('Network error');
+    }
+  };
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 5000);
+  };
+
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(''), 5000);
+  };
+
+  const getThumbnailUrl = (imagePath: string) => {
+    if (!imagePath) return '';
+    const lastDotIndex = imagePath.lastIndexOf('.');
+    if (lastDotIndex !== -1 && !imagePath.includes('-thumb.')) {
+      return imagePath.substring(0, lastDotIndex) + '-thumb' + imagePath.substring(lastDotIndex);
+    }
+    return imagePath;
+  };
+
+  const handleToggleSelect = (itemId: number) => {
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        if (user?.role === 'sales' && prev.length >= 6) {
+          showError('Sales users can only select up to 6 designs at a time.');
+          return prev;
+        }
+        return [...prev, itemId];
+      }
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    const allVisibleIds = filteredItems.map(item => item.id);
+    const allSelected = allVisibleIds.every(id => selectedItems.includes(id));
+    
+    if (allSelected) {
+      setSelectedItems(prev => prev.filter(id => !allVisibleIds.includes(id)));
+    } else {
+      setSelectedItems(prev => {
+        if (user?.role === 'sales') {
+          const remainingSlots = 6 - prev.length;
+          if (remainingSlots <= 0) {
+            showError('Sales users can only select up to 6 designs at a time.');
+            return prev;
+          }
+          const toAdd = allVisibleIds.filter(id => !prev.includes(id)).slice(0, remainingSlots);
+          if (toAdd.length < allVisibleIds.filter(id => !prev.includes(id)).length) {
+            showError(`Sales users can only select up to 6 designs. Selected first ${toAdd.length} items.`);
+          }
+          return [...prev, ...toAdd];
+        }
+        const unique = new Set([...prev, ...allVisibleIds]);
+        return Array.from(unique);
+      });
+    }
+  };
+
+  const generateShareText = () => {
+    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
+    let text = '';
+    if (selectedItemsData.length === 1) {
+      const item = selectedItemsData[0];
+      text += `Design SKU: ${item.sku_id}\n`;
+      if (item.material) {
+        text += `Work/Material: ${item.material}\n`;
+      }
+      if (webSendDescription && item.description) {
+        text += `Description: ${item.description}\n`;
+      }
+      text += `\nShared via Desuka Catalog`;
+    } else {
+      text += `Designs from Desuka Catalogue:\n\n`;
+      selectedItemsData.forEach(item => {
+        text += `• SKU: ${item.sku_id}\n`;
+        if (item.material) {
+          text += `  Work/Material: ${item.material}\n`;
+        }
+        if (webSendDescription && item.description) {
+          text += `  Description: ${item.description}\n`;
+        }
+        text += `\n`;
+      });
+      text += `Shared via Desuka Catalog`;
+    }
+    return text;
+  };
+
+  const handleCopyDetails = () => {
+    const text = generateShareText();
+    navigator.clipboard.writeText(text);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  };
+
+  const handleDownloadSelectedImages = () => {
+    const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
+    if (user?.role === 'sales' && selectedItemsData.length > 6) {
+      showError('Sales users can only download up to 6 designs at a time.');
+      return;
+    }
+    
+    let downloadDelay = 0;
+    selectedItemsData.forEach(item => {
+      if (webShareRealImages && item.real_images && item.real_images.length > 0) {
+        const targetRealImages = item.real_images.slice(0, shareImagesPerItem);
+        targetRealImages.forEach((realPath, rIdx) => {
+          setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = realPath;
+            const rExt = realPath.substring(realPath.lastIndexOf('.')) || '.jpg';
+            link.download = `${item.sku_id}-real-${rIdx + 1}${rExt}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }, downloadDelay);
+          downloadDelay += 300;
+        });
+      } else {
+        setTimeout(() => {
+          const link = document.createElement('a');
+          link.href = item.image_path;
+          const ext = item.image_path.substring(item.image_path.lastIndexOf('.'));
+          link.download = `${item.sku_id}${ext}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }, downloadDelay);
+        downloadDelay += 300;
+      }
+    });
+  };
+
+  const handleShareWhatsAppWeb = () => {
+    const text = generateShareText();
+    const cleanNum = sharePhone.trim().replace(/\D/g, '');
+    const url = cleanNum 
+      ? `https://web.whatsapp.com/send?phone=${cleanNum}&text=${encodeURIComponent(text)}`
+      : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleCopyImageToClipboard = async (imagePath: string, itemId: number) => {
+    try {
+      setCopyingImgId(itemId);
+      
+      const imagePromise = new Promise<Blob>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imagePath;
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to convert image format'));
+            }
+          }, 'image/png');
+        };
+        
+        img.onerror = () => {
+          reject(new Error('Failed to load image'));
+        };
+      });
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': imagePromise
+        })
+      ]);
+
+      showSuccess('Photo copied to clipboard! Paste it into WhatsApp.');
+      setTimeout(() => setCopyingImgId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy image to clipboard:', err);
+      showError('Browser blocked copying. Right-click the thumbnail and select "Copy Image".');
+      setCopyingImgId(null);
+    }
+  };
+
+
+  // Filter items including age limitation (>60 days), status, and sort them
+  const filteredItems = items
+    .filter(item => {
+      const matchesSearch = item.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = filterShowcaseOnly || filterCatId === '' || item.category_id === parseInt(filterCatId);
+      
+      let matchesAge = true;
+      if (filterAgeLimit) {
+        const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+        matchesAge = ageInDays >= 60;
+      }
+
+      let matchesOffers = true;
+      if (filterOffersOnly) {
+        matchesOffers = !!(item.revised_rate && item.revised_rate > 0);
+      }
+
+      const matchesStatus = filterStatus === '' || 
+        (filterStatus === 'A' && item.is_available && item.sets_count > 0 && !item.is_permanent_inactive) ||
+        (filterStatus === 'OS' && item.is_available && item.sets_count === 0 && !item.is_permanent_inactive) ||
+        (filterStatus === 'NA' && !item.is_available && !item.is_permanent_inactive) ||
+        (filterStatus === 'PINA' && !!item.is_permanent_inactive);
+
+      let matchesRate = true;
+      if (filterRateRange) {
+        const [minStr, maxStr] = filterRateRange.split('-');
+        const minVal = parseInt(minStr);
+        const maxVal = parseInt(maxStr);
+        const itemRate = item.rate || 0;
+        if (!isNaN(minVal)) matchesRate = matchesRate && itemRate >= minVal;
+        if (!isNaN(maxVal)) matchesRate = matchesRate && itemRate <= maxVal;
+      }
+
+      const matchesWork = filterWork === '' || (item.work || '') === filterWork;
+      const matchesShowcase = !filterShowcaseOnly || !!item.is_in_showcase;
+      
+      // Ensure item belongs to one of the user's permitted categories
+      const allowedCatIds = categories.map(c => c.id);
+      const isPermittedCategory = allowedCatIds.includes(item.category_id);
+
+      return isPermittedCategory && matchesSearch && matchesCategory && matchesWork && matchesAge && matchesStatus && matchesRate && matchesOffers && matchesShowcase;
+    })
+    .sort((a, b) => {
+      // Permanent Inactive (P-INA) always sorted to the bottom
+      const aPina = !!a.is_permanent_inactive;
+      const bPina = !!b.is_permanent_inactive;
+      if (aPina !== bPina) {
+        return aPina ? 1 : -1;
+      }
+
+      // Sort items: Available (A) first, Out of Stock (OS) second, Inactive (NA) last
+      const aAvailable = a.is_available && a.sets_count > 0;
+      const bAvailable = b.is_available && b.sets_count > 0;
+      if (aAvailable !== bAvailable) {
+        return aAvailable ? -1 : 1;
+      }
+      
+      const aOS = a.is_available && a.sets_count === 0;
+      const bOS = b.is_available && b.sets_count === 0;
+      if (aOS !== bOS) {
+        return aOS ? -1 : 1;
+      }
+      
+      // Secondary sort: pattern hierarchy (PL -> AK -> CTP -> LH -> SKT -> SP)
+      const rankA = getPatternInfo(a.sku_id, a.category_name).rank;
+      const rankB = getPatternInfo(b.sku_id, b.category_name).rank;
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
+      // Tertiary sort: serial wise (natural sort)
+      return a.sku_id.localeCompare(b.sku_id, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCatId, filterAgeLimit, filterOffersOnly, filterStatus, filterRateRange]);
+
+  const itemsPerPage = 15;
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
+
+  const totalDesigns = items.length;
+  const activeDesigns = items.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+  const outOfStockDesigns = items.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+  const inactiveDesigns = items.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+  const permanentInactiveDesigns = items.filter(item => item.is_permanent_inactive).length;
+  const revisedDesigns = items.filter(item => item.revised_rate && item.revised_rate > 0).length;
+  const showcaseDesignsCount = items.filter(item => item.is_in_showcase).length;
+
+  return (
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div>
+        <h1>Catalog & SKU Management</h1>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Create folders and upload designs SKU-wise</p>
+      </div>
+
+      {/* Design Counts Summary Ribbon */}
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total SKU Designs</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '0.25rem' }}>{totalDesigns}</div>
+          </div>
+          <div style={{ background: 'var(--bg-tertiary)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-primary)' }}>
+            <ImageIcon size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-success)', textTransform: 'uppercase', fontWeight: 600 }}>Available (In Stock)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)', marginTop: '0.25rem' }}>{activeDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-success)' }}>
+            <CheckCircle size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-warning)', textTransform: 'uppercase', fontWeight: 600 }}>Available (Out of Stock)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-warning)', marginTop: '0.25rem' }}>{outOfStockDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-warning)' }}>
+            <AlertCircle size={20} />
+          </div>
+        </div>
+
+        <div 
+          className="glass-card" 
+          onClick={() => setFilterOffersOnly(!filterOffersOnly)}
+          style={{ 
+            padding: '1rem', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            borderColor: filterOffersOnly ? '#f59e0b' : 'rgba(245, 158, 11, 0.25)',
+            background: filterOffersOnly ? 'rgba(245, 158, 11, 0.15)' : undefined,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          title="Click to view only Revised Offer Price designs"
+        >
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 700 }}>
+              🔥 Offers (Revised)
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.25rem' }}>
+              {revisedDesigns}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.35rem 0.55rem', borderRadius: 'var(--radius-sm)', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 800 }}>
+            {filterOffersOnly ? 'ACTIVE' : 'FILTER'}
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244, 63, 94, 0.2)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', textTransform: 'uppercase', fontWeight: 600 }}>Inactive (INA)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)', marginTop: '0.25rem' }}>{inactiveDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)' }}>
+            <XCircle size={20} />
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#c084fc', textTransform: 'uppercase', fontWeight: 600 }}>Permanent Inactive (P-INA)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>{permanentInactiveDesigns}</div>
+          </div>
+          <div style={{ background: 'rgba(168, 85, 247, 0.15)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#c084fc' }}>
+            <XCircle size={20} />
+          </div>
+        </div>
+
+        <div 
+          className="glass-card" 
+          onClick={() => setShowcaseModalOpen(true)}
+          style={{ 
+            padding: '1rem', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            borderColor: 'rgba(99, 102, 241, 0.4)',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          title="Click to manage Daily 24h Client Showcase Link & 7AM Auto-Email"
+        >
+          <div>
+            <div style={{ fontSize: '0.75rem', color: '#a5b4fc', textTransform: 'uppercase', fontWeight: 700 }}>
+              🌟 24h Showcase
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c084fc', marginTop: '0.25rem' }}>
+              {showcaseDesignsCount}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(99, 102, 241, 0.25)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', color: '#a5b4fc' }}>
+            <Star size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Success/Error Alerts */}
+      {successMsg && (
+        <div style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+          {successMsg}
+        </div>
+      )}
+      {errorMsg && (
+        <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {user?.role !== 'sales' && (
+        <div className="grid-2">
+          {/* Create Folder / Category */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <FolderPlus size={20} color="var(--color-primary)" />
+                Create Category Folder
+              </h3>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setShowWorksModal(true)}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Sparkles size={14} color="#c084fc" />
+                Manage Works ({works.length})
+              </button>
+            </div>
+          <form onSubmit={handleCreateCategory} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
+            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+              <label>Folder / Category Name</label>
+              <input 
+                type="text" 
+                placeholder="e.g. CROPTOP NET Regular" 
+                value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">Create</button>
+          </form>
+
+          <hr style={{ border: '0', borderTop: '1px solid var(--glass-border)' }} />
+
+          {/* List of Category Folders */}
+          <label>Active Category Folders</label>
+          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {categories.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No folder categories created yet.</p>
+            ) : (
+              categories.map(cat => {
+                const isEditing = editingCatId === cat.id;
+                const isSuperAdmin = user?.role === 'superadmin';
+
+                return (
+                  <div key={cat.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.02)', minHeight: '44px' }}>
+                    {isEditing ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
+                        <input 
+                          type="text" 
+                          value={editingCatName}
+                          onChange={e => setEditingCatName(e.target.value)}
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
+                        />
+                        <button 
+                          onClick={() => handleRenameCategory(cat.id)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
+                          title="Save Name"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={() => setEditingCatId(null)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+                          title="Cancel"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span style={{ fontWeight: 600 }}>{cat.name}</span>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          {isSuperAdmin && (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setEditingCatId(cat.id);
+                                  setEditingCatName(cat.name);
+                                }}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
+                                title="Rename Category Folder"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
+                                title="Delete folder and contents"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Upload SKU Form */}
+        <div className="glass-card">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <Upload size={20} color="var(--color-primary)" />
+            Upload SKU Design
+          </h3>
+          <form onSubmit={handleUploadSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="form-group">
+              <label>SKU ID (Unique Identifier)</label>
+              <input 
+                type="text" 
+                placeholder="e.g. SKU-1002-BLACK" 
+                value={skuId}
+                onChange={e => setSkuId(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Folder / Category</label>
+                <select 
+                  value={selectedCatId} 
+                  onChange={e => setSelectedCatId(e.target.value)}
+                  required
+                >
+                  <option value="">Select Folder</option>
+                  {categories.map(c => {
+                    const catItems = items.filter(item => item.category_id === c.id);
+                    const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+                    const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+                    const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+                    const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Pieces per Set</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={piecesPerSet}
+                  onChange={e => setPiecesPerSet(parseInt(e.target.value) || 4)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group">
+                <label>Work Type</label>
+                <select 
+                  value={work} 
+                  onChange={e => setWork(e.target.value)}
+                >
+                  <option value="">Select Work (Optional)</option>
+                  {works.map(w => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Material Details</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Net Cotton, Silk, Georgette" 
+                  value={material}
+                  onChange={e => setMaterial(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group">
+                <label>Base Rate / Price (₹)</label>
+                <input 
+                  type="number" 
+                  placeholder="e.g. 1495" 
+                  value={rate}
+                  onChange={e => setRate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Stitcher Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. AHM, RASD (Optional)" 
+                  value={stitcherName}
+                  onChange={e => setStitcherName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', alignItems: 'center' }}>
+              <label style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Stock Classification:</label>
+              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  name="stockType" 
+                  checked={stockType === 'new'} 
+                  onChange={() => setStockType('new')} 
+                />
+                New Stock
+              </label>
+              <label style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  name="stockType" 
+                  checked={stockType === 'old'} 
+                  onChange={() => setStockType('old')} 
+                />
+                Old Stock
+              </label>
+              
+              {stockType === 'old' && (
+                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
+                  <label style={{ margin: 0, fontSize: '0.85rem' }}>Creation Date:</label>
+                  <input 
+                    type="date" 
+                    value={originalCreatedAt} 
+                    onChange={e => setOriginalCreatedAt(e.target.value)}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', width: 'auto' }}
+                    required
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label>Product Description / Notes</label>
+              <textarea 
+                placeholder="Enter catalog design description notes..." 
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={2}
+                style={{ 
+                  resize: 'vertical', 
+                  background: 'var(--bg-primary)', 
+                  border: '1px solid var(--glass-border)', 
+                  borderRadius: 'var(--radius-md)', 
+                  padding: '0.75rem 1rem', 
+                  color: 'var(--text-primary)', 
+                  fontFamily: 'inherit',
+                  fontSize: '0.95rem'
+                }}
+              />
+            </div>
+
+            {/* Drag & Drop File Selector */}
+            <div 
+              style={{
+                border: '2px dashed var(--glass-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '1.5rem',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: 'rgba(255,255,255,0.01)',
+                position: 'relative'
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*"
+                style={{ display: 'none' }} 
+              />
+              
+              {filePreview ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                  <img 
+                    src={filePreview} 
+                    alt="Preview" 
+                    style={{ maxHeight: '100px', borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} 
+                  />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)' }}>Click to replace image</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+                  <ImageIcon size={32} style={{ opacity: 0.5 }} />
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Click to select catalog design photo</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>JPG, PNG or WEBP (Max 5MB)</span>
+                </div>
+              )}
+            </div>
+
+            {/* Optional RAW Real Photos Selector */}
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                <Camera size={14} color="var(--color-primary)" />
+                Optional: RAW Real Photos (2-3 photos)
+              </label>
+              <input 
+                type="file" 
+                multiple
+                accept="image/*"
+                onChange={handleRealImagesFilesChange}
+                style={{ fontSize: '0.85rem' }}
+              />
+              {realImagesPreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                  {realImagesPreviews.map((src, i) => (
+                    <img key={i} src={src} alt={`Real ${i}`} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }} disabled={loading}>
+              {loading ? 'Uploading File...' : 'Upload Design'}
+            </button>
+          </form>
+        </div>
+      </div>
+      )}
+
+      {/* SKUs Grid section with Search & Filters */}
+      <div className="glass-card">
+        <div className="flex-between" style={{ marginBottom: '1.5rem' }}>
+          <h3>Design Catalog Directory ({filteredItems.length} items)</h3>
+          
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            {/* Search */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)' }} />
+              <input 
+                type="text" 
+                placeholder="Search SKU..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ paddingLeft: '2.25rem', width: '200px' }}
+              />
+            </div>
+            
+            {/* Filter Folder */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={16} color="var(--text-muted)" />
+              <select 
+                value={filterCatId} 
+                onChange={e => setFilterCatId(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Folders</option>
+                {categories.map(c => {
+                  const catItems = items.filter(item => item.category_id === c.id);
+                  const activeCount = catItems.filter(item => item.is_available && item.sets_count > 0 && !item.is_permanent_inactive).length;
+                  const osCount = catItems.filter(item => item.is_available && item.sets_count === 0 && !item.is_permanent_inactive).length;
+                  const naCount = catItems.filter(item => !item.is_available && !item.is_permanent_inactive).length;
+                  const pinaCount = catItems.filter(item => item.is_permanent_inactive).length;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (AV-{activeCount} OS-{osCount} INA-{naCount} P-INA-{pinaCount})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Filter Work */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sparkles size={16} color="#c084fc" />
+              <select 
+                value={filterWork} 
+                onChange={e => setFilterWork(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Works</option>
+                {works.map(w => (
+                  <option key={w.id} value={w.name}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={16} color="var(--text-muted)" />
+              <select 
+                value={filterStatus} 
+                onChange={e => setFilterStatus(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Statuses</option>
+                <option value="A">Available (AV)</option>
+                <option value="OS">Out of Stock (OS)</option>
+                <option value="NA">Inactive (INA)</option>
+                <option value="PINA">Permanent Inactive (P-INA)</option>
+              </select>
+            </div>
+
+            {/* Filter Rate / Price Range */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select 
+                value={filterRateRange} 
+                onChange={e => setFilterRateRange(e.target.value)}
+                style={{ padding: '0.6rem 1rem' }}
+              >
+                <option value="">All Prices</option>
+                <option value="0-1000">Below ₹1,000</option>
+                <option value="0-1500">Below ₹1,500</option>
+                <option value="0-2000">Below ₹2,000</option>
+                <option value="0-2500">Below ₹2,500</option>
+                <option value="1000-1500">₹1,000 - ₹1,500</option>
+                <option value="1000-2000">₹1,000 - ₹2,000</option>
+                <option value="1500-2000">₹1,500 - ₹2,000</option>
+                <option value="2000-3000">₹2,000 - ₹3,000</option>
+                <option value="2000-999999">Above ₹2,000</option>
+                <option value="2500-999999">Above ₹2,500</option>
+                <option value="3000-999999">Above ₹3,000</option>
+              </select>
+            </div>
+
+            {/* Filter Offers Only */}
+            <button 
+              type="button"
+              className={`btn ${filterOffersOnly ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterOffersOnly(!filterOffersOnly)}
+              style={{ 
+                padding: '0.6rem 1.2rem', 
+                fontSize: '0.85rem', 
+                whiteSpace: 'nowrap',
+                background: filterOffersOnly ? '#f59e0b' : undefined,
+                color: filterOffersOnly ? '#000' : '#fbbf24',
+                borderColor: '#f59e0b',
+                fontWeight: 700
+              }}
+              title="Filter to show only articles with New / Revised Offer Price"
+            >
+              🔥 Offers Only ({revisedDesigns})
+            </button>
+
+            {/* Filter Showcase Only */}
+            <button 
+              type="button"
+              className={`btn ${filterShowcaseOnly ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterShowcaseOnly(!filterShowcaseOnly)}
+              style={{ 
+                padding: '0.6rem 1.2rem', 
+                fontSize: '0.85rem', 
+                whiteSpace: 'nowrap',
+                background: filterShowcaseOnly ? '#6366f1' : undefined,
+                color: filterShowcaseOnly ? '#fff' : '#a5b4fc',
+                borderColor: '#6366f1',
+                fontWeight: 700
+              }}
+              title="Filter to show only articles selected for 24h Showcase"
+            >
+              🌟 Showcase ({showcaseDesignsCount})
+            </button>
+
+            {/* Open Showcase Manager Button */}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowcaseModalOpen(true)}
+              style={{
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.85rem',
+                whiteSpace: 'nowrap',
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontWeight: 700,
+                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)'
+              }}
+              title="Generate or share 24-hour showcase link with clients"
+            >
+              <Link size={15} />
+              24h Client Link
+            </button>
+
+            {/* Filter Age */}
+            <button 
+              type="button"
+              className={`btn ${filterAgeLimit ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterAgeLimit(!filterAgeLimit)}
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              Older than 60 Days Only
+            </button>
+
+            <button 
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleToggleSelectAll}
+              style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              {filteredItems.every(item => selectedItems.includes(item.id)) && filteredItems.length > 0 
+                ? 'Deselect All' 
+                : 'Select All Visible'}
+            </button>
+          </div>
+        </div>
+
+        {/* Catalog items grid */}
+        {filteredItems.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', border: '1px dashed var(--glass-border)', borderRadius: 'var(--radius-md)' }}>
+            No SKU designs match your filters. Upload some designs or adjust filters!
+          </div>
+        ) : (
+          <>
+            <div className="catalog-grid">
+              {paginatedItems.map(item => {
+                const ageInDays = Math.max(0, Math.floor((new Date().getTime() - new Date(item.original_created_at || item.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+
+                return (
+                  <div key={item.id} className="catalog-card fade-in" style={{
+                    border: ageInDays >= 60 ? '1px solid rgba(244,63,94,0.3)' : '1px solid var(--glass-border)'
+                  }}>
+                    <div 
+                      className="catalog-image-wrapper"
+                      style={{ cursor: 'pointer', position: 'relative' }}
+                      onClick={() => {
+                        setPreviewLightboxUrl(item.image_path);
+                        setPreviewLightboxTitle(`${item.sku_id} • ${item.category_name || ''} ${item.work ? '• ' + item.work : ''}`);
+                        setPreviewLightboxItem(item);
+                        setZoomLevel(1);
+                      }}
+                      title="Click photo to inspect fabric & zoom in full-resolution"
+                    >
+                      {/* Selection Checkbox */}
+                      <div 
+                        style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input 
+                          type="checkbox"
+                          checked={selectedItems.includes(item.id)}
+                          onChange={() => handleToggleSelect(item.id)}
+                          style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            cursor: 'pointer',
+                            accentColor: 'var(--color-primary)',
+                            borderRadius: '4px',
+                            border: '2px solid white',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                          }}
+                        />
+                      </div>
+                      {item.is_in_showcase && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '10px',
+                          left: '38px',
+                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))',
+                          color: '#fff',
+                          fontSize: '0.65rem',
+                          fontWeight: 800,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.5px',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          zIndex: 5
+                        }}>
+                          ★ SHOWCASE
+                        </div>
+                      )}
+                      <img 
+                        src={getThumbnailUrl(item.image_path)} 
+                        alt={item.sku_id} 
+                        className="catalog-image" 
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== item.image_path) {
+                            target.src = item.image_path;
+                          }
+                        }}
+                      />
+                      {/* Click to Zoom Overlay Pill */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '8px',
+                        left: '8px',
+                        background: 'rgba(0, 0, 0, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        color: '#ffffff',
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        pointerEvents: 'none',
+                        border: '1px solid rgba(255, 255, 255, 0.15)'
+                      }}>
+                        <ZoomIn size={12} color="#60a5fa" /> Zoom
+                      </div>
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', zIndex: 10 }}>
+                        {item.is_permanent_inactive ? (
+                          <span className="badge" style={{ background: 'rgba(124, 58, 237, 0.25)', color: '#c084fc', border: '1px solid rgba(124, 58, 237, 0.45)' }} title="Permanent Inactive (Never Restock)">
+                            <XCircle size={12} style={{ marginRight: '4px' }} />
+                            P-INA
+                          </span>
+                        ) : !item.is_available ? (
+                          <span className="badge badge-danger" title="Inactive (Temporary Out of Stock)">
+                            <XCircle size={12} style={{ marginRight: '4px' }} />
+                            INA
+                          </span>
+                        ) : item.sets_count > 0 ? (
+                          <span className="badge badge-success" title="Active & Available">
+                            <CheckCircle size={12} style={{ marginRight: '4px' }} />
+                            AV
+                          </span>
+                        ) : (
+                          <span className="badge badge-warning" title="Active but Out of Stock">
+                            <AlertCircle size={12} style={{ marginRight: '4px' }} />
+                            OS
+                          </span>
+                        )}
+                        
+                        {ageInDays >= 60 && (
+                          <span className="badge badge-danger" style={{ background: '#f43f5e', border: 'none', color: '#fff' }}>
+                            OLD STOCK ({ageInDays}d)
+                          </span>
+                        )}
+
+                        {/* Direct Edit Button on Image */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(item);
+                          }}
+                          style={{
+                            background: 'rgba(15, 23, 42, 0.88)',
+                            backdropFilter: 'blur(6px)',
+                            border: '1px solid rgba(255, 255, 255, 0.25)',
+                            color: '#ffffff',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                            marginTop: '2px'
+                          }}
+                          title="Edit SKU Details & Replace Photo"
+                        >
+                          <Edit2 size={11} color="#a5b4fc" /> Edit SKU
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="catalog-details">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <span className="sku-tag" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{item.sku_id}</span>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleShowcase(item);
+                            }}
+                            style={{ 
+                              border: item.is_in_showcase ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)', 
+                              background: item.is_in_showcase ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.06)', 
+                              color: item.is_in_showcase ? '#34d399' : '#cbd5e1', 
+                              cursor: 'pointer', 
+                              fontSize: '0.72rem', 
+                              fontWeight: 600, 
+                              padding: '3px 7px', 
+                              borderRadius: '4px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '3px' 
+                            }}
+                            title={item.is_in_showcase ? 'Remove design from 24h Showcase' : 'Add design to 24h Showcase'}
+                          >
+                            <Star size={11} fill={item.is_in_showcase ? '#34d399' : 'none'} />
+                            {item.is_in_showcase ? 'Showcase' : '+ Showcase'}
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetchRealImagesForItem(item);
+                            }}
+                            style={{ border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, padding: '3px 7px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}
+                            title="Manage RAW Real Photos"
+                          >
+                            <Camera size={11} />
+                            RAW ({item.real_image_count || 0})
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(item);
+                            }}
+                            style={{ 
+                              border: '1px solid rgba(99, 102, 241, 0.4)', 
+                              background: 'rgba(99, 102, 241, 0.15)', 
+                              color: '#a5b4fc', 
+                              cursor: 'pointer', 
+                              fontSize: '0.72rem', 
+                              fontWeight: 600, 
+                              padding: '3px 8px', 
+                              borderRadius: '4px', 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '4px' 
+                            }}
+                            title="Edit SKU Details & Replace Photo"
+                          >
+                            <Edit2 size={11} />
+                            Edit
+                          </button>
+                          {user?.role === 'superadmin' && (
+                            <button 
+                              onClick={() => handleDeleteSKU(item.id, item.sku_id)}
+                              style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '2px' }}
+                              title="Delete SKU Design"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap', gap: '4px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span className="folder-tag">{item.category_name}</span>
+                          {item.work && (
+                            <span className="folder-tag" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                              ✨ {item.work}
+                            </span>
+                          )}
+                          {item.stitcher_name && (
+                            <span className="folder-tag" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.25)' }} title={`Stitcher: ${item.stitcher_name}`}>
+                              🧵 {item.stitcher_name}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Age: <strong>{ageInDays} days</strong>
+                        </span>
+                      </div>
+
+                      {item.material && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginTop: '2px' }}>
+                          Material: {item.material}
+                        </span>
+                      )}
+                      {item.description && (
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '4px', lineHeight: '1.2' }} title={item.description}>
+                          {item.description}
+                        </p>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem' }}>
+                        <div>
+                          <span>Sets: <strong>{item.sets_count}</strong> ({item.pieces_per_set} pc/set)</span>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Qty: <strong>{item.total_pieces}</strong></span>
+                        </div>
+                        {item.hike_rate && item.hike_rate > 0 ? (
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.65rem', background: '#ef4444', color: '#fff', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
+                              ▲ HIKE PRICE
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
+                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ef4444' }}>₹{item.hike_rate}</span>
+                            </div>
+                          </div>
+                        ) : item.revised_rate && item.revised_rate > 0 ? (
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.65rem', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginBottom: '2px' }}>
+                              🔥 NEW OFFER PRICE
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                              <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>₹{item.rate}</span>
+                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f59e0b' }}>₹{item.revised_rate}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                            ₹{item.rate || 0}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.5rem 1rem', opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`btn ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.5rem 0.8rem', minWidth: '36px' }}
+                  >
+                    {page}
+                  </button>
+                ))}
+                
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.5rem 1rem', opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Edit SKU Modal Dialog */}
+      {isEditModalOpen && editingItem && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 8, 16, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1.5rem'
+        }}>
+          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="flex-between">
+              <h3>Edit SKU: {editingItem?.sku_id}</h3>
+              <button 
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingItem(null);
+                  setEditImageFile(null);
+                  setEditImagePreview(null);
+                  setEditStitcherName('');
+                  if (editFileInputRef.current) editFileInputRef.current.value = '';
+                }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSKU} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Replace Main Image Section */}
+              <div className="form-group" style={{ marginBottom: '0.25rem' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Main Catalog Image</span>
+                  {editImageFile && (
+                    <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 600 }}>
+                      ✓ New replacement image selected
+                    </span>
+                  )}
+                </label>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '1rem', 
+                  alignItems: 'center', 
+                  background: 'rgba(255, 255, 255, 0.03)', 
+                  padding: '0.85rem', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: editImageFile ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--glass-border)' 
+                }}>
+                  <div style={{ 
+                    position: 'relative', 
+                    width: '84px', 
+                    height: '108px', 
+                    flexShrink: 0, 
+                    borderRadius: 'var(--radius-sm)', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--glass-border)', 
+                    background: '#090d16',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {editImagePreview ? (
+                      <img 
+                        src={editImagePreview} 
+                        alt={editSkuId}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>No Image</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                    <input 
+                      type="file" 
+                      ref={editFileInputRef}
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setEditImageFile(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setEditImagePreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
+                      >
+                        <Upload size={14} />
+                        {editImageFile ? 'Choose Different Image' : 'Replace Main Image'}
+                      </button>
+                      {editImageFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditImageFile(null);
+                            setEditImagePreview(editingItem?.image_path || null);
+                            if (editFileInputRef.current) editFileInputRef.current.value = '';
+                          }}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', color: 'var(--color-danger)' }}
+                        >
+                          Revert to Original
+                        </button>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+                      {editImageFile ? (
+                        <span style={{ color: 'var(--text-primary)' }}>File: <strong>{editImageFile.name}</strong></span>
+                      ) : (
+                        'Click "Replace Main Image" to upload an updated catalog photo or fixed poster design.'
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>SKU ID (SKU Number)</label>
+                <input 
+                  type="text" 
+                  value={editSkuId}
+                  onChange={e => setEditSkuId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>Folder / Category</label>
+                  <select 
+                    value={editCategoryId} 
+                    onChange={e => setEditCategoryId(e.target.value)}
+                    required
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Pieces per Set</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={editPiecesPerSet}
+                    onChange={e => setEditPiecesPerSet(parseInt(e.target.value) || 4)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>Work Type</label>
+                  <select 
+                    value={editWork} 
+                    onChange={e => setEditWork(e.target.value)}
+                  >
+                    <option value="">Select Work (Optional)</option>
+                    {works.map(w => (
+                      <option key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Material Details</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Net Cotton, Silk"
+                    value={editMaterial}
+                    onChange={e => setEditMaterial(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>Base Rate (₹)</label>
+                  <input 
+                    type="number" 
+                    value={editRate}
+                    onChange={e => setEditRate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ color: '#fbbf24', fontWeight: 600 }}>🔥 Revised Rate (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder={editHikeRate.trim() !== '' ? 'Disabled (Hike active)' : 'e.g. 450 (or blank)'}
+                    value={editRevisedRate}
+                    disabled={editHikeRate.trim() !== '' && parseInt(editHikeRate) > 0}
+                    onChange={e => {
+                      setEditRevisedRate(e.target.value);
+                      if (e.target.value.trim() !== '') setEditHikeRate('');
+                    }}
+                    style={{ borderColor: editRevisedRate ? '#fbbf24' : undefined, opacity: (editHikeRate.trim() !== '' && parseInt(editHikeRate) > 0) ? 0.5 : 1 }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ color: '#f43f5e', fontWeight: 600 }}>▲ Hike Price (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 520 (or blank)"
+                    value={editHikeRate}
+                    onChange={e => {
+                      setEditHikeRate(e.target.value);
+                      if (e.target.value.trim() !== '') setEditRevisedRate('');
+                    }}
+                    style={{ borderColor: editHikeRate ? '#f43f5e' : undefined }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Stitcher Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. AHM, RASD"
+                    value={editStitcherName}
+                    onChange={e => setEditStitcherName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'center' }}>
+                <div className="form-group">
+                  <label>Sets Count</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={editSetsCount}
+                    onChange={e => setEditSetsCount(parseInt(e.target.value) || 0)}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600 }}>
+                    <input 
+                      type="checkbox"
+                      checked={editIsAvailable && !editIsPermanentInactive}
+                      disabled={editIsPermanentInactive}
+                      onChange={e => setEditIsAvailable(e.target.checked)}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                    Available (AV)
+                  </label>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, paddingTop: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', fontWeight: 600, color: editIsPermanentInactive ? '#c084fc' : undefined }}>
+                    <input 
+                      type="checkbox"
+                      checked={editIsPermanentInactive}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setEditIsPermanentInactive(checked);
+                        if (checked) {
+                          setEditIsAvailable(false);
+                        }
+                      }}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                    Permanent Inactive (P-INA)
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Product Description / Notes</label>
+                <textarea 
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  rows={3}
+                  style={{ 
+                    resize: 'vertical', 
+                    background: 'var(--bg-primary)', 
+                    border: '1px solid var(--glass-border)', 
+                    borderRadius: 'var(--radius-md)', 
+                    padding: '0.75rem 1rem', 
+                    color: 'var(--text-primary)', 
+                    fontFamily: 'inherit',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingItem(null);
+                    setEditImageFile(null);
+                    setEditImagePreview(null);
+                    setEditStitcherName('');
+                    if (editFileInputRef.current) editFileInputRef.current.value = '';
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating WhatsApp Share Bar */}
+      {selectedItems.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '55%',
+          transform: 'translateX(-50%)',
+          width: '80%',
+          maxWidth: '850px',
+          background: 'rgba(18, 20, 24, 0.9)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '16px',
+          padding: '1rem 1.5rem',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          color: 'white',
+          animation: 'slideUp 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ 
+                background: 'var(--color-primary)', 
+                color: 'white', 
+                padding: '0.25rem 0.6rem', 
+                borderRadius: '50px', 
+                fontSize: '0.85rem',
+                fontWeight: 'bold'
+              }}>
+                {selectedItems.length}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Designs Selected</span>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                type="button" 
+                onClick={() => setSelectedItems([])}
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.1)', 
+                  border: 'none', 
+                  color: 'white', 
+                  padding: '0.5rem 1rem', 
+                  borderRadius: '8px', 
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+
+          {/* Selected items photo quick-copy drawer */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: '12px',
+            padding: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#25D366', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                📸 Quick Copy Photos for WhatsApp (No Downloads)
+              </span>
+              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                Click "Copy Photo" or right-click the thumbnail to copy. Then open WhatsApp and press <strong>Ctrl+V</strong> to paste and send!
+              </span>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              overflowX: 'auto',
+              paddingBottom: '0.5rem',
+              maxHeight: '120px',
+              scrollbarWidth: 'thin'
+            }}>
+              {items.filter(item => selectedItems.includes(item.id)).map(item => (
+                <div 
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    padding: '0.4rem',
+                    gap: '0.5rem',
+                    minWidth: '200px',
+                    flexShrink: 0,
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={getThumbnailUrl(item.image_path)}
+                    alt={item.sku_id}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (target.src !== item.image_path) {
+                        target.src = item.image_path;
+                      }
+                    }}
+                    style={{
+                      width: '45px',
+                      height: '45px',
+                      objectFit: 'cover',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}
+                    title="Right-click -> Copy Image (as backup)"
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {item.sku_id}
+                    </span>
+                    {item.material && (
+                      <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {item.material}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyImageToClipboard(item.image_path, item.id)}
+                    style={{
+                      background: copyingImgId === item.id ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                      border: copyingImgId === item.id ? '1px solid #25D366' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.6rem',
+                      color: copyingImgId === item.id ? '#25D366' : 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {copyingImgId === item.id ? (
+                      <>
+                        <Check size={12} />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        Copy Photo
+                      </>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+
+            {/* Phone Number Input */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 200px' }}>
+              <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                Customer WhatsApp No. (e.g. 919876543210)
+              </label>
+              <input 
+                type="text" 
+                placeholder="Enter country code + number" 
+                value={sharePhone}
+                onChange={e => setSharePhone(e.target.value)}
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.05)', 
+                  border: '1px solid rgba(255, 255, 255, 0.1)', 
+                  borderRadius: '8px', 
+                  padding: '0.5rem 0.75rem',
+                  color: 'white',
+                  fontSize: '0.9rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
+            
+            {/* Images Per Design Selector & Send Description */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1.2rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Photos / SKU:</span>
+                <select 
+                  value={shareImagesPerItem} 
+                  onChange={e => setShareImagesPerItem(parseInt(e.target.value) || 1)}
+                  style={{ 
+                    padding: '0.4rem 0.6rem', 
+                    fontSize: '0.8rem', 
+                    borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value={1} style={{ background: '#1e293b', color: 'white' }}>1 Photo (Default)</option>
+                  <option value={2} style={{ background: '#1e293b', color: 'white' }}>2 Photos</option>
+                  <option value={3} style={{ background: '#1e293b', color: 'white' }}>3 Photos</option>
+                  <option value={10} style={{ background: '#1e293b', color: 'white' }}>All Photos</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="web-send-desc"
+                  checked={webSendDescription}
+                  onChange={e => setWebSendDescription(e.target.checked)}
+                  style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    cursor: 'pointer',
+                    accentColor: 'var(--color-primary)'
+                  }}
+                />
+                <label htmlFor="web-send-desc" style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
+                  Send Description
+                </label>
+              </div>
+
+              {items.some(it => selectedItems.includes(it.id) && (it.real_image_count || 0) > 0) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input 
+                    type="checkbox" 
+                    id="web-share-real"
+                    checked={webShareRealImages}
+                    onChange={e => setWebShareRealImages(e.target.checked)}
+                    style={{ 
+                      width: '18px', 
+                      height: '18px', 
+                      cursor: 'pointer',
+                      accentColor: '#3b82f6'
+                    }}
+                  />
+                  <label htmlFor="web-share-real" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', cursor: 'pointer', userSelect: 'none' }}>
+                    📷 RAW Real Photos
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto', flexWrap: 'wrap', marginTop: '1.2rem' }}>
+              <button 
+                type="button" 
+                onClick={() => handleBulkToggleShowcase(true)}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 0.9rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid #10b981',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#34d399',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Add selected designs to 24h Showcase"
+              >
+                <Star size={14} fill="#34d399" />
+                + Showcase
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => handleBulkToggleShowcase(false)}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 0.9rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  color: '#f43f5e',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Remove selected designs from 24h Showcase"
+              >
+                - Showcase
+              </button>
+
+              <button 
+                type="button" 
+                onClick={handleCopyDetails}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {copiedText ? <Check size={16} color="var(--color-success)" /> : <Copy size={16} />}
+                {copiedText ? 'Copied!' : 'Copy Text'}
+              </button>
+              
+              <button 
+                type="button" 
+                onClick={handleDownloadSelectedImages}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Download size={16} />
+                Download Images
+              </button>
+              
+              <button 
+                type="button" 
+                onClick={handleShareWhatsAppWeb}
+                className="btn"
+                style={{ 
+                  padding: '0.5rem 1.2rem', 
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  border: '1px solid #25D366',
+                  borderRadius: '8px',
+                  background: '#25D366', // WhatsApp Green
+                  color: 'white',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Share2 size={16} />
+                Share via WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAW Real Images Management Modal */}
+      {realImagesModalItem && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '650px' }}>
+            <div className="modal-header">
+              <h3>📷 Manage RAW Real Photos: {realImagesModalItem.sku_id}</h3>
+              <button className="close-btn" onClick={() => setRealImagesModalItem(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '1.2rem' }}>
+              
+              {/* Task Done Success Notification */}
+              {modalSuccessMsg && (
+                <div style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22c55e', color: '#22c55e', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  {modalSuccessMsg}
+                </div>
+              )}
+
+              {/* Upload Box */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--glass-border)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', color: 'white' }}>
+                  Select & Upload RAW Real Photos:
+                </label>
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*"
+                  onChange={handleSelectModalRealFiles}
+                  disabled={uploadingRealImages}
+                  style={{ fontSize: '0.85rem' }}
+                />
+                
+                {/* Local Previews of newly selected files before uploading */}
+                {modalSelectedFiles.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(255,255,255,0.04)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 600 }}>
+                        📌 Selected to upload ({modalSelectedFiles.length} files):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalSelectedFiles([]);
+                          setModalSelectedPreviews([]);
+                        }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', padding: '4px 0' }}>
+                      {modalSelectedFiles.map((file, fIdx) => (
+                        <div key={fIdx} style={{ position: 'relative', width: '70px', height: '70px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                          <img 
+                            src={modalSelectedPreviews[fIdx]} 
+                            alt={file.name} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModalSelectedFile(fIdx)}
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '2px',
+                              background: 'rgba(0,0,0,0.75)',
+                              color: '#ef4444',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '18px',
+                              height: '18px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                            title="Remove file"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                      <button
+                        type="button"
+                        onClick={handleSaveModalRealImages}
+                        disabled={uploadingRealImages}
+                        className="btn btn-primary"
+                        style={{ padding: '0.45rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                      >
+                        {uploadingRealImages ? 'Uploading...' : '💾 Save & Upload Selected Photos'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {uploadingRealImages && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-primary)', margin: 0, fontWeight: 600 }}>
+                    ⏳ Task in progress: Uploading and saving real photos...
+                  </p>
+                )}
+              </div>
+
+              {/* Uploaded Photos Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Currently Available Real Photos ({realImagesList.length}):
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {realImagesList.length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.01)', borderRadius: '8px' }}>
+                      No RAW real photos uploaded for this design yet.
+                    </p>
+                  ) : (
+                    realImagesList.map((img, idx) => (
+                      <div key={img.id} style={{ position: 'relative', border: '1px solid var(--glass-border)', borderRadius: '8px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+                        <div 
+                          style={{ position: 'relative', cursor: 'pointer' }}
+                          onClick={() => setPreviewLightboxUrl(img.watermarked_path || img.image_path)}
+                          title="Click to zoom preview"
+                        >
+                          <img 
+                            src={img.watermarked_path || img.image_path} 
+                            alt={`Real photo ${idx + 1}`} 
+                            style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} 
+                          />
+                          <div style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', borderRadius: '4px', padding: '2px 5px', fontSize: '0.7rem', color: 'white' }}>
+                            🔍 Zoom
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem', background: 'rgba(0,0,0,0.6)', gap: '0.4rem' }}>
+                          <a 
+                            href={img.watermarked_path || img.image_path}
+                            download={`real_${realImagesModalItem.sku_id}_${img.id}.jpg`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.75rem', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px' }}
+                            title="Download Photo"
+                          >
+                            <Download size={12} /> Download
+                          </a>
+                          {(user?.role === 'superadmin' || user?.role === 'manager' || user?.role === 'both') && (
+                            <button 
+                              onClick={() => handleDeleteRealImage(img.id)}
+                              style={{ background: 'rgba(239, 68, 68, 0.25)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}
+                              title="Delete photo from article"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Work Master Management Modal */}
+      {showWorksModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          padding: '1rem'
+        }}>
+          <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '550px', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="flex-between">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Sparkles size={20} color="#c084fc" />
+                Work Master Management
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowWorksModal(false);
+                  setEditingWorkId(null);
+                }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Create New Work Type */}
+            <form onSubmit={handleCreateWork} className="flex-between" style={{ alignItems: 'flex-end', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Add New Work Type</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Zari Work, Mirror Work, Thread Embroidery" 
+                  value={newWorkName}
+                  onChange={e => setNewWorkName(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Sparkles size={14} /> Add Work
+              </button>
+            </form>
+
+            <hr style={{ border: '0', borderTop: '1px solid var(--glass-border)', margin: '0.5rem 0' }} />
+
+            {/* List of Existing Works */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Active Work Masters ({works.length})</label>
+              <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingRight: '4px' }}>
+                {works.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '1.5rem' }}>No work types found. Add one above!</p>
+                ) : (
+                  works.map(w => {
+                    const isEditing = editingWorkId === w.id;
+                    const itemsCount = items.filter(it => (it.work || '') === w.name).length;
+
+                    return (
+                      <div key={w.id} className="flex-between" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.05)', minHeight: '44px' }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', gap: '0.5rem', flex: 1, alignItems: 'center' }}>
+                            <input 
+                              type="text" 
+                              value={editingWorkName}
+                              onChange={e => setEditingWorkName(e.target.value)}
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', flex: 1 }}
+                            />
+                            <button 
+                              onClick={() => handleRenameWork(w.id)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-success)', padding: '4px' }}
+                              title="Save Name"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button 
+                              onClick={() => setEditingWorkId(null)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+                              title="Cancel"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontWeight: 600 }}>{w.name}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '10px' }}>
+                                {itemsCount} items
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {(user?.role === 'superadmin' || user?.role === 'manager') && (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingWorkId(w.id);
+                                      setEditingWorkName(w.name);
+                                    }}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', padding: '4px' }}
+                                    title="Rename Work Type"
+                                  >
+                                    <Edit2 size={15} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteWork(w.id, w.name)}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: '4px' }}
+                                    title="Delete Work Type"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setShowWorksModal(false);
+                  setEditingWorkId(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 24-Hour VIP Showcase Link & 7AM Auto-Email Manager Modal */}
+      {showcaseModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 10500 }}>
+          <div className="modal-content" style={{ maxWidth: '650px', background: '#0f172a', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff'
+                }}>
+                  <Star size={18} fill="#fff" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#fff' }}>24-Hour VIP Client Showcase Manager</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Generate temporary mobile catalogs for WhatsApp Business clients (No Prices, No QTY)
+                  </p>
+                </div>
+              </div>
+              <button 
+                className="close-btn" 
+                onClick={() => {
+                  setShowcaseModalOpen(false);
+                  setShowcaseSuccessMsg('');
+                  setShowcaseErrorMsg('');
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem 0' }}>
+              {/* Feedback Notifications */}
+              {showcaseSuccessMsg && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#34d399', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ✓ {showcaseSuccessMsg}
+                </div>
+              )}
+              {showcaseErrorMsg && (
+                <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid #f43f5e', color: '#fb7185', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ⚠ {showcaseErrorMsg}
+                </div>
+              )}
+
+              {/* Status Ribbon */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Current Showcase Selection
+                  </div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a5b4fc', marginTop: '2px' }}>
+                    {showcaseDesignsCount} Designs Selected
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterShowcaseOnly(true);
+                      setShowcaseModalOpen(false);
+                    }}
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '0.5rem 0.85rem' }}
+                  >
+                    View / Curate Designs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateShowcase}
+                    disabled={showcaseGenerating}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                      fontSize: '0.8rem',
+                      padding: '0.5rem 1rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
+                    <Sparkles size={15} />
+                    {showcaseGenerating ? 'Generating...' : 'Generate New 24h Link'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Link Box */}
+              {showcaseActiveLink && (
+                <div style={{
+                  background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8))',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Active Client URL (Valid 24 Hours)
+                    </span>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      color: '#fbbf24',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontWeight: 600
+                    }}>
+                      Expires: {new Date(showcaseActiveLink.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(showcaseActiveLink.expires_at).toLocaleDateString()})
+                    </span>
+                  </div>
+
+                  {/* URL Row */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {(() => {
+                      const clientUrl = showcaseActiveLink.token 
+                        ? `${window.location.origin}/showcase/${showcaseActiveLink.token}` 
+                        : (showcaseActiveLink.url || '').replace(/https?:\/\/[^/]+/, window.location.origin);
+                      return (
+                        <>
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={clientUrl} 
+                            style={{ 
+                              flex: 1, 
+                              background: '#0b0f19', 
+                              border: '1px solid rgba(255, 255, 255, 0.15)', 
+                              padding: '0.6rem 0.85rem',
+                              fontSize: '0.85rem',
+                              color: '#38bdf8',
+                              borderRadius: '6px'
+                            }} 
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(clientUrl);
+                              setShowcaseSuccessMsg('Link copied to clipboard!');
+                              setTimeout(() => setShowcaseSuccessMsg(''), 2500);
+                            }}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <Copy size={14} /> Copy
+                          </button>
+                          <a
+                            href={clientUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                          >
+                            <ExternalLink size={14} /> Preview
+                          </a>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* WhatsApp Quick Share Button */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={handleCopyShowcaseWhatsAppText}
+                      className="btn"
+                      style={{
+                        background: '#25d366',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Share2 size={15} />
+                      {copiedShowcaseText ? 'Copied WhatsApp Text!' : 'Copy WhatsApp Share Message'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendShowcaseEmail}
+                      disabled={showcaseSendingEmail}
+                      className="btn btn-secondary"
+                      style={{
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <Mail size={15} />
+                      {showcaseSendingEmail ? 'Sending Email...' : 'Email to Sales Team Now'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSuspendShowcase}
+                      disabled={showcaseSuspending}
+                      className="btn"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid #ef4444',
+                        color: '#f87171',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        cursor: 'pointer'
+                      }}
+                      title="Suspend link immediately before 24h expires"
+                    >
+                      <AlertOctagon size={15} />
+                      {showcaseSuspending ? 'Suspending...' : 'Suspend Before Time'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      To monitor all active client links, live countdown timers & views in real time, check the <strong style={{ color: '#818cf8' }}>Showcase Monitor</strong> tab in the sidebar navigation.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Daily 7:00 AM Automated Email Configuration */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Mail size={16} color="#6366f1" />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
+                    Daily 7:00 AM Scheduled Email Dispatch
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.5 }}>
+                  Every day at <strong>7:00 AM IST</strong>, the system generates a fresh 24-hour showcase link from currently selected items and emails it directly to your sales team to start forwarding to customer leads.
+                </p>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <input
+                    type="email"
+                    value={showcaseEmailRecipient}
+                    onChange={e => setShowcaseEmailRecipient(e.target.value)}
+                    placeholder="sales@desukafashion.com"
+                    style={{
+                      flex: 1,
+                      background: '#0b0f19',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      padding: '0.5rem 0.8rem',
+                      fontSize: '0.85rem',
+                      color: '#fff',
+                      borderRadius: '6px'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveEmailRecipient}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 600 }}
+                  >
+                    Save Recipient
+                  </button>
+                </div>
+              </div>
+
+              {/* Client Safety Rules Checklist */}
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '8px',
+                padding: '0.85rem 1rem',
+                fontSize: '0.75rem',
+                color: '#cbd5e1',
+                lineHeight: 1.6
+              }}>
+                <strong style={{ color: '#fbbf24' }}>🔒 Security & Commercial Rules Enforced:</strong>
+                <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+                  <li><strong>Zero Price Exposure:</strong> Rates and revised rates are strictly hidden from clients.</li>
+                  <li><strong>Zero Quantity Exposure:</strong> Set pieces, total sets, and stock counts are completely hidden.</li>
+                  <li><strong>24-Hour Lifetime:</strong> After 24 hours, clients see randomized WhatsApp sales desk buttons (8796333844, 8796893844), direct call (9718503340), community link, and full social profiles.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Resolution Interactive Lightbox Zoom Modal */}
+      {previewLightboxUrl && (
+        <div 
+          onClick={() => {
+            setPreviewLightboxUrl(null);
+            setZoomLevel(1);
+            setPreviewLightboxTitle(null);
+            setPreviewLightboxItem(null);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.92)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 11000,
+            padding: '1rem',
+            userSelect: 'none'
+          }}
+        >
+          {/* Top Floating Control Bar */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 11005,
+              background: 'rgba(18, 24, 38, 0.85)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '9999px',
+              padding: '6px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
+              maxWidth: '90vw'
+            }}
+          >
+            {/* Title */}
+            {previewLightboxTitle && (
+              <span style={{ 
+                fontSize: '0.85rem', 
+                fontWeight: 700, 
+                color: '#ffffff',
+                fontFamily: 'Outfit',
+                maxWidth: '240px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                borderRight: '1px solid rgba(255, 255, 255, 0.15)',
+                paddingRight: '12px'
+              }}>
+                {previewLightboxTitle}
+              </span>
+            )}
+
+            {/* Zoom Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button 
+                onClick={() => setZoomLevel(z => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
+                disabled={zoomLevel <= 1}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: zoomLevel <= 1 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
+                  cursor: zoomLevel <= 1 ? 'not-allowed' : 'pointer'
+                }}
+                title="Zoom Out"
+              >
+                <ZoomOut size={15} />
+              </button>
+
+              <span style={{ 
+                fontSize: '0.8rem', 
+                fontWeight: 700, 
+                fontFamily: 'Outfit', 
+                color: zoomLevel > 1 ? '#60a5fa' : '#ffffff',
+                minWidth: '42px',
+                textAlign: 'center'
+              }}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+
+              <button 
+                onClick={() => setZoomLevel(z => Math.min(3.5, Math.round((z + 0.25) * 100) / 100))}
+                disabled={zoomLevel >= 3.5}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: zoomLevel >= 3.5 ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
+                  cursor: zoomLevel >= 3.5 ? 'not-allowed' : 'pointer'
+                }}
+                title="Zoom In"
+              >
+                <ZoomIn size={15} />
+              </button>
+
+              {zoomLevel > 1 && (
+                <button 
+                  onClick={() => setZoomLevel(1)}
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.2)',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    borderRadius: '12px',
+                    padding: '3px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: '#c7d2fe',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  title="Reset to 100%"
+                >
+                  <RotateCcw size={12} /> Reset
+                </button>
+              )}
+            </div>
+
+            {/* Direct Edit SKU & Replace Image Button from Lightbox */}
+            {previewLightboxItem && (
+              <button 
+                type="button"
+                onClick={() => {
+                  const target = previewLightboxItem;
+                  setPreviewLightboxUrl(null);
+                  setPreviewLightboxTitle(null);
+                  setPreviewLightboxItem(null);
+                  setZoomLevel(1);
+                  openEditModal(target);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: '#ffffff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                }}
+                title="Edit SKU Details or Replace Main Image"
+              >
+                <Edit2 size={13} /> Edit / Replace Photo
+              </button>
+            )}
+
+            <div style={{ height: '18px', width: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
+
+            {/* Download Button */}
+            <a 
+              href={previewLightboxUrl}
+              download="catalog-image.jpg"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: 'rgba(16, 185, 129, 0.2)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                borderRadius: '50%',
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#10b981',
+                textDecoration: 'none'
+              }}
+              title="Download Full-Res Image"
+            >
+              <Download size={15} />
+            </a>
+
+            {/* Close Button */}
+            <button 
+              onClick={() => {
+                setPreviewLightboxUrl(null);
+                setZoomLevel(1);
+                setPreviewLightboxTitle(null);
+                setPreviewLightboxItem(null);
+              }}
+              style={{
+                background: 'rgba(244, 63, 94, 0.2)',
+                border: '1px solid rgba(244, 63, 94, 0.4)',
+                borderRadius: '50%',
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#f43f5e',
+                cursor: 'pointer'
+              }}
+              title="Close Preview (Esc)"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Interactive Image Display Container */}
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              // Click image to toggle between 1x and 2x zoom
+              setZoomLevel(prev => prev > 1 ? 1 : 2);
+            }}
+            style={{
+              position: 'relative',
+              maxWidth: '92vw',
+              maxHeight: '82vh',
+              overflow: 'auto',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in',
+              padding: '1rem',
+              borderRadius: '8px'
+            }}
+          >
+            <img 
+              src={previewLightboxUrl} 
+              alt="Zoomed catalog preview" 
+              style={{ 
+                maxWidth: zoomLevel === 1 ? '100%' : 'none',
+                maxHeight: zoomLevel === 1 ? '80vh' : 'none',
+                objectFit: 'contain', 
+                borderRadius: '8px', 
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9)',
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: 'center center',
+                transition: 'transform 0.22s cubic-bezier(0.2, 0, 0, 1)'
+              }} 
+            />
+          </div>
+
+          {/* Bottom Helpful Hint Badge */}
+          <div style={{
+            position: 'fixed',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            color: 'rgba(255, 255, 255, 0.7)',
+            padding: '5px 14px',
+            borderRadius: '9999px',
+            fontSize: '0.75rem',
+            pointerEvents: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            💡 Click photo to toggle 2x zoom • Use buttons to zoom up to 350% • Scroll to pan
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

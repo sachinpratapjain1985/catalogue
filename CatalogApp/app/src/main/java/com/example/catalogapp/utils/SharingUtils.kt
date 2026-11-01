@@ -1,791 +1,791 @@
-package com.example.catalogapp.utils
-
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Typeface
-import android.net.Uri
-import android.widget.Toast
-import androidx.core.content.FileProvider
-import com.example.catalogapp.data.SKUItemDto
-import com.example.catalogapp.data.SessionManager
-import com.example.catalogapp.data.NetworkClient
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.File
-import java.io.FileOutputStream
-
-object SharingUtils {
-
-    fun sanitizeDescription(desc: String?): String {
-        if (desc.isNullOrBlank()) {
-            return ""
-        }
-        val trimmed = desc.trim()
-        if (trimmed.equals("DESUKA by VS FASHION Gandhi Nagar Delhi.", ignoreCase = true)) {
-            return ""
-        }
-        return trimmed
-            .replace("old stock", "", ignoreCase = true)
-            .replace("new stock", "", ignoreCase = true)
-            .replace("old", "", ignoreCase = true)
-            .replace("new", "", ignoreCase = true)
-            .trim()
-    }
-
-    /**
-     * Builds comprehensive article details text (SKU ID, Fabric, Work, Description, Pack Details)
-     * for WhatsApp sharing when "Send Description" is checked.
-     */
-    fun buildShareDescription(selectedItems: List<SKUItemDto>): String {
-        if (selectedItems.isEmpty()) return ""
-
-        if (selectedItems.size == 1) {
-            val item = selectedItems[0]
-            val lines = mutableListOf<String>()
-            lines.add("Design SKU: ${item.sku_id}")
-            val fabric = item.material?.trim() ?: ""
-            if (fabric.isNotEmpty()) {
-                lines.add("Fabric: $fabric")
-            }
-            val work = item.work?.trim() ?: ""
-            if (work.isNotEmpty()) {
-                lines.add("Work: $work")
-            }
-            val desc = sanitizeDescription(item.description)
-            if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
-                lines.add("Description: $desc")
-            }
-            if (item.pieces_per_set > 0) {
-                lines.add("Pack Details: ${item.pieces_per_set} pcs/set")
-            }
-            lines.add("\nDESUKA by VS FASHION Gandhi Nagar Delhi")
-            return lines.joinToString("\n").trim()
-        } else {
-            return buildString {
-                append("Designs from Desuka Catalogue:\n\n")
-                selectedItems.forEachIndexed { index, item ->
-                    append("${index + 1}. SKU: ${item.sku_id}\n")
-                    val fabric = item.material?.trim() ?: ""
-                    if (fabric.isNotEmpty()) {
-                        append("   Fabric: $fabric\n")
-                    }
-                    val work = item.work?.trim() ?: ""
-                    if (work.isNotEmpty()) {
-                        append("   Work: $work\n")
-                    }
-                    val desc = sanitizeDescription(item.description)
-                    if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
-                        append("   Description: $desc\n")
-                    }
-                    if (item.pieces_per_set > 0) {
-                        append("   Pack Details: ${item.pieces_per_set} pcs/set\n")
-                    }
-                    append("\n")
-                }
-                append("Shared via Desuka Catalog\nDESUKA by VS FASHION Gandhi Nagar Delhi")
-            }.trim()
-        }
-    }
-
-    /**
-     * Renders a clean, light diagonal watermark in the center of the bitmap.
-     */
-    fun addWatermarkToBitmap(originalBitmap: Bitmap): Bitmap {
-        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val width = mutableBitmap.width.toFloat()
-        val height = mutableBitmap.height.toFloat()
-
-        val text = "VS FASHION (DESUKA)"
-        val fontSize = (width / 12f).coerceAtLeast(32f)
-
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(60, 0, 0, 0)
-            textSize = fontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.06f
-        }
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(125, 255, 255, 255)
-            textSize = fontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.06f
-        }
-
-        canvas.save()
-        canvas.rotate(-30f, width / 2f, height / 2f)
-
-        // Draw shadow offset by +2px
-        canvas.drawText(text, width / 2f + 2f, height / 2f + 2f, shadowPaint)
-        // Draw light translucent white text
-        canvas.drawText(text, width / 2f, height / 2f, textPaint)
-
-        canvas.restore()
-        return mutableBitmap
-    }
-
-    /**
-     * Renders a crisp luxury rate watermark badge positioned safely below top-right brand logos.
-     * Features "NEW OFFER PRICE" in gold followed by the highlighted amount in crisp white.
-     */
-    fun addTopRightRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
-        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val width = mutableBitmap.width.toFloat()
-        val height = mutableBitmap.height.toFloat()
-
-        // 10% reduced font size for sleek elegance
-        val amountFontSize = (width / 18f).coerceIn(30f, 85f)
-        val labelFontSize = (amountFontSize * 0.38f).coerceIn(12f, 32f)
-
-        val paddingHorizontal = amountFontSize * 0.55f
-        val paddingVertical = amountFontSize * 0.32f
-        val cornerRadius = amountFontSize * 0.32f
-
-        // Positioned 9% from top edge so VS FASHION brand watermark remains completely unobstructed
-        val marginTop = width * 0.09f
-        val marginRight = width * 0.04f
-
-        val labelText = "NEW OFFER PRICE"
-
-        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(251, 191, 36) // Luxury gold (#FBBF24)
-            textSize = labelFontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.10f // Elegant luxury letter-spacing
-        }
-
-        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = amountFontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-        }
-
-        // Measure text dimensions
-        val labelBounds = android.graphics.Rect()
-        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
-        val labelWidth = labelPaint.measureText(labelText)
-        val labelHeight = labelBounds.height().toFloat()
-
-        val amountBounds = android.graphics.Rect()
-        amountPaint.getTextBounds(rateText, 0, rateText.length, amountBounds)
-        val amountWidth = amountPaint.measureText(rateText)
-        val amountHeight = amountBounds.height().toFloat()
-
-        val lineSpacing = labelFontSize * 0.45f
-        val contentWidth = maxOf(labelWidth, amountWidth)
-        val badgeWidth = contentWidth + (paddingHorizontal * 2f)
-        val badgeHeight = labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)
-
-        val right = width - marginRight
-        val left = right - badgeWidth
-        val top = marginTop
-        val bottom = top + badgeHeight
-
-        val badgeRect = android.graphics.RectF(left, top, right, bottom)
-
-        // Draw soft outer shadow
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(100, 0, 0, 0)
-            style = Paint.Style.FILL
-        }
-        val shadowRect = android.graphics.RectF(left + 3f, top + 4f, right + 3f, bottom + 4f)
-        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
-
-        // Draw stylish dark translucent background pill
-        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(225, 15, 17, 24)
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
-
-        // Draw luxury gold highlight border
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(240, 245, 158, 11) // Gold border (#F59E0B)
-            style = Paint.Style.STROKE
-            strokeWidth = (amountFontSize * 0.055f).coerceAtLeast(2.5f)
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
-
-        val centerX = badgeRect.centerX()
-
-        // Line 1: NEW OFFER PRICE (Gold with letter spacing)
-        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
-        canvas.drawText(labelText, centerX, labelY, labelPaint)
-
-        // Line 2: Amount (Bold White)
-        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
-        canvas.drawText(rateText, centerX, amountY, amountPaint)
-
-        return mutableBitmap
-    }
-
-    /**
-     * Calculates the coded internal price number:
-     * - Takes first 2 digits of the price
-     * - Adds range-based offset:
-     *   - Below 2095: +2 (e.g. 1495 -> 14 + 2 = 16)
-     *   - 2095 to 3095: +3 (e.g. 2495 -> 24 + 3 = 27)
-     *   - 3095 to 4095: +4 (e.g. 4095 -> 40 + 4 = 44)
-     *   - Above 4095: +5
-     */
-    fun encodePriceCode(price: Int): String {
-        if (price <= 0) return ""
-        val priceStr = price.toString()
-        val firstTwoDigits = if (priceStr.length >= 2) {
-            priceStr.substring(0, 2).toIntOrNull() ?: 0
-        } else {
-            priceStr.toIntOrNull() ?: 0
-        }
-
-        val offset = when {
-            price <= 2095 -> 2
-            price <= 3095 -> 3
-            price <= 4095 -> 4
-            price <= 5095 -> 5
-            else -> 2 + ((price - 1000) / 1000).coerceAtLeast(0)
-        }
-
-        val coded = firstTwoDigits + offset
-        return coded.toString()
-    }
-
-    /**
-     * Renders a fully opaque luxury rate badge in the bottom-left corner of the catalog image
-     * to completely overwrite and mask the existing marka / printed rate.
-     */
-    fun addBottomLeftHikeRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
-        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val width = mutableBitmap.width.toFloat()
-        val height = mutableBitmap.height.toFloat()
-
-        // Scaled typography based on canvas width
-        val labelFontSize = (width / 38f).coerceIn(16f, 32f)
-        val amountFontSize = (width / 24f).coerceIn(24f, 54f)
-
-        val paddingHorizontal = amountFontSize * 0.45f
-        val paddingVertical = labelFontSize * 0.35f
-        val lineSpacing = labelFontSize * 0.20f
-        val cornerRadius = labelFontSize * 0.35f
-
-        val marginLeft = (width * 0.010f).coerceAtLeast(10f)
-        val marginBottom = (height * 0.022f).coerceAtLeast(14f)
-
-        val labelText = "RATE"
-        val amountText = if (rateText.startsWith("₹")) rateText else "₹$rateText"
-
-        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(245, 158, 11) // Luxury gold
-            textSize = labelFontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            letterSpacing = 0.12f
-            textAlign = Paint.Align.CENTER
-        }
-
-        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = amountFontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-        }
-
-        val labelBounds = android.graphics.Rect()
-        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
-        val labelWidth = labelPaint.measureText(labelText)
-        val labelHeight = labelBounds.height().toFloat()
-
-        val amountBounds = android.graphics.Rect()
-        amountPaint.getTextBounds(amountText, 0, amountText.length, amountBounds)
-        val amountWidth = amountPaint.measureText(amountText)
-        val amountHeight = amountBounds.height().toFloat()
-
-        val contentWidth = maxOf(labelWidth, amountWidth)
-        // Ensure badge is wide and tall enough to cover any legacy marka stamp completely
-        val badgeWidth = (contentWidth + (paddingHorizontal * 2f)).coerceAtLeast(width * 0.16f)
-        val badgeHeight = (labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)).coerceAtLeast(height * 0.075f)
-
-        val left = marginLeft
-        val right = left + badgeWidth
-        val bottom = height - marginBottom
-        val top = bottom - badgeHeight
-
-        val badgeRect = android.graphics.RectF(left, top, right, bottom)
-
-        // Drop shadow
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(140, 0, 0, 0)
-            style = Paint.Style.FILL
-        }
-        val shadowRect = android.graphics.RectF(left + 3f, top + 3f, right + 3f, bottom + 3f)
-        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
-
-        // 100% Opaque Solid Dark Background to completely conceal the underlying marka
-        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(17, 24, 39) // Solid dark #111827
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
-
-        // Gold luxury border
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(245, 158, 11) // Luxury gold
-            style = Paint.Style.STROKE
-            strokeWidth = (labelFontSize * 0.08f).coerceAtLeast(2.0f)
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
-
-        val centerX = badgeRect.centerX()
-        // Draw Label "RATE"
-        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
-        canvas.drawText(labelText, centerX, labelY, labelPaint)
-
-        // Draw Amount "₹{hike_rate}"
-        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
-        canvas.drawText(amountText, centerX, amountY, amountPaint)
-
-        return mutableBitmap
-    }
-
-    /**
-     * Renders a small, sleek SKU-ID and coded price reference badge in the top-left corner for RAW images.
-     */
-    fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String, priceCode: String = ""): Bitmap {
-        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val width = mutableBitmap.width.toFloat()
-        val height = mutableBitmap.height.toFloat()
-
-        val displayText = if (priceCode.isNotBlank()) "$skuId - $priceCode" else skuId
-
-        // Small, sleek font size for discreet reference (not overly highlighted)
-        val fontSize = (width / 28f).coerceIn(18f, 44f)
-        val paddingHorizontal = fontSize * 0.45f
-        val paddingVertical = fontSize * 0.25f
-        val cornerRadius = fontSize * 0.28f
-
-        val marginLeft = width * 0.035f
-        val marginTop = width * 0.035f
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = fontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.03f
-        }
-
-        val textBounds = android.graphics.Rect()
-        textPaint.getTextBounds(displayText, 0, displayText.length, textBounds)
-        val textWidth = textPaint.measureText(displayText)
-        val textHeight = textBounds.height().toFloat()
-
-        val badgeWidth = textWidth + (paddingHorizontal * 2f)
-        val badgeHeight = textHeight + (paddingVertical * 2f)
-
-        val left = marginLeft
-        val right = left + badgeWidth
-        val top = marginTop
-        val bottom = top + badgeHeight
-
-        val badgeRect = android.graphics.RectF(left, top, right, bottom)
-
-        // Soft outer shadow
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(80, 0, 0, 0)
-            style = Paint.Style.FILL
-        }
-        val shadowRect = android.graphics.RectF(left + 2f, top + 2f, right + 2f, bottom + 2f)
-        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
-
-        // Subtle dark translucent background pill (low profile, not overly highlighted)
-        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(180, 15, 17, 24)
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
-
-        // Subtle clean border
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(120, 255, 255, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = (fontSize * 0.04f).coerceAtLeast(1.2f)
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
-
-        // Draw SKU-ID and coded price text
-        val textX = badgeRect.centerX()
-        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
-        canvas.drawText(displayText, textX, textY, textPaint)
-
-        return mutableBitmap
-    }
-
-    /**
-     * Renders a discreet, small stitcher identifier badge at the bottom center of the image.
-     * Low profile and unobtrusive — strictly for internal reference without highlighting.
-     */
-    fun addBottomCenterStitcherBadge(originalBitmap: Bitmap, stitcherName: String): Bitmap {
-        val trimmed = stitcherName.trim()
-        if (trimmed.isEmpty()) return originalBitmap
-
-        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val width = mutableBitmap.width.toFloat()
-        val height = mutableBitmap.height.toFloat()
-
-        // Small discreet font size - low profile, not highlighted
-        val fontSize = (width / 42f).coerceIn(14f, 26f)
-        val paddingHorizontal = fontSize * 0.45f
-        val paddingVertical = fontSize * 0.22f
-        val cornerRadius = fontSize * 0.25f
-
-        val marginBottom = height * 0.02f // 2% from bottom edge
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(175, 240, 240, 240) // Soft translucent off-white, not harsh
-            textSize = fontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-            letterSpacing = 0.06f
-            textAlign = Paint.Align.CENTER
-        }
-
-        val textBounds = android.graphics.Rect()
-        textPaint.getTextBounds(trimmed, 0, trimmed.length, textBounds)
-        val textWidth = textPaint.measureText(trimmed)
-        val textHeight = textBounds.height().toFloat()
-
-        val badgeWidth = textWidth + (paddingHorizontal * 2f)
-        val badgeHeight = textHeight + (paddingVertical * 2f)
-
-        val left = (width - badgeWidth) / 2f
-        val right = left + badgeWidth
-        val bottom = height - marginBottom
-        val top = bottom - badgeHeight
-
-        val badgeRect = android.graphics.RectF(left, top, right, bottom)
-
-        // Subtle discreet translucent dark pill behind text to ensure readability on any color background without highlighting
-        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(100, 0, 0, 0)
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, bgPaint)
-
-        val textX = badgeRect.centerX()
-        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
-        canvas.drawText(trimmed, textX, textY, textPaint)
-
-        return mutableBitmap
-    }
-
-    enum class SharePlatform {
-        WHATSAPP,
-        TELEGRAM
-    }
-
-    /**
-     * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp or Telegram.
-     */
-    suspend fun downloadAndShareImages(
-        context: Context,
-        selectedItems: List<SKUItemDto>,
-        sessionManager: SessionManager,
-        shareDescription: Boolean = false,
-        shareRealImages: Boolean = false,
-        imagesPerItem: Int = 1,
-        platform: SharePlatform = SharePlatform.WHATSAPP,
-        onProgress: (String) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        withContext(Dispatchers.IO) {
-            val client = NetworkClient.getOkHttpClient(sessionManager)
-            val uris = ArrayList<Uri>()
-            
-            val cacheFolder = File(context.cacheDir, "shared_catalogs").apply {
-                if (!exists()) mkdirs() else deleteRecursively(); mkdirs() // Clear old downloads
-            }
-
-            try {
-                // Flatten all tasks preserving original item and image sequence order
-                data class DownloadTask(
-                    val item: SKUItemDto,
-                    val imageUrl: String,
-                    val targetFile: File,
-                    val isRealImage: Boolean,
-                    val hasRevisedRate: Boolean,
-                    val hasHikeRate: Boolean,
-                    val hasStitcher: Boolean,
-                    val suffix: String
-                )
-
-                val tasks = mutableListOf<DownloadTask>()
-                selectedItems.forEach { item ->
-                    val allUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
-                        item.getFullRealImageUrls(sessionManager.getServerUrl())
-                    } else {
-                        listOf(item.getFullImageUrl(sessionManager.getServerUrl()))
-                    }
-                    val targetUrls = allUrls.take(imagesPerItem.coerceAtLeast(1))
-                    targetUrls.forEachIndexed { imgIdx, imageUrl ->
-                        val suffix = if (imageUrl.endsWith(".png", true)) ".png" else ".jpg"
-                        val filename = if (targetUrls.size > 1) "${item.sku_id}_real_${imgIdx + 1}$suffix" else "${item.sku_id}$suffix"
-                        val file = File(cacheFolder, filename)
-                        tasks.add(
-                            DownloadTask(
-                                item = item,
-                                imageUrl = imageUrl,
-                                targetFile = file,
-                                isRealImage = shareRealImages && item.real_images.isNotEmpty(),
-                                hasRevisedRate = item.revised_rate != null && item.revised_rate > 0,
-                                hasHikeRate = item.hike_rate != null && item.hike_rate > 0,
-                                hasStitcher = !item.stitcher_name.isNullOrBlank(),
-                                suffix = suffix
-                            )
-                        )
-                    }
-                }
-
-                var completedCount = 0
-                val totalTasks = tasks.size
-
-                // Process up to 4 items concurrently without blocking or quality compromise
-                val processedUris = tasks.chunked(4).flatMap { chunk ->
-                    chunk.map { task ->
-                        async(Dispatchers.IO) {
-                            val request = Request.Builder()
-                                .url(task.imageUrl)
-                                .header("Authorization", "Bearer ${sessionManager.getToken() ?: ""}")
-                                .build()
-
-                            val response = client.newCall(request).execute()
-                            if (!response.isSuccessful) {
-                                throw Exception("HTTP error code ${response.code} for ${task.item.sku_id}")
-                            }
-
-                            val body = response.body ?: throw Exception("Empty body for ${task.item.sku_id}")
-                            val bytes = body.bytes()
-
-                            if (task.isRealImage || task.hasRevisedRate || task.hasHikeRate || task.hasStitcher) {
-                                val decodeOptions = BitmapFactory.Options().apply {
-                                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                                    inScaled = false
-                                    inPremultiplied = true
-                                }
-                                val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
-                                if (rawBitmap != null) {
-                                    var processedBitmap = rawBitmap
-
-                                    // 1. Always apply VS FASHION (DESUKA) watermark on RAW images
-                                    if (task.isRealImage) {
-                                        val wmBitmap = addWatermarkToBitmap(processedBitmap)
-                                        if (processedBitmap != rawBitmap && processedBitmap != wmBitmap) {
-                                            processedBitmap.recycle()
-                                        }
-                                        processedBitmap = wmBitmap
-
-                                        // 2. Add SKU-ID and coded price in Left corner for RAW images
-                                        val activeRate = if (task.item.hike_rate != null && task.item.hike_rate > 0) task.item.hike_rate else if (task.item.revised_rate != null && task.item.revised_rate > 0) task.item.revised_rate else task.item.rate
-                                        val priceCode = encodePriceCode(activeRate)
-                                        val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, task.item.sku_id, priceCode)
-                                        if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
-                                            processedBitmap.recycle()
-                                        }
-                                        processedBitmap = skuBadgeBitmap
-                                    }
-
-                                    // 3. Apply NEW OFFER PRICE top-right watermark badge if revised rate exists
-                                    if (task.hasRevisedRate) {
-                                        val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${task.item.revised_rate}")
-                                        if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
-                                            processedBitmap.recycle()
-                                        }
-                                        processedBitmap = rateBadgeBitmap
-                                    }
-
-                                    // 3.5 Apply HIKE RATE bottom-left watermark badge to overwrite old marka if hike rate exists
-                                    if (task.hasHikeRate && task.item.hike_rate != null && task.item.hike_rate > 0) {
-                                        val hikeBadgeBitmap = addBottomLeftHikeRateBadge(processedBitmap, "₹${task.item.hike_rate}")
-                                        if (processedBitmap != rawBitmap && processedBitmap != hikeBadgeBitmap) {
-                                            processedBitmap.recycle()
-                                        }
-                                        processedBitmap = hikeBadgeBitmap
-                                    }
-
-                                    // 4. Apply Stitcher Name in bottom center (small, discreet, not highlighted) if present
-                                    if (task.hasStitcher && !task.item.stitcher_name.isNullOrBlank()) {
-                                        val stitcherBitmap = addBottomCenterStitcherBadge(processedBitmap, task.item.stitcher_name)
-                                        if (processedBitmap != rawBitmap && processedBitmap != stitcherBitmap) {
-                                            processedBitmap.recycle()
-                                        }
-                                        processedBitmap = stitcherBitmap
-                                    }
-
-                                    // 5. Save at 96% high quality JPEG or 100% PNG (indistinguishable visual clarity with 3-5x faster file writing)
-                                    FileOutputStream(task.targetFile).use { out ->
-                                        if (task.suffix.equals(".png", ignoreCase = true)) {
-                                            processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                                        } else {
-                                            processedBitmap.compress(Bitmap.CompressFormat.JPEG, 96, out)
-                                        }
-                                    }
-
-                                    if (processedBitmap != rawBitmap) {
-                                        processedBitmap.recycle()
-                                    }
-                                    rawBitmap.recycle()
-                                } else {
-                                    FileOutputStream(task.targetFile).use { it.write(bytes) }
-                                }
-                            } else {
-                                // Standard regular catalog images (already watermarked on server)
-                                FileOutputStream(task.targetFile).use { it.write(bytes) }
-                            }
-
-                            synchronized(this@SharingUtils) {
-                                completedCount++
-                            }
-                            val progressMsg = "Processing designs ($completedCount/$totalTasks)..."
-                            withContext(Dispatchers.Main) { onProgress(progressMsg) }
-
-                            FileProvider.getUriForFile(
-                                context,
-                                "com.example.catalogapp.fileprovider",
-                                task.targetFile
-                            )
-                        }
-                    }.awaitAll()
-                }
-
-                uris.addAll(processedUris)
-
-                if (uris.isEmpty()) {
-                    withContext(Dispatchers.Main) { onError("No images were successfully cached.") }
-                    return@withContext
-                }
-
-                val platformLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
-                withContext(Dispatchers.Main) { onProgress("Opening $platformLabel...") }
-
-                val shareText = if (shareDescription) buildShareDescription(selectedItems) else ""
-
-                // If user requested to share description and we have text, copy it to clipboard as well
-                if (shareDescription && shareText.isNotEmpty()) {
-                    try {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clip = ClipData.newPlainText("Article Details", shareText)
-                        clipboard?.setPrimaryClip(clip)
-                        if (selectedItems.size > 1) {
-                            withContext(Dispatchers.Main) {
-                                val appLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
-                                Toast.makeText(context, "Descriptions copied to clipboard — paste in $appLabel", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-
-                // Helper to create intent configured for sharing images
-                fun createShareIntent(targetPackage: String?): Intent {
-                    val intent = if (uris.size == 1) {
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_STREAM, uris[0])
-                            if (shareText.isNotEmpty()) {
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                putExtra(Intent.EXTRA_TITLE, shareText)
-                            }
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    } else {
-                        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                            type = "image/*"
-                            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                            if (shareText.isNotEmpty()) {
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                putExtra(Intent.EXTRA_TITLE, shareText)
-                            }
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    }
-                    if (targetPackage != null) {
-                        intent.setPackage(targetPackage)
-                    }
-                    return intent
-                }
-
-                val pm = context.packageManager
-                val targetPackages = if (platform == SharePlatform.TELEGRAM) {
-                    listOf(
-                        "org.telegram.messenger",
-                        "org.thunderdog.challegram",
-                        "org.telegram.messenger.web",
-                        "org.telegram.messenger.beta"
-                    )
-                } else {
-                    listOf("com.whatsapp", "com.whatsapp.w4b")
-                }
-                val availableIntents = ArrayList<Intent>()
-
-                for (pkg in targetPackages) {
-                    try {
-                        pm.getPackageInfo(pkg, 0)
-                        availableIntents.add(createShareIntent(pkg))
-                    } catch (_: Exception) {
-                        // Package not installed on device
-                    }
-                }
-
-                val launchIntent = when {
-                    availableIntents.isEmpty() -> {
-                        // Fallback: None installed -> open system chooser
-                        Intent.createChooser(createShareIntent(null), "Share via $platformLabel").apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    }
-                    availableIntents.size == 1 -> {
-                        // Only one variant installed -> launch directly
-                        availableIntents[0].apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                    }
-                    else -> {
-                        // Multiple variants installed -> show chooser
-                        val firstIntent = availableIntents.removeAt(0)
-                        Intent.createChooser(firstIntent, "Select $platformLabel").apply {
-                            putExtra(Intent.EXTRA_INITIAL_INTENTS, availableIntents.toTypedArray())
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    }
-                }
-
-                context.startActivity(launchIntent)
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) { 
-                    onError("Sharing failed: ${e.localizedMessage ?: "Unknown error"}") 
-                }
-            }
-        }
-    }
-}
+package com.example.catalogapp.utils
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.net.Uri
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import com.example.catalogapp.data.SKUItemDto
+import com.example.catalogapp.data.SessionManager
+import com.example.catalogapp.data.NetworkClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+
+object SharingUtils {
+
+    fun sanitizeDescription(desc: String?): String {
+        if (desc.isNullOrBlank()) {
+            return ""
+        }
+        val trimmed = desc.trim()
+        if (trimmed.equals("DESUKA by VS FASHION Gandhi Nagar Delhi.", ignoreCase = true)) {
+            return ""
+        }
+        return trimmed
+            .replace("old stock", "", ignoreCase = true)
+            .replace("new stock", "", ignoreCase = true)
+            .replace("old", "", ignoreCase = true)
+            .replace("new", "", ignoreCase = true)
+            .trim()
+    }
+
+    /**
+     * Builds comprehensive article details text (SKU ID, Fabric, Work, Description, Pack Details)
+     * for WhatsApp sharing when "Send Description" is checked.
+     */
+    fun buildShareDescription(selectedItems: List<SKUItemDto>): String {
+        if (selectedItems.isEmpty()) return ""
+
+        if (selectedItems.size == 1) {
+            val item = selectedItems[0]
+            val lines = mutableListOf<String>()
+            lines.add("Design SKU: ${item.sku_id}")
+            val fabric = item.material?.trim() ?: ""
+            if (fabric.isNotEmpty()) {
+                lines.add("Fabric: $fabric")
+            }
+            val work = item.work?.trim() ?: ""
+            if (work.isNotEmpty()) {
+                lines.add("Work: $work")
+            }
+            val desc = sanitizeDescription(item.description)
+            if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
+                lines.add("Description: $desc")
+            }
+            if (item.pieces_per_set > 0) {
+                lines.add("Pack Details: ${item.pieces_per_set} pcs/set")
+            }
+            lines.add("\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+            return lines.joinToString("\n").trim()
+        } else {
+            return buildString {
+                append("Designs from Desuka Catalogue:\n\n")
+                selectedItems.forEachIndexed { index, item ->
+                    append("${index + 1}. SKU: ${item.sku_id}\n")
+                    val fabric = item.material?.trim() ?: ""
+                    if (fabric.isNotEmpty()) {
+                        append("   Fabric: $fabric\n")
+                    }
+                    val work = item.work?.trim() ?: ""
+                    if (work.isNotEmpty()) {
+                        append("   Work: $work\n")
+                    }
+                    val desc = sanitizeDescription(item.description)
+                    if (desc.isNotEmpty() && !desc.equals(fabric, ignoreCase = true) && !desc.equals(work, ignoreCase = true)) {
+                        append("   Description: $desc\n")
+                    }
+                    if (item.pieces_per_set > 0) {
+                        append("   Pack Details: ${item.pieces_per_set} pcs/set\n")
+                    }
+                    append("\n")
+                }
+                append("Shared via Desuka Catalog\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+            }.trim()
+        }
+    }
+
+    /**
+     * Renders a clean, light diagonal watermark in the center of the bitmap.
+     */
+    fun addWatermarkToBitmap(originalBitmap: Bitmap): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        val text = "VS FASHION (DESUKA)"
+        val fontSize = (width / 12f).coerceAtLeast(32f)
+
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(60, 0, 0, 0)
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.06f
+        }
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(125, 255, 255, 255)
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.06f
+        }
+
+        canvas.save()
+        canvas.rotate(-30f, width / 2f, height / 2f)
+
+        // Draw shadow offset by +2px
+        canvas.drawText(text, width / 2f + 2f, height / 2f + 2f, shadowPaint)
+        // Draw light translucent white text
+        canvas.drawText(text, width / 2f, height / 2f, textPaint)
+
+        canvas.restore()
+        return mutableBitmap
+    }
+
+    /**
+     * Renders a crisp luxury rate watermark badge positioned safely below top-right brand logos.
+     * Features "NEW OFFER PRICE" in gold followed by the highlighted amount in crisp white.
+     */
+    fun addTopRightRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // 10% reduced font size for sleek elegance
+        val amountFontSize = (width / 18f).coerceIn(30f, 85f)
+        val labelFontSize = (amountFontSize * 0.38f).coerceIn(12f, 32f)
+
+        val paddingHorizontal = amountFontSize * 0.55f
+        val paddingVertical = amountFontSize * 0.32f
+        val cornerRadius = amountFontSize * 0.32f
+
+        // Positioned 9% from top edge so VS FASHION brand watermark remains completely unobstructed
+        val marginTop = width * 0.09f
+        val marginRight = width * 0.04f
+
+        val labelText = "NEW OFFER PRICE"
+
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(251, 191, 36) // Luxury gold (#FBBF24)
+            textSize = labelFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.10f // Elegant luxury letter-spacing
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = amountFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+
+        // Measure text dimensions
+        val labelBounds = android.graphics.Rect()
+        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
+        val labelWidth = labelPaint.measureText(labelText)
+        val labelHeight = labelBounds.height().toFloat()
+
+        val amountBounds = android.graphics.Rect()
+        amountPaint.getTextBounds(rateText, 0, rateText.length, amountBounds)
+        val amountWidth = amountPaint.measureText(rateText)
+        val amountHeight = amountBounds.height().toFloat()
+
+        val lineSpacing = labelFontSize * 0.45f
+        val contentWidth = maxOf(labelWidth, amountWidth)
+        val badgeWidth = contentWidth + (paddingHorizontal * 2f)
+        val badgeHeight = labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)
+
+        val right = width - marginRight
+        val left = right - badgeWidth
+        val top = marginTop
+        val bottom = top + badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Draw soft outer shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val shadowRect = android.graphics.RectF(left + 3f, top + 4f, right + 3f, bottom + 4f)
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        // Draw stylish dark translucent background pill
+        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(225, 15, 17, 24)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
+
+        // Draw luxury gold highlight border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(240, 245, 158, 11) // Gold border (#F59E0B)
+            style = Paint.Style.STROKE
+            strokeWidth = (amountFontSize * 0.055f).coerceAtLeast(2.5f)
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
+
+        val centerX = badgeRect.centerX()
+
+        // Line 1: NEW OFFER PRICE (Gold with letter spacing)
+        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
+        canvas.drawText(labelText, centerX, labelY, labelPaint)
+
+        // Line 2: Amount (Bold White)
+        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
+        canvas.drawText(rateText, centerX, amountY, amountPaint)
+
+        return mutableBitmap
+    }
+
+    /**
+     * Calculates the coded internal price number:
+     * - Takes first 2 digits of the price
+     * - Adds range-based offset:
+     *   - Below 2095: +2 (e.g. 1495 -> 14 + 2 = 16)
+     *   - 2095 to 3095: +3 (e.g. 2495 -> 24 + 3 = 27)
+     *   - 3095 to 4095: +4 (e.g. 4095 -> 40 + 4 = 44)
+     *   - Above 4095: +5
+     */
+    fun encodePriceCode(price: Int): String {
+        if (price <= 0) return ""
+        val priceStr = price.toString()
+        val firstTwoDigits = if (priceStr.length >= 2) {
+            priceStr.substring(0, 2).toIntOrNull() ?: 0
+        } else {
+            priceStr.toIntOrNull() ?: 0
+        }
+
+        val offset = when {
+            price <= 2095 -> 2
+            price <= 3095 -> 3
+            price <= 4095 -> 4
+            price <= 5095 -> 5
+            else -> 2 + ((price - 1000) / 1000).coerceAtLeast(0)
+        }
+
+        val coded = firstTwoDigits + offset
+        return coded.toString()
+    }
+
+    /**
+     * Renders a fully opaque luxury rate badge in the bottom-left corner of the catalog image
+     * to completely overwrite and mask the existing marka / printed rate.
+     */
+    fun addBottomLeftHikeRateBadge(originalBitmap: Bitmap, rateText: String): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // Scaled typography based on canvas width
+        val labelFontSize = (width / 38f).coerceIn(16f, 32f)
+        val amountFontSize = (width / 24f).coerceIn(24f, 54f)
+
+        val paddingHorizontal = amountFontSize * 0.45f
+        val paddingVertical = labelFontSize * 0.35f
+        val lineSpacing = labelFontSize * 0.20f
+        val cornerRadius = labelFontSize * 0.35f
+
+        val marginLeft = (width * 0.010f).coerceAtLeast(10f)
+        val marginBottom = (height * 0.022f).coerceAtLeast(14f)
+
+        val labelText = "RATE"
+        val amountText = if (rateText.startsWith("₹")) rateText else "₹$rateText"
+
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(245, 158, 11) // Luxury gold
+            textSize = labelFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.12f
+            textAlign = Paint.Align.CENTER
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = amountFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+
+        val labelBounds = android.graphics.Rect()
+        labelPaint.getTextBounds(labelText, 0, labelText.length, labelBounds)
+        val labelWidth = labelPaint.measureText(labelText)
+        val labelHeight = labelBounds.height().toFloat()
+
+        val amountBounds = android.graphics.Rect()
+        amountPaint.getTextBounds(amountText, 0, amountText.length, amountBounds)
+        val amountWidth = amountPaint.measureText(amountText)
+        val amountHeight = amountBounds.height().toFloat()
+
+        val contentWidth = maxOf(labelWidth, amountWidth)
+        // Ensure badge is wide and tall enough to cover any legacy marka stamp completely
+        val badgeWidth = (contentWidth + (paddingHorizontal * 2f)).coerceAtLeast(width * 0.16f)
+        val badgeHeight = (labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)).coerceAtLeast(height * 0.075f)
+
+        val left = marginLeft
+        val right = left + badgeWidth
+        val bottom = height - marginBottom
+        val top = bottom - badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Drop shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(140, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val shadowRect = android.graphics.RectF(left + 3f, top + 3f, right + 3f, bottom + 3f)
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        // 100% Opaque Solid Dark Background to completely conceal the underlying marka
+        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(17, 24, 39) // Solid dark #111827
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
+
+        // Gold luxury border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(245, 158, 11) // Luxury gold
+            style = Paint.Style.STROKE
+            strokeWidth = (labelFontSize * 0.08f).coerceAtLeast(2.0f)
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
+
+        val centerX = badgeRect.centerX()
+        // Draw Label "RATE"
+        val labelY = top + paddingVertical + labelHeight - labelBounds.bottom
+        canvas.drawText(labelText, centerX, labelY, labelPaint)
+
+        // Draw Amount "₹{hike_rate}"
+        val amountY = top + paddingVertical + labelHeight + lineSpacing + amountHeight - amountBounds.bottom
+        canvas.drawText(amountText, centerX, amountY, amountPaint)
+
+        return mutableBitmap
+    }
+
+    /**
+     * Renders a small, sleek SKU-ID and coded price reference badge in the top-left corner for RAW images.
+     */
+    fun addTopLeftSkuBadge(originalBitmap: Bitmap, skuId: String, priceCode: String = ""): Bitmap {
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        val displayText = if (priceCode.isNotBlank()) "$skuId - $priceCode" else skuId
+
+        // Small, sleek font size for discreet reference (not overly highlighted)
+        val fontSize = (width / 28f).coerceIn(18f, 44f)
+        val paddingHorizontal = fontSize * 0.45f
+        val paddingVertical = fontSize * 0.25f
+        val cornerRadius = fontSize * 0.28f
+
+        val marginLeft = width * 0.035f
+        val marginTop = width * 0.035f
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.03f
+        }
+
+        val textBounds = android.graphics.Rect()
+        textPaint.getTextBounds(displayText, 0, displayText.length, textBounds)
+        val textWidth = textPaint.measureText(displayText)
+        val textHeight = textBounds.height().toFloat()
+
+        val badgeWidth = textWidth + (paddingHorizontal * 2f)
+        val badgeHeight = textHeight + (paddingVertical * 2f)
+
+        val left = marginLeft
+        val right = left + badgeWidth
+        val top = marginTop
+        val bottom = top + badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Soft outer shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(80, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val shadowRect = android.graphics.RectF(left + 2f, top + 2f, right + 2f, bottom + 2f)
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        // Subtle dark translucent background pill (low profile, not overly highlighted)
+        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(180, 15, 17, 24)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, backgroundPaint)
+
+        // Subtle clean border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(120, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = (fontSize * 0.04f).coerceAtLeast(1.2f)
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, borderPaint)
+
+        // Draw SKU-ID and coded price text
+        val textX = badgeRect.centerX()
+        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
+        canvas.drawText(displayText, textX, textY, textPaint)
+
+        return mutableBitmap
+    }
+
+    /**
+     * Renders a discreet, small stitcher identifier badge at the bottom center of the image.
+     * Low profile and unobtrusive — strictly for internal reference without highlighting.
+     */
+    fun addBottomCenterStitcherBadge(originalBitmap: Bitmap, stitcherName: String): Bitmap {
+        val trimmed = stitcherName.trim()
+        if (trimmed.isEmpty()) return originalBitmap
+
+        val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        val width = mutableBitmap.width.toFloat()
+        val height = mutableBitmap.height.toFloat()
+
+        // Small discreet font size - low profile, not highlighted
+        val fontSize = (width / 42f).coerceIn(14f, 26f)
+        val paddingHorizontal = fontSize * 0.45f
+        val paddingVertical = fontSize * 0.22f
+        val cornerRadius = fontSize * 0.25f
+
+        val marginBottom = height * 0.02f // 2% from bottom edge
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(175, 240, 240, 240) // Soft translucent off-white, not harsh
+            textSize = fontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            letterSpacing = 0.06f
+            textAlign = Paint.Align.CENTER
+        }
+
+        val textBounds = android.graphics.Rect()
+        textPaint.getTextBounds(trimmed, 0, trimmed.length, textBounds)
+        val textWidth = textPaint.measureText(trimmed)
+        val textHeight = textBounds.height().toFloat()
+
+        val badgeWidth = textWidth + (paddingHorizontal * 2f)
+        val badgeHeight = textHeight + (paddingVertical * 2f)
+
+        val left = (width - badgeWidth) / 2f
+        val right = left + badgeWidth
+        val bottom = height - marginBottom
+        val top = bottom - badgeHeight
+
+        val badgeRect = android.graphics.RectF(left, top, right, bottom)
+
+        // Subtle discreet translucent dark pill behind text to ensure readability on any color background without highlighting
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(badgeRect, cornerRadius, cornerRadius, bgPaint)
+
+        val textX = badgeRect.centerX()
+        val textY = badgeRect.centerY() + (textHeight / 2f) - textBounds.bottom
+        canvas.drawText(trimmed, textX, textY, textPaint)
+
+        return mutableBitmap
+    }
+
+    enum class SharePlatform {
+        WHATSAPP,
+        TELEGRAM
+    }
+
+    /**
+     * Downloads list of selected images to cache, applies on-the-fly watermark, and shares them over WhatsApp or Telegram.
+     */
+    suspend fun downloadAndShareImages(
+        context: Context,
+        selectedItems: List<SKUItemDto>,
+        sessionManager: SessionManager,
+        shareDescription: Boolean = false,
+        shareRealImages: Boolean = false,
+        imagesPerItem: Int = 1,
+        platform: SharePlatform = SharePlatform.WHATSAPP,
+        onProgress: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        withContext(Dispatchers.IO) {
+            val client = NetworkClient.getOkHttpClient(sessionManager)
+            val uris = ArrayList<Uri>()
+            
+            val cacheFolder = File(context.cacheDir, "shared_catalogs").apply {
+                if (!exists()) mkdirs() else deleteRecursively(); mkdirs() // Clear old downloads
+            }
+
+            try {
+                // Flatten all tasks preserving original item and image sequence order
+                data class DownloadTask(
+                    val item: SKUItemDto,
+                    val imageUrl: String,
+                    val targetFile: File,
+                    val isRealImage: Boolean,
+                    val hasRevisedRate: Boolean,
+                    val hasHikeRate: Boolean,
+                    val hasStitcher: Boolean,
+                    val suffix: String
+                )
+
+                val tasks = mutableListOf<DownloadTask>()
+                selectedItems.forEach { item ->
+                    val allUrls = if (shareRealImages && item.real_images.isNotEmpty()) {
+                        item.getFullRealImageUrls(sessionManager.getServerUrl())
+                    } else {
+                        listOf(item.getFullImageUrl(sessionManager.getServerUrl()))
+                    }
+                    val targetUrls = allUrls.take(imagesPerItem.coerceAtLeast(1))
+                    targetUrls.forEachIndexed { imgIdx, imageUrl ->
+                        val suffix = if (imageUrl.endsWith(".png", true)) ".png" else ".jpg"
+                        val filename = if (targetUrls.size > 1) "${item.sku_id}_real_${imgIdx + 1}$suffix" else "${item.sku_id}$suffix"
+                        val file = File(cacheFolder, filename)
+                        tasks.add(
+                            DownloadTask(
+                                item = item,
+                                imageUrl = imageUrl,
+                                targetFile = file,
+                                isRealImage = shareRealImages && item.real_images.isNotEmpty(),
+                                hasHikeRate = item.hike_rate != null && item.hike_rate > 0,
+                                hasRevisedRate = (item.hike_rate == null || item.hike_rate <= 0) && item.revised_rate != null && item.revised_rate > 0,
+                                hasStitcher = !item.stitcher_name.isNullOrBlank(),
+                                suffix = suffix
+                            )
+                        )
+                    }
+                }
+
+                var completedCount = 0
+                val totalTasks = tasks.size
+
+                // Process up to 4 items concurrently without blocking or quality compromise
+                val processedUris = tasks.chunked(4).flatMap { chunk ->
+                    chunk.map { task ->
+                        async(Dispatchers.IO) {
+                            val request = Request.Builder()
+                                .url(task.imageUrl)
+                                .header("Authorization", "Bearer ${sessionManager.getToken() ?: ""}")
+                                .build()
+
+                            val response = client.newCall(request).execute()
+                            if (!response.isSuccessful) {
+                                throw Exception("HTTP error code ${response.code} for ${task.item.sku_id}")
+                            }
+
+                            val body = response.body ?: throw Exception("Empty body for ${task.item.sku_id}")
+                            val bytes = body.bytes()
+
+                            if (task.isRealImage || task.hasRevisedRate || task.hasHikeRate || task.hasStitcher) {
+                                val decodeOptions = BitmapFactory.Options().apply {
+                                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                                    inScaled = false
+                                    inPremultiplied = true
+                                }
+                                val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+                                if (rawBitmap != null) {
+                                    var processedBitmap = rawBitmap
+
+                                    // 1. Always apply VS FASHION (DESUKA) watermark on RAW images
+                                    if (task.isRealImage) {
+                                        val wmBitmap = addWatermarkToBitmap(processedBitmap)
+                                        if (processedBitmap != rawBitmap && processedBitmap != wmBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = wmBitmap
+
+                                        // 2. Add SKU-ID and coded price in Left corner for RAW images
+                                        val activeRate = if (task.item.hike_rate != null && task.item.hike_rate > 0) task.item.hike_rate else if (task.item.revised_rate != null && task.item.revised_rate > 0) task.item.revised_rate else task.item.rate
+                                        val priceCode = encodePriceCode(activeRate)
+                                        val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, task.item.sku_id, priceCode)
+                                        if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = skuBadgeBitmap
+                                    }
+
+                                    // 3. Apply NEW OFFER PRICE top-right watermark badge ONLY if hike rate is NOT active
+                                    if (task.hasRevisedRate && !task.hasHikeRate) {
+                                        val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${task.item.revised_rate}")
+                                        if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = rateBadgeBitmap
+                                    }
+
+                                    // 3.5 Apply HIKE RATE bottom-left watermark badge to overwrite old marka if hike rate exists
+                                    if (task.hasHikeRate && task.item.hike_rate != null && task.item.hike_rate > 0) {
+                                        val hikeBadgeBitmap = addBottomLeftHikeRateBadge(processedBitmap, "₹${task.item.hike_rate}")
+                                        if (processedBitmap != rawBitmap && processedBitmap != hikeBadgeBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = hikeBadgeBitmap
+                                    }
+
+                                    // 4. Apply Stitcher Name in bottom center (small, discreet, not highlighted) if present
+                                    if (task.hasStitcher && !task.item.stitcher_name.isNullOrBlank()) {
+                                        val stitcherBitmap = addBottomCenterStitcherBadge(processedBitmap, task.item.stitcher_name)
+                                        if (processedBitmap != rawBitmap && processedBitmap != stitcherBitmap) {
+                                            processedBitmap.recycle()
+                                        }
+                                        processedBitmap = stitcherBitmap
+                                    }
+
+                                    // 5. Save at 96% high quality JPEG or 100% PNG (indistinguishable visual clarity with 3-5x faster file writing)
+                                    FileOutputStream(task.targetFile).use { out ->
+                                        if (task.suffix.equals(".png", ignoreCase = true)) {
+                                            processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                        } else {
+                                            processedBitmap.compress(Bitmap.CompressFormat.JPEG, 96, out)
+                                        }
+                                    }
+
+                                    if (processedBitmap != rawBitmap) {
+                                        processedBitmap.recycle()
+                                    }
+                                    rawBitmap.recycle()
+                                } else {
+                                    FileOutputStream(task.targetFile).use { it.write(bytes) }
+                                }
+                            } else {
+                                // Standard regular catalog images (already watermarked on server)
+                                FileOutputStream(task.targetFile).use { it.write(bytes) }
+                            }
+
+                            synchronized(this@SharingUtils) {
+                                completedCount++
+                            }
+                            val progressMsg = "Processing designs ($completedCount/$totalTasks)..."
+                            withContext(Dispatchers.Main) { onProgress(progressMsg) }
+
+                            FileProvider.getUriForFile(
+                                context,
+                                "com.example.catalogapp.fileprovider",
+                                task.targetFile
+                            )
+                        }
+                    }.awaitAll()
+                }
+
+                uris.addAll(processedUris)
+
+                if (uris.isEmpty()) {
+                    withContext(Dispatchers.Main) { onError("No images were successfully cached.") }
+                    return@withContext
+                }
+
+                val platformLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
+                withContext(Dispatchers.Main) { onProgress("Opening $platformLabel...") }
+
+                val shareText = if (shareDescription) buildShareDescription(selectedItems) else ""
+
+                // If user requested to share description and we have text, copy it to clipboard as well
+                if (shareDescription && shareText.isNotEmpty()) {
+                    try {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = ClipData.newPlainText("Article Details", shareText)
+                        clipboard?.setPrimaryClip(clip)
+                        if (selectedItems.size > 1) {
+                            withContext(Dispatchers.Main) {
+                                val appLabel = if (platform == SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
+                                Toast.makeText(context, "Descriptions copied to clipboard — paste in $appLabel", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                // Helper to create intent configured for sharing images
+                fun createShareIntent(targetPackage: String?): Intent {
+                    val intent = if (uris.size == 1) {
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_STREAM, uris[0])
+                            if (shareText.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_TITLE, shareText)
+                            }
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    } else {
+                        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                            type = "image/*"
+                            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                            if (shareText.isNotEmpty()) {
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_TITLE, shareText)
+                            }
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    }
+                    if (targetPackage != null) {
+                        intent.setPackage(targetPackage)
+                    }
+                    return intent
+                }
+
+                val pm = context.packageManager
+                val targetPackages = if (platform == SharePlatform.TELEGRAM) {
+                    listOf(
+                        "org.telegram.messenger",
+                        "org.thunderdog.challegram",
+                        "org.telegram.messenger.web",
+                        "org.telegram.messenger.beta"
+                    )
+                } else {
+                    listOf("com.whatsapp", "com.whatsapp.w4b")
+                }
+                val availableIntents = ArrayList<Intent>()
+
+                for (pkg in targetPackages) {
+                    try {
+                        pm.getPackageInfo(pkg, 0)
+                        availableIntents.add(createShareIntent(pkg))
+                    } catch (_: Exception) {
+                        // Package not installed on device
+                    }
+                }
+
+                val launchIntent = when {
+                    availableIntents.isEmpty() -> {
+                        // Fallback: None installed -> open system chooser
+                        Intent.createChooser(createShareIntent(null), "Share via $platformLabel").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    }
+                    availableIntents.size == 1 -> {
+                        // Only one variant installed -> launch directly
+                        availableIntents[0].apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    }
+                    else -> {
+                        // Multiple variants installed -> show chooser
+                        val firstIntent = availableIntents.removeAt(0)
+                        Intent.createChooser(firstIntent, "Select $platformLabel").apply {
+                            putExtra(Intent.EXTRA_INITIAL_INTENTS, availableIntents.toTypedArray())
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    }
+                }
+
+                context.startActivity(launchIntent)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) { 
+                    onError("Sharing failed: ${e.localizedMessage ?: "Unknown error"}") 
+                }
+            }
+        }
+    }
+}

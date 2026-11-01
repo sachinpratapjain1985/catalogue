@@ -1,1653 +1,1664 @@
-package com.example.catalogapp.ui
-
-import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.example.catalogapp.data.*
-import com.example.catalogapp.utils.SharingUtils
-import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SalesDashboard(
-    sessionManager: SessionManager,
-    onLogout: () -> Unit,
-    onSwitchMode: () -> Unit,
-    onBackToSelection: () -> Unit,
-    initialMatchedItem: SKUItemDto? = null,
-    onConsumedMatchedItem: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    
-    var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
-    var works by remember { mutableStateOf<List<WorkDto>>(emptyList()) }
-    var selectedCategory by remember { mutableStateOf<CategoryDto?>(null) }
-    var items by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
-    
-    // Selection state
-    val selectedItems = remember { mutableStateListOf<SKUItemDto>() }
-    
-    // Loading/Error states
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf("") }
-    
-    // Pagination states
-    var currentPage by remember { mutableStateOf(1) }
-    var hasMoreItems by remember { mutableStateOf(true) }
-    
-    // Sharing dialogue progress state
-    var isSharing by remember { mutableStateOf(false) }
-    var shareProgressMsg by remember { mutableStateOf("") }
-    var shareDescription by remember { mutableStateOf(false) }
-    // Visual AI Search state
-    var showVisualSearchDialog by remember { mutableStateOf(false) }
-    // Filter expandable state
-    var showFiltersExpanded by remember { mutableStateOf(false) }
-
-    val apiService = NetworkClient.getApiService(sessionManager)
-
-    val loadCategories = {
-        isLoading = true
-        errorMsg = ""
-        coroutineScope.launch {
-            try {
-                categories = apiService.getCategories()
-                try {
-                    works = apiService.getWorks()
-                } catch (e: Exception) {
-                    // Non-fatal if works fail
-                }
-            } catch (e: retrofit2.HttpException) {
-                val errorBody = e.response()?.errorBody()?.string()
-                if (errorBody != null && errorBody.contains("pending")) {
-                    errorMsg = "Device pending approval. Please approve this device UUID in the Admin Web Portal.\nUUID: ${sessionManager.getDeviceUuid().take(12)}..."
-                } else if (errorBody != null && errorBody.contains("disabled")) {
-                    errorMsg = "Your account has been disabled."
-                } else if (errorBody != null && errorBody.contains("restricted")) {
-                    errorMsg = "Access restricted outside working hours."
-                } else {
-                    errorMsg = "Server returned error: ${e.message()}"
-                }
-            } catch (e: Exception) {
-                errorMsg = "Connection error. Pull to refresh."
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        loadCategories()
-    }
-
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Folders, 1 = Offers
-
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
-    var selectedWork by remember { mutableStateOf<String?>(null) }
-
-    // Global SKU Search across all folders
-    var globalSkuQuery by remember { mutableStateOf("") }
-    var globalSearchItems by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
-    var isSearchingGlobal by remember { mutableStateOf(false) }
-
-    val performGlobalSearch: (String) -> Unit = { query ->
-        val trimmed = query.trim()
-        if (trimmed.isEmpty()) {
-            globalSearchItems = emptyList()
-            isSearchingGlobal = false
-        } else {
-            isSearchingGlobal = true
-            coroutineScope.launch {
-                try {
-                    globalSearchItems = apiService.searchAllItems(search = trimmed, status = "active")
-                } catch (e: Exception) {
-                    globalSearchItems = emptyList()
-                } finally {
-                    isSearchingGlobal = false
-                }
-            }
-        }
-    }
-
-    val loadItems = { category: CategoryDto, page: Int ->
-        if (page == 1) {
-            isLoading = true
-            items = emptyList()
-            selectedItems.clear()
-            currentPage = 1
-            hasMoreItems = true
-        }
-        coroutineScope.launch {
-            try {
-                val fetched = apiService.getCategoryItems(
-                    categoryId = category.id,
-                    page = page,
-                    limit = 30,
-                    search = searchQuery.ifEmpty { null },
-                    work = selectedWork,
-                    minRate = selectedRateRange?.first,
-                    maxRate = selectedRateRange?.second
-                )
-                if (fetched.size < 30) {
-                    hasMoreItems = false
-                }
-                if (page == 1) {
-                    items = fetched
-                } else {
-                    items = items + fetched
-                }
-                currentPage = page
-            } catch (e: Exception) {
-                errorMsg = "Failed to fetch designs."
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    val openMatchedItemInCatalog: (SKUItemDto) -> Unit = { matchedItem ->
-        val targetCat = categories.find { it.id == matchedItem.category_id }
-            ?: CategoryDto(
-                id = matchedItem.category_id,
-                name = matchedItem.category_name ?: "Matched Folder",
-                sku_count = 1,
-                active_count = 1
-            )
-        selectedTab = 0
-        selectedCategory = targetCat
-        searchQuery = matchedItem.sku_id
-        selectedRateRange = null
-        selectedWork = null
-        isLoading = true
-        items = listOf(matchedItem)
-        selectedItems.clear()
-        selectedItems.add(matchedItem)
-        currentPage = 1
-        hasMoreItems = false
-        coroutineScope.launch {
-            try {
-                val fetched = apiService.getCategoryItems(
-                    categoryId = targetCat.id,
-                    page = 1,
-                    limit = 30,
-                    search = matchedItem.sku_id
-                )
-                if (fetched.isNotEmpty()) {
-                    items = fetched
-                    selectedItems.clear()
-                    selectedItems.add(fetched.first())
-                }
-            } catch (e: Exception) {
-                // Keep matchedItem displayed even if folder fetch fails
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(initialMatchedItem) {
-        if (initialMatchedItem != null) {
-            openMatchedItemInCatalog(initialMatchedItem)
-            onConsumedMatchedItem()
-        }
-    }
-
-    val loadRevisedItems = { page: Int ->
-        if (page == 1) {
-            isLoading = true
-            items = emptyList()
-            selectedItems.clear()
-            currentPage = 1
-            hasMoreItems = true
-        }
-        coroutineScope.launch {
-            try {
-                val fetched = apiService.getRevisedItems(
-                    page = page,
-                    limit = 30,
-                    search = searchQuery.ifEmpty { null },
-                    work = selectedWork,
-                    minRate = selectedRateRange?.first,
-                    maxRate = selectedRateRange?.second
-                )
-                if (fetched.size < 30) {
-                    hasMoreItems = false
-                }
-                if (page == 1) {
-                    items = fetched
-                } else {
-                    items = items + fetched
-                }
-                currentPage = page
-            } catch (e: Exception) {
-                errorMsg = "Failed to fetch revised offer designs."
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    var showShareChoiceModal by remember { mutableStateOf(false) }
-    var imagesPerItem by remember { mutableIntStateOf(1) }
-    var targetSharePlatform by remember { mutableStateOf(SharingUtils.SharePlatform.WHATSAPP) }
-
-    fun executeShare(shareReal: Boolean, platform: SharingUtils.SharePlatform = targetSharePlatform) {
-        val userRole = sessionManager.getUserRole()
-        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-        val maxLimit = if (canSelectAll) 100 else 20
-        val itemsToShare = if (selectedItems.size > maxLimit) selectedItems.take(maxLimit) else selectedItems.toList()
-
-        isSharing = true
-        coroutineScope.launch {
-            SharingUtils.downloadAndShareImages(
-                context = context,
-                selectedItems = itemsToShare,
-                sessionManager = sessionManager,
-                shareDescription = shareDescription,
-                shareRealImages = shareReal,
-                imagesPerItem = imagesPerItem,
-                platform = platform,
-                onProgress = { shareProgressMsg = it },
-                onError = {
-                    isSharing = false
-                    Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                }
-            )
-            isSharing = false
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        text = when {
-                            selectedCategory != null -> selectedCategory!!.name
-                            selectedTab == 1 -> "🔥 Special Offers"
-                            else -> "Sales Catalogue"
-                        },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                },
-                navigationIcon = {
-                    if (selectedCategory != null) {
-                        IconButton(onClick = { 
-                            selectedCategory = null 
-                            items = emptyList()
-                            selectedItems.clear()
-                            searchQuery = ""
-                            globalSkuQuery = ""
-                            globalSearchItems = emptyList()
-                            selectedRateRange = null
-                            selectedWork = null
-                        }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                },
-                actions = {
-                    val userRole = sessionManager.getUserRole()
-                    if (userRole == "both" || userRole == "manager") {
-                        IconButton(onClick = onBackToSelection) {
-                            Icon(Icons.Default.Home, contentDescription = "Return to Dashboard")
-                        }
-                        IconButton(onClick = onSwitchMode) {
-                            Icon(Icons.Default.Build, contentDescription = "Switch to Stockist Mode")
-                        }
-                    }
-                    IconButton(onClick = { 
-                        if (selectedCategory != null) {
-                            loadItems(selectedCategory!!, 1)
-                        } else if (selectedTab == 1) {
-                            loadRevisedItems(1)
-                        } else {
-                            if (globalSkuQuery.isNotEmpty()) {
-                                performGlobalSearch(globalSkuQuery)
-                            } else {
-                                loadCategories()
-                            }
-                        }
-                    }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        },
-        bottomBar = {
-            if (selectedItems.isNotEmpty()) {
-                val userRole = sessionManager.getUserRole()
-                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-                val maxLimit = if (canSelectAll) 100 else 20
-
-                Surface(
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        // Top row of bottomBar: Item count & Description checkbox
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "${selectedItems.size}/$maxLimit selected",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { shareDescription = !shareDescription }
-                                    .padding(vertical = 2.dp)
-                            ) {
-                                Checkbox(
-                                    checked = shareDescription,
-                                    onCheckedChange = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Send Description & Fabric",
-                                    fontSize = 11.sp,
-                                    fontWeight = if (shareDescription) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (shareDescription) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // Middle row: WhatsApp and Telegram Share Buttons
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // WhatsApp Share Button (WhatsApp Brand Green)
-                            Button(
-                                onClick = {
-                                    targetSharePlatform = SharingUtils.SharePlatform.WHATSAPP
-                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
-                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
-                                        showShareChoiceModal = true
-                                    } else {
-                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.WHATSAPP)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF25D366),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("WhatsApp", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                            }
-
-                            // Telegram Share Button (Telegram Brand Blue)
-                            Button(
-                                onClick = {
-                                    targetSharePlatform = SharingUtils.SharePlatform.TELEGRAM
-                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
-                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
-                                        showShareChoiceModal = true
-                                    } else {
-                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.TELEGRAM)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF229ED9),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                            }
-                        }
-
-                        // Bottom row: Photos per SKU selector (1 default, 2, 3, All)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Photos/design:",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
-                                val isSelected = imagesPerItem == count
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { imagesPerItem = count },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    modifier = Modifier.height(26.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    ) { paddingValues ->
-        // Share Type Choice Dialog Modal
-        if (showShareChoiceModal) {
-            val platformLabel = if (targetSharePlatform == SharingUtils.SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
-            AlertDialog(
-                onDismissRequest = { showShareChoiceModal = false },
-                title = { Text("Share to $platformLabel") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Choose which type of photos to share to $platformLabel:")
-
-                        // Images per design selector in modal as well
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Photos/design:",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
-                                val isSelected = imagesPerItem == count
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { imagesPerItem = count },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    modifier = Modifier.height(30.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(
-                            onClick = {
-                                showShareChoiceModal = false
-                                executeShare(shareReal = false, platform = targetSharePlatform)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Share Catalog Images (Standard)")
-                        }
-                        Button(
-                            onClick = {
-                                showShareChoiceModal = false
-                                executeShare(shareReal = true, platform = targetSharePlatform)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Share RAW Real Photos (Watermarked)")
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { showShareChoiceModal = false }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (isLoading && items.isEmpty() && categories.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else if (errorMsg.isNotEmpty()) {
-                Text(
-                    text = errorMsg,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp)
-                )
-            } else if (selectedCategory == null && selectedTab == 0) {
-                // Main Dashboard View with TabRow + Categories List Selection
-                Column(modifier = Modifier.fillMaxSize()) {
-                    TabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = {
-                                selectedTab = 0
-                                searchQuery = ""
-                                selectedRateRange = null
-                                selectedWork = null
-                                loadCategories()
-                            },
-                            text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = {
-                                selectedTab = 1
-                                searchQuery = ""
-                                selectedRateRange = null
-                                selectedWork = null
-                                loadRevisedItems(1)
-                            },
-                            text = { 
-                                Text(
-                                    text = "🔥 Offers (Revised)", 
-                                    fontWeight = FontWeight.Bold, 
-                                    fontSize = 13.sp,
-                                    color = if (selectedTab == 1) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant
-                                ) 
-                            }
-                        )
-                    }
-
-                    // Global SKU Search across all folders
-                    OutlinedTextField(
-                        value = globalSkuQuery,
-                        onValueChange = { 
-                            globalSkuQuery = it 
-                            performGlobalSearch(it)
-                        },
-                        placeholder = { Text("Search SKU across all folders...", fontSize = 13.sp) },
-                        leadingIcon = { 
-                            Icon(
-                                Icons.Default.Search, 
-                                contentDescription = "Search SKU", 
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            ) 
-                        },
-                        trailingIcon = {
-                            if (globalSkuQuery.isNotEmpty()) {
-                                IconButton(onClick = { 
-                                    globalSkuQuery = "" 
-                                    globalSearchItems = emptyList()
-                                }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-
-                    if (globalSkuQuery.isNotEmpty()) {
-                        // Global SKU Search Results View
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "🔍 Results (${globalSearchItems.size} designs found)",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            val userRole = sessionManager.getUserRole()
-                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-                            val maxLimit = if (canSelectAll) 100 else 20
-                            if (canSelectAll && globalSearchItems.isNotEmpty()) {
-                                val allSelected = globalSearchItems.isNotEmpty() && globalSearchItems.all { item -> selectedItems.any { it.id == item.id } }
-                                Surface(
-                                    modifier = Modifier.clickable {
-                                        if (allSelected) {
-                                            val currentIds = globalSearchItems.map { it.id }.toSet()
-                                            selectedItems.removeAll { currentIds.contains(it.id) }
-                                        } else {
-                                            var hitLimit = false
-                                            for (item in globalSearchItems) {
-                                                if (!selectedItems.any { it.id == item.id }) {
-                                                    if (selectedItems.size >= maxLimit) {
-                                                        hitLimit = true
-                                                        break
-                                                    }
-                                                    selectedItems.add(item)
-                                                }
-                                            }
-                                            if (hitLimit) {
-                                                Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Text(
-                                        text = if (allSelected) "Deselect All" else "Select All (${minOf(globalSearchItems.size, maxLimit)})",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        if (isSearchingGlobal) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator()
-                            }
-                        } else if (globalSearchItems.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "No designs found matching \"$globalSkuQuery\" across any folders.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentPadding = PaddingValues(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(globalSearchItems, key = { it.id }) { item ->
-                                    val isSelected = selectedItems.any { it.id == item.id }
-                                    SalesItemCard(
-                                        item = item,
-                                        isSelected = isSelected,
-                                        sessionManager = sessionManager,
-                                        apiService = apiService,
-                                        onSelectToggle = {
-                                            if (isSelected) {
-                                                selectedItems.removeAll { it.id == item.id }
-                                            } else {
-                                                val userRole = sessionManager.getUserRole()
-                                                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-                                                val maxLimit = if (canSelectAll) 100 else 20
-                                                if (selectedItems.size >= maxLimit) {
-                                                    Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
-                                                } else {
-                                                    selectedItems.add(item)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    } else if (categories.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "No folder categories available.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(categories) { category ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { 
-                                            selectedCategory = category
-                                            loadItems(category, 1)
-                                        },
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(20.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = category.name,
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "${category.active_count} active designs",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Icon(
-                                            Icons.Default.Share, 
-                                            contentDescription = null, 
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            item {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "Powered by VS FASHION",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                    Text(
-                                        text = "Designed by VS FASHION",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-                        }
-                    }
-                }
-            } else {
-                // SKU Showcase Grid Selection (Category View OR Unified Offers View)
-                val isOffersTab = selectedCategory == null && selectedTab == 1
-
-                Column(modifier = Modifier.fillMaxSize()) {
-                    if (isOffersTab) {
-                        TabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = {
-                                    selectedTab = 0
-                                    searchQuery = ""
-                                    selectedRateRange = null
-                                    selectedWork = null
-                                    loadCategories()
-                                },
-                                text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = {
-                                    selectedTab = 1
-                                    searchQuery = ""
-                                    selectedRateRange = null
-                                    selectedWork = null
-                                    loadRevisedItems(1)
-                                },
-                                text = { 
-                                    Text(
-                                        text = "🔥 Offers (Revised)", 
-                                        fontWeight = FontWeight.Bold, 
-                                        fontSize = 13.sp,
-                                        color = Color(0xFFD97706)
-                                    ) 
-                                }
-                            )
-                        }
-                    }
-
-                    // Search Bar
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { 
-                            searchQuery = it 
-                            if (selectedCategory != null) {
-                                loadItems(selectedCategory!!, 1)
-                            } else {
-                                loadRevisedItems(1)
-                            }
-                        },
-                        placeholder = { Text(if (isOffersTab) "Search offers across all folders..." else "Search SKU ID...") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { 
-                                    searchQuery = "" 
-                                    if (selectedCategory != null) {
-                                        loadItems(selectedCategory!!, 1)
-                                    } else {
-                                        loadRevisedItems(1)
-                                    }
-                                }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                }
-                            } else {
-                                IconButton(onClick = { showVisualSearchDialog = true }) {
-                                    Icon(
-                                        Icons.Default.CameraAlt,
-                                        contentDescription = "Search by Photo",
-                                        tint = Color(0xFFF59E0B)
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    // Expandable Filter Toggle Bar (Price & Work)
-                    val activeFilterCount = (if (selectedRateRange != null) 1 else 0) + (if (selectedWork != null) 1 else 0)
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Surface(
-                            modifier = Modifier.clickable { showFiltersExpanded = !showFiltersExpanded },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (activeFilterCount > 0 || showFiltersExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (showFiltersExpanded) "Hide Filters (Price & Work)" else "Filter by Price & Work",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (activeFilterCount > 0) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "$activeFilterCount",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    if (showFiltersExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (activeFilterCount > 0) {
-                            TextButton(
-                                onClick = {
-                                    selectedRateRange = null
-                                    selectedWork = null
-                                    if (selectedCategory != null) {
-                                        loadItems(selectedCategory!!, 1)
-                                    } else {
-                                        loadRevisedItems(1)
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text("Clear Filters", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-
-                    if (showFiltersExpanded) {
-                        // Price Filter Chips
-                        val rateOptions = listOf(
-                            "All Prices" to null,
-                            "Below ₹1k" to (null to 1000),
-                            "Below ₹1.5k" to (null to 1500),
-                            "Below ₹2k" to (null to 2000),
-                            "Below ₹2.5k" to (null to 2500),
-                            "₹1k - ₹1.5k" to (1000 to 1500),
-                            "₹1k - ₹2k" to (1000 to 2000),
-                            "₹1.5k - ₹2k" to (1500 to 2000),
-                            "₹2k - ₹3k" to (2000 to 3000),
-                            "Above ₹2k" to (2000 to null),
-                            "Above ₹2.5k" to (2500 to null),
-                            "Above ₹3k" to (3000 to null)
-                        )
-
-                        LazyRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(rateOptions) { (label, range) ->
-                                val isSelected = selectedRateRange == range
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = {
-                                        selectedRateRange = if (isSelected) null else range
-                                        if (selectedCategory != null) {
-                                            loadItems(selectedCategory!!, 1)
-                                        } else {
-                                            loadRevisedItems(1)
-                                        }
-                                    },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 12.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        // Work Filter Chips
-                        if (works.isNotEmpty()) {
-                            LazyRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                item {
-                                    FilterChip(
-                                        selected = selectedWork == null,
-                                        onClick = {
-                                            if (selectedWork != null) {
-                                                selectedWork = null
-                                                if (selectedCategory != null) {
-                                                    loadItems(selectedCategory!!, 1)
-                                                } else {
-                                                    loadRevisedItems(1)
-                                                }
-                                            }
-                                        },
-                                        label = {
-                                            Text(
-                                                text = "All Works",
-                                                fontSize = 12.sp,
-                                                fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        }
-                                    )
-                                }
-                                items(works) { w ->
-                                    val isSelected = selectedWork == w.name
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = {
-                                            selectedWork = if (isSelected) null else w.name
-                                            if (selectedCategory != null) {
-                                                loadItems(selectedCategory!!, 1)
-                                            } else {
-                                                loadRevisedItems(1)
-                                            }
-                                        },
-                                        label = {
-                                            Text(
-                                                text = w.name,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Active count header + Select All option
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (isOffersTab) "🔥 All Folders Offer Designs (${items.size} loaded)" else "Total Active: ${selectedCategory?.active_count ?: 0} articles",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOffersTab) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
-                        )
-                        val userRole = sessionManager.getUserRole()
-                        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-                        val maxLimit = if (canSelectAll) 100 else 20
-                        if (canSelectAll && items.isNotEmpty()) {
-                            val allSelected = items.isNotEmpty() && items.all { item -> selectedItems.any { it.id == item.id } }
-                            Surface(
-                                modifier = Modifier.clickable {
-                                    if (allSelected) {
-                                        val currentIds = items.map { it.id }.toSet()
-                                        selectedItems.removeAll { currentIds.contains(it.id) }
-                                    } else {
-                                        var hitLimit = false
-                                        for (item in items) {
-                                            if (!selectedItems.any { it.id == item.id }) {
-                                                if (selectedItems.size >= maxLimit) {
-                                                    hitLimit = true
-                                                    break
-                                                }
-                                                selectedItems.add(item)
-                                            }
-                                        }
-                                        if (hitLimit) {
-                                            Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    text = if (allSelected) "Deselect All" else "Select All (${minOf(items.size, maxLimit)})",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    if (items.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isLoading) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "Loading designs, please wait...",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = if (searchQuery.isNotEmpty()) "No designs match \"$searchQuery\"" else if (isOffersTab) "No revised price / offer designs currently available." else "No available items found in this section.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(16.dp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentPadding = PaddingValues(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(items, key = { it.id }) { item ->
-                                val isSelected = selectedItems.any { it.id == item.id }
-                                SalesItemCard(
-                                    item = item,
-                                    isSelected = isSelected,
-                                    sessionManager = sessionManager,
-                                    apiService = apiService,
-                                    onSelectToggle = {
-                                        if (isSelected) {
-                                            selectedItems.removeAll { it.id == item.id }
-                                        } else {
-                                            val userRole = sessionManager.getUserRole()
-                                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
-                                            val maxLimit = if (canSelectAll) 100 else 20
-                                            if (selectedItems.size >= maxLimit) {
-                                                Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                selectedItems.add(item)
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-
-                            if (hasMoreItems && items.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Button(
-                                            onClick = { 
-                                                if (selectedCategory != null) {
-                                                    loadItems(selectedCategory!!, currentPage + 1) 
-                                                } else {
-                                                    loadRevisedItems(currentPage + 1)
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                            ),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text("Load More Articles", fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Sharing Progress Modal Dialog
-            if (isSharing) {
-                AlertDialog(
-                    onDismissRequest = {},
-                    confirmButton = {},
-                    title = { Text("Preparing Share Bundle") },
-                    text = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth().padding(8.dp)
-                        ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = shareProgressMsg,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                )
-            }
-
-            // Visual AI Search Dialog
-            if (showVisualSearchDialog) {
-                VisualSearchDialog(
-                    sessionManager = sessionManager,
-                    onDismiss = { showVisualSearchDialog = false },
-                    onSelectSKU = { matchedItem ->
-                        showVisualSearchDialog = false
-                        openMatchedItemInCatalog(matchedItem)
-                        Toast.makeText(context, "Opened ${matchedItem.sku_id} in Catalog", Toast.LENGTH_SHORT).show()
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SalesItemCard(
-    item: SKUItemDto,
-    isSelected: Boolean,
-    sessionManager: SessionManager,
-    apiService: CatalogApiService,
-    onSelectToggle: () -> Unit
-) {
-    var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
-    var showZoomDialog by remember { mutableStateOf(false) }
-    var showEditRateDialog by remember { mutableStateOf(false) }
-    var currentRate by remember { mutableStateOf(item.rate) }
-    var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
-    var currentHikeRate by remember { mutableStateOf(item.hike_rate) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelectToggle() }
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // High-Performance Thumbnail Image Box with overlays
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(0.75f) // Beautiful Portrait 3:4 aspect ratio
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = item.sku_id,
-                    onError = {
-                        val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
-                        if (imageUrl != fallback) {
-                            imageUrl = fallback
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-
-                // Top-Left SKU Badge
-                Box(
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                        .align(Alignment.TopStart)
-                ) {
-                    Text(
-                        text = item.sku_id,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Top-Right Stock Sets Badge
-                Box(
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                        .align(Alignment.TopEnd)
-                ) {
-                    Text(
-                        text = "${item.sets_count} sets",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Bottom-Left Zoom Icon Trigger Button
-                IconButton(
-                    onClick = { showZoomDialog = true },
-                    modifier = Modifier
-                        .padding(6.dp)
-                        .align(Alignment.BottomStart)
-                        .size(26.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Zoom Design",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                // Overlay Selection indicator checkmark icon
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.3f))
-                    )
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .align(Alignment.BottomEnd)
-                            .size(24.dp)
-                            .background(Color.White, shape = RoundedCornerShape(percent = 50))
-                    )
-                }
-            }
-
-            // Compact bottom information container
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable(enabled = sessionManager.canEditRates()) {
-                        showEditRateDialog = true
-                    }
-                ) {
-                    if (currentHikeRate != null && currentHikeRate!! > 0) {
-                        Column {
-                            Text(
-                                text = "▲ HIKE",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFEF4444)
-                            )
-                            Text(
-                                text = "₹$currentHikeRate",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFEF4444)
-                            )
-                        }
-                    } else if (currentRevisedRate != null && currentRevisedRate!! > 0) {
-                        Column {
-                            Text(
-                                text = "🔥 OFFER",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFD97706)
-                            )
-                            Text(
-                                text = "₹$currentRevisedRate",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFD97706)
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = "₹$currentRate",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    if (sessionManager.canEditRates()) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Price",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .size(12.dp)
-                        )
-                    }
-                }
-
-                val detailText = when {
-                    !item.category_name.isNullOrBlank() && !item.work.isNullOrBlank() -> "${item.category_name} • ${item.work}"
-                    !item.category_name.isNullOrBlank() -> item.category_name
-                    !item.work.isNullOrBlank() && !item.material.isNullOrBlank() -> "${item.work} | ${item.material}"
-                    !item.work.isNullOrBlank() -> item.work
-                    !item.material.isNullOrBlank() -> item.material
-                    else -> SharingUtils.sanitizeDescription(item.description)
-                }
-                if (detailText.isNotEmpty()) {
-                    Text(
-                        text = detailText,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 6.dp)
-                    )
-                }
-            }
-        }
-    }
-
-    if (showZoomDialog) {
-        ImageZoomDialog(
-            item = item,
-            serverUrl = sessionManager.getServerUrl(),
-            sessionManager = sessionManager,
-            onDismiss = { showZoomDialog = false }
-        )
-    }
-
-    if (showEditRateDialog) {
-        var editBaseRate by remember { mutableStateOf(currentRate.toString()) }
-        var editRevisedRate by remember { mutableStateOf(currentRevisedRate?.toString() ?: "") }
-        var editHikeRate by remember { mutableStateOf(currentHikeRate?.toString() ?: "") }
-        var isSaving by remember { mutableStateOf(false) }
-        var saveError by remember { mutableStateOf<String?>(null) }
-        val scope = rememberCoroutineScope()
-
-        AlertDialog(
-            onDismissRequest = { if (!isSaving) showEditRateDialog = false },
-            title = {
-                Text(
-                    text = "Edit Pricing: ${item.sku_id}",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = editBaseRate,
-                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editBaseRate = it },
-                        label = { Text("Base Rate (₹)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = editRevisedRate,
-                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editRevisedRate = it },
-                        label = { Text("🔥 Offer / Revised Rate (₹)") },
-                        placeholder = { Text("Leave blank to remove offer") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = editHikeRate,
-                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editHikeRate = it },
-                        label = { Text("▲ Hike Price (₹)") },
-                        placeholder = { Text("Leave blank to remove hike") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (saveError != null) {
-                        Text(
-                            text = saveError!!,
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        isSaving = true
-                        saveError = null
-                        scope.launch {
-                            try {
-                                val baseVal = editBaseRate.toIntOrNull() ?: currentRate
-                                val revVal = if (editRevisedRate.isBlank()) null else editRevisedRate.toIntOrNull()
-                                val hikeVal = if (editHikeRate.isBlank()) null else editHikeRate.toIntOrNull()
-                                val response = apiService.updateStock(
-                                    item.id,
-                                    StockUpdateRequest(
-                                        setsCount = null,
-                                        isAvailable = null,
-                                        rate = baseVal,
-                                        revisedRate = revVal,
-                                        hikeRate = hikeVal
-                                    )
-                                )
-                                currentRate = response.rate ?: baseVal
-                                currentRevisedRate = response.revised_rate
-                                currentHikeRate = response.hike_rate
-                                showEditRateDialog = false
-                            } catch (e: Exception) {
-                                saveError = e.message ?: "Failed to update pricing"
-                            } finally {
-                                isSaving = false
-                            }
-                        }
-                    },
-                    enabled = !isSaving
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                    } else {
-                        Text("Save Rates")
-                    }
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showEditRateDialog = false },
-                    enabled = !isSaving
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
+package com.example.catalogapp.ui
+
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.catalogapp.data.*
+import com.example.catalogapp.utils.SharingUtils
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SalesDashboard(
+    sessionManager: SessionManager,
+    onLogout: () -> Unit,
+    onSwitchMode: () -> Unit,
+    onBackToSelection: () -> Unit,
+    initialMatchedItem: SKUItemDto? = null,
+    onConsumedMatchedItem: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    
+    var categories by remember { mutableStateOf<List<CategoryDto>>(emptyList()) }
+    var works by remember { mutableStateOf<List<WorkDto>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf<CategoryDto?>(null) }
+    var items by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    
+    // Selection state
+    val selectedItems = remember { mutableStateListOf<SKUItemDto>() }
+    
+    // Loading/Error states
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+    
+    // Pagination states
+    var currentPage by remember { mutableStateOf(1) }
+    var hasMoreItems by remember { mutableStateOf(true) }
+    
+    // Sharing dialogue progress state
+    var isSharing by remember { mutableStateOf(false) }
+    var shareProgressMsg by remember { mutableStateOf("") }
+    var shareDescription by remember { mutableStateOf(false) }
+    // Visual AI Search state
+    var showVisualSearchDialog by remember { mutableStateOf(false) }
+    // Filter expandable state
+    var showFiltersExpanded by remember { mutableStateOf(false) }
+
+    val apiService = NetworkClient.getApiService(sessionManager)
+
+    val loadCategories = {
+        isLoading = true
+        errorMsg = ""
+        coroutineScope.launch {
+            try {
+                categories = apiService.getCategories()
+                try {
+                    works = apiService.getWorks()
+                } catch (e: Exception) {
+                    // Non-fatal if works fail
+                }
+            } catch (e: retrofit2.HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                if (errorBody != null && errorBody.contains("pending")) {
+                    errorMsg = "Device pending approval. Please approve this device UUID in the Admin Web Portal.\nUUID: ${sessionManager.getDeviceUuid().take(12)}..."
+                } else if (errorBody != null && errorBody.contains("disabled")) {
+                    errorMsg = "Your account has been disabled."
+                } else if (errorBody != null && errorBody.contains("restricted")) {
+                    errorMsg = "Access restricted outside working hours."
+                } else {
+                    errorMsg = "Server returned error: ${e.message()}"
+                }
+            } catch (e: Exception) {
+                errorMsg = "Connection error. Pull to refresh."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadCategories()
+    }
+
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Folders, 1 = Offers
+
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedRateRange by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
+    var selectedWork by remember { mutableStateOf<String?>(null) }
+
+    // Global SKU Search across all folders
+    var globalSkuQuery by remember { mutableStateOf("") }
+    var globalSearchItems by remember { mutableStateOf<List<SKUItemDto>>(emptyList()) }
+    var isSearchingGlobal by remember { mutableStateOf(false) }
+
+    val performGlobalSearch: (String) -> Unit = { query ->
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            globalSearchItems = emptyList()
+            isSearchingGlobal = false
+        } else {
+            isSearchingGlobal = true
+            coroutineScope.launch {
+                try {
+                    globalSearchItems = apiService.searchAllItems(search = trimmed, status = "active")
+                } catch (e: Exception) {
+                    globalSearchItems = emptyList()
+                } finally {
+                    isSearchingGlobal = false
+                }
+            }
+        }
+    }
+
+    val loadItems = { category: CategoryDto, page: Int ->
+        if (page == 1) {
+            isLoading = true
+            items = emptyList()
+            selectedItems.clear()
+            currentPage = 1
+            hasMoreItems = true
+        }
+        coroutineScope.launch {
+            try {
+                val fetched = apiService.getCategoryItems(
+                    categoryId = category.id,
+                    page = page,
+                    limit = 30,
+                    search = searchQuery.ifEmpty { null },
+                    work = selectedWork,
+                    minRate = selectedRateRange?.first,
+                    maxRate = selectedRateRange?.second
+                )
+                if (fetched.size < 30) {
+                    hasMoreItems = false
+                }
+                if (page == 1) {
+                    items = fetched
+                } else {
+                    items = items + fetched
+                }
+                currentPage = page
+            } catch (e: Exception) {
+                errorMsg = "Failed to fetch designs."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    val openMatchedItemInCatalog: (SKUItemDto) -> Unit = { matchedItem ->
+        val targetCat = categories.find { it.id == matchedItem.category_id }
+            ?: CategoryDto(
+                id = matchedItem.category_id,
+                name = matchedItem.category_name ?: "Matched Folder",
+                sku_count = 1,
+                active_count = 1
+            )
+        selectedTab = 0
+        selectedCategory = targetCat
+        searchQuery = matchedItem.sku_id
+        selectedRateRange = null
+        selectedWork = null
+        isLoading = true
+        items = listOf(matchedItem)
+        selectedItems.clear()
+        selectedItems.add(matchedItem)
+        currentPage = 1
+        hasMoreItems = false
+        coroutineScope.launch {
+            try {
+                val fetched = apiService.getCategoryItems(
+                    categoryId = targetCat.id,
+                    page = 1,
+                    limit = 30,
+                    search = matchedItem.sku_id
+                )
+                if (fetched.isNotEmpty()) {
+                    items = fetched
+                    selectedItems.clear()
+                    selectedItems.add(fetched.first())
+                }
+            } catch (e: Exception) {
+                // Keep matchedItem displayed even if folder fetch fails
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(initialMatchedItem) {
+        if (initialMatchedItem != null) {
+            openMatchedItemInCatalog(initialMatchedItem)
+            onConsumedMatchedItem()
+        }
+    }
+
+    val loadRevisedItems = { page: Int ->
+        if (page == 1) {
+            isLoading = true
+            items = emptyList()
+            selectedItems.clear()
+            currentPage = 1
+            hasMoreItems = true
+        }
+        coroutineScope.launch {
+            try {
+                val fetched = apiService.getRevisedItems(
+                    page = page,
+                    limit = 30,
+                    search = searchQuery.ifEmpty { null },
+                    work = selectedWork,
+                    minRate = selectedRateRange?.first,
+                    maxRate = selectedRateRange?.second
+                )
+                if (fetched.size < 30) {
+                    hasMoreItems = false
+                }
+                if (page == 1) {
+                    items = fetched
+                } else {
+                    items = items + fetched
+                }
+                currentPage = page
+            } catch (e: Exception) {
+                errorMsg = "Failed to fetch revised offer designs."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    var showShareChoiceModal by remember { mutableStateOf(false) }
+    var imagesPerItem by remember { mutableIntStateOf(1) }
+    var targetSharePlatform by remember { mutableStateOf(SharingUtils.SharePlatform.WHATSAPP) }
+
+    fun executeShare(shareReal: Boolean, platform: SharingUtils.SharePlatform = targetSharePlatform) {
+        val userRole = sessionManager.getUserRole()
+        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+        val maxLimit = if (canSelectAll) 100 else 20
+        val itemsToShare = if (selectedItems.size > maxLimit) selectedItems.take(maxLimit) else selectedItems.toList()
+
+        isSharing = true
+        coroutineScope.launch {
+            SharingUtils.downloadAndShareImages(
+                context = context,
+                selectedItems = itemsToShare,
+                sessionManager = sessionManager,
+                shareDescription = shareDescription,
+                shareRealImages = shareReal,
+                imagesPerItem = imagesPerItem,
+                platform = platform,
+                onProgress = { shareProgressMsg = it },
+                onError = {
+                    isSharing = false
+                    Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                }
+            )
+            isSharing = false
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = when {
+                            selectedCategory != null -> selectedCategory!!.name
+                            selectedTab == 1 -> "🔥 Special Offers"
+                            else -> "Sales Catalogue"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                },
+                navigationIcon = {
+                    if (selectedCategory != null) {
+                        IconButton(onClick = { 
+                            selectedCategory = null 
+                            items = emptyList()
+                            selectedItems.clear()
+                            searchQuery = ""
+                            globalSkuQuery = ""
+                            globalSearchItems = emptyList()
+                            selectedRateRange = null
+                            selectedWork = null
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                actions = {
+                    val userRole = sessionManager.getUserRole()
+                    if (userRole == "both" || userRole == "manager") {
+                        IconButton(onClick = onBackToSelection) {
+                            Icon(Icons.Default.Home, contentDescription = "Return to Dashboard")
+                        }
+                        IconButton(onClick = onSwitchMode) {
+                            Icon(Icons.Default.Build, contentDescription = "Switch to Stockist Mode")
+                        }
+                    }
+                    IconButton(onClick = { 
+                        if (selectedCategory != null) {
+                            loadItems(selectedCategory!!, 1)
+                        } else if (selectedTab == 1) {
+                            loadRevisedItems(1)
+                        } else {
+                            if (globalSkuQuery.isNotEmpty()) {
+                                performGlobalSearch(globalSkuQuery)
+                            } else {
+                                loadCategories()
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        },
+        bottomBar = {
+            if (selectedItems.isNotEmpty()) {
+                val userRole = sessionManager.getUserRole()
+                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                val maxLimit = if (canSelectAll) 100 else 20
+
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        // Top row of bottomBar: Item count & Description checkbox
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${selectedItems.size}/$maxLimit selected",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { shareDescription = !shareDescription }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Checkbox(
+                                    checked = shareDescription,
+                                    onCheckedChange = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Send Description & Fabric",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (shareDescription) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (shareDescription) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Middle row: WhatsApp and Telegram Share Buttons
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // WhatsApp Share Button (WhatsApp Brand Green)
+                            Button(
+                                onClick = {
+                                    targetSharePlatform = SharingUtils.SharePlatform.WHATSAPP
+                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                        showShareChoiceModal = true
+                                    } else {
+                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.WHATSAPP)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF25D366),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("WhatsApp", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            }
+
+                            // Telegram Share Button (Telegram Brand Blue)
+                            Button(
+                                onClick = {
+                                    targetSharePlatform = SharingUtils.SharePlatform.TELEGRAM
+                                    val hasRealImages = selectedItems.any { it.real_image_count > 0 }
+                                    if (sessionManager.canAccessRealImages() && hasRealImages) {
+                                        showShareChoiceModal = true
+                                    } else {
+                                        executeShare(shareReal = false, platform = SharingUtils.SharePlatform.TELEGRAM)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF229ED9),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            }
+                        }
+
+                        // Bottom row: Photos per SKU selector (1 default, 2, 3, All)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Photos/design:",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
+                                val isSelected = imagesPerItem == count
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { imagesPerItem = count },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.height(26.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
+        // Share Type Choice Dialog Modal
+        if (showShareChoiceModal) {
+            val platformLabel = if (targetSharePlatform == SharingUtils.SharePlatform.TELEGRAM) "Telegram" else "WhatsApp"
+            AlertDialog(
+                onDismissRequest = { showShareChoiceModal = false },
+                title = { Text("Share to $platformLabel") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Choose which type of photos to share to $platformLabel:")
+
+                        // Images per design selector in modal as well
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Photos/design:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            listOf(1 to "1 (Default)", 2 to "2", 3 to "3", 10 to "All").forEach { (count, label) ->
+                                val isSelected = imagesPerItem == count
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { imagesPerItem = count },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.height(30.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = {
+                                showShareChoiceModal = false
+                                executeShare(shareReal = false, platform = targetSharePlatform)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share Catalog Images (Standard)")
+                        }
+                        Button(
+                            onClick = {
+                                showShareChoiceModal = false
+                                executeShare(shareReal = true, platform = targetSharePlatform)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share RAW Real Photos (Watermarked)")
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showShareChoiceModal = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (isLoading && items.isEmpty() && categories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMsg.isNotEmpty()) {
+                Text(
+                    text = errorMsg,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
+                )
+            } else if (selectedCategory == null && selectedTab == 0) {
+                // Main Dashboard View with TabRow + Categories List Selection
+                Column(modifier = Modifier.fillMaxSize()) {
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = {
+                                selectedTab = 0
+                                searchQuery = ""
+                                selectedRateRange = null
+                                selectedWork = null
+                                loadCategories()
+                            },
+                            text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = {
+                                selectedTab = 1
+                                searchQuery = ""
+                                selectedRateRange = null
+                                selectedWork = null
+                                loadRevisedItems(1)
+                            },
+                            text = { 
+                                Text(
+                                    text = "🔥 Offers (Revised)", 
+                                    fontWeight = FontWeight.Bold, 
+                                    fontSize = 13.sp,
+                                    color = if (selectedTab == 1) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) 
+                            }
+                        )
+                    }
+
+                    // Global SKU Search across all folders
+                    OutlinedTextField(
+                        value = globalSkuQuery,
+                        onValueChange = { 
+                            globalSkuQuery = it 
+                            performGlobalSearch(it)
+                        },
+                        placeholder = { Text("Search SKU across all folders...", fontSize = 13.sp) },
+                        leadingIcon = { 
+                            Icon(
+                                Icons.Default.Search, 
+                                contentDescription = "Search SKU", 
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            ) 
+                        },
+                        trailingIcon = {
+                            if (globalSkuQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    globalSkuQuery = "" 
+                                    globalSearchItems = emptyList()
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
+                    if (globalSkuQuery.isNotEmpty()) {
+                        // Global SKU Search Results View
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🔍 Results (${globalSearchItems.size} designs found)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            val userRole = sessionManager.getUserRole()
+                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                            val maxLimit = if (canSelectAll) 100 else 20
+                            if (canSelectAll && globalSearchItems.isNotEmpty()) {
+                                val allSelected = globalSearchItems.isNotEmpty() && globalSearchItems.all { item -> selectedItems.any { it.id == item.id } }
+                                Surface(
+                                    modifier = Modifier.clickable {
+                                        if (allSelected) {
+                                            val currentIds = globalSearchItems.map { it.id }.toSet()
+                                            selectedItems.removeAll { currentIds.contains(it.id) }
+                                        } else {
+                                            var hitLimit = false
+                                            for (item in globalSearchItems) {
+                                                if (!selectedItems.any { it.id == item.id }) {
+                                                    if (selectedItems.size >= maxLimit) {
+                                                        hitLimit = true
+                                                        break
+                                                    }
+                                                    selectedItems.add(item)
+                                                }
+                                            }
+                                            if (hitLimit) {
+                                                Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = if (allSelected) "Deselect All" else "Select All (${minOf(globalSearchItems.size, maxLimit)})",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isSearchingGlobal) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        } else if (globalSearchItems.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "No designs found matching \"$globalSkuQuery\" across any folders.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentPadding = PaddingValues(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(globalSearchItems, key = { it.id }) { item ->
+                                    val isSelected = selectedItems.any { it.id == item.id }
+                                    SalesItemCard(
+                                        item = item,
+                                        isSelected = isSelected,
+                                        sessionManager = sessionManager,
+                                        apiService = apiService,
+                                        onSelectToggle = {
+                                            if (isSelected) {
+                                                selectedItems.removeAll { it.id == item.id }
+                                            } else {
+                                                val userRole = sessionManager.getUserRole()
+                                                val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                                                val maxLimit = if (canSelectAll) 100 else 20
+                                                if (selectedItems.size >= maxLimit) {
+                                                    Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    selectedItems.add(item)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else if (categories.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No folder categories available.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(categories) { category ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { 
+                                            selectedCategory = category
+                                            loadItems(category, 1)
+                                        },
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = category.name,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "${category.active_count} active designs",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.Share, 
+                                            contentDescription = null, 
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Powered by VS FASHION",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "Designed by VS FASHION",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+                        }
+                    }
+                }
+            } else {
+                // SKU Showcase Grid Selection (Category View OR Unified Offers View)
+                val isOffersTab = selectedCategory == null && selectedTab == 1
+
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (isOffersTab) {
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ) {
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = {
+                                    selectedTab = 0
+                                    searchQuery = ""
+                                    selectedRateRange = null
+                                    selectedWork = null
+                                    loadCategories()
+                                },
+                                text = { Text("📁 Category Folders", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                            )
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = {
+                                    selectedTab = 1
+                                    searchQuery = ""
+                                    selectedRateRange = null
+                                    selectedWork = null
+                                    loadRevisedItems(1)
+                                },
+                                text = { 
+                                    Text(
+                                        text = "🔥 Offers (Revised)", 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFD97706)
+                                    ) 
+                                }
+                            )
+                        }
+                    }
+
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { 
+                            searchQuery = it 
+                            if (selectedCategory != null) {
+                                loadItems(selectedCategory!!, 1)
+                            } else {
+                                loadRevisedItems(1)
+                            }
+                        },
+                        placeholder = { Text(if (isOffersTab) "Search offers across all folders..." else "Search SKU ID...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { 
+                                    searchQuery = "" 
+                                    if (selectedCategory != null) {
+                                        loadItems(selectedCategory!!, 1)
+                                    } else {
+                                        loadRevisedItems(1)
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                }
+                            } else {
+                                IconButton(onClick = { showVisualSearchDialog = true }) {
+                                    Icon(
+                                        Icons.Default.CameraAlt,
+                                        contentDescription = "Search by Photo",
+                                        tint = Color(0xFFF59E0B)
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    // Expandable Filter Toggle Bar (Price & Work)
+                    val activeFilterCount = (if (selectedRateRange != null) 1 else 0) + (if (selectedWork != null) 1 else 0)
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Surface(
+                            modifier = Modifier.clickable { showFiltersExpanded = !showFiltersExpanded },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (activeFilterCount > 0 || showFiltersExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (showFiltersExpanded) "Hide Filters (Price & Work)" else "Filter by Price & Work",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (activeFilterCount > 0) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$activeFilterCount",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    if (showFiltersExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (activeFilterCount > 0) {
+                            TextButton(
+                                onClick = {
+                                    selectedRateRange = null
+                                    selectedWork = null
+                                    if (selectedCategory != null) {
+                                        loadItems(selectedCategory!!, 1)
+                                    } else {
+                                        loadRevisedItems(1)
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Clear Filters", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    if (showFiltersExpanded) {
+                        // Price Filter Chips
+                        val rateOptions = listOf(
+                            "All Prices" to null,
+                            "Below ₹1k" to (null to 1000),
+                            "Below ₹1.5k" to (null to 1500),
+                            "Below ₹2k" to (null to 2000),
+                            "Below ₹2.5k" to (null to 2500),
+                            "₹1k - ₹1.5k" to (1000 to 1500),
+                            "₹1k - ₹2k" to (1000 to 2000),
+                            "₹1.5k - ₹2k" to (1500 to 2000),
+                            "₹2k - ₹3k" to (2000 to 3000),
+                            "Above ₹2k" to (2000 to null),
+                            "Above ₹2.5k" to (2500 to null),
+                            "Above ₹3k" to (3000 to null)
+                        )
+
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(rateOptions) { (label, range) ->
+                                val isSelected = selectedRateRange == range
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedRateRange = if (isSelected) null else range
+                                        if (selectedCategory != null) {
+                                            loadItems(selectedCategory!!, 1)
+                                        } else {
+                                            loadRevisedItems(1)
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        // Work Filter Chips
+                        if (works.isNotEmpty()) {
+                            LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedWork == null,
+                                        onClick = {
+                                            if (selectedWork != null) {
+                                                selectedWork = null
+                                                if (selectedCategory != null) {
+                                                    loadItems(selectedCategory!!, 1)
+                                                } else {
+                                                    loadRevisedItems(1)
+                                                }
+                                            }
+                                        },
+                                        label = {
+                                            Text(
+                                                text = "All Works",
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selectedWork == null) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
+                                }
+                                items(works) { w ->
+                                    val isSelected = selectedWork == w.name
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedWork = if (isSelected) null else w.name
+                                            if (selectedCategory != null) {
+                                                loadItems(selectedCategory!!, 1)
+                                            } else {
+                                                loadRevisedItems(1)
+                                            }
+                                        },
+                                        label = {
+                                            Text(
+                                                text = w.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Active count header + Select All option
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isOffersTab) "🔥 All Folders Offer Designs (${items.size} loaded)" else "Total Active: ${selectedCategory?.active_count ?: 0} articles",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOffersTab) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
+                        )
+                        val userRole = sessionManager.getUserRole()
+                        val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                        val maxLimit = if (canSelectAll) 100 else 20
+                        if (canSelectAll && items.isNotEmpty()) {
+                            val allSelected = items.isNotEmpty() && items.all { item -> selectedItems.any { it.id == item.id } }
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    if (allSelected) {
+                                        val currentIds = items.map { it.id }.toSet()
+                                        selectedItems.removeAll { currentIds.contains(it.id) }
+                                    } else {
+                                        var hitLimit = false
+                                        for (item in items) {
+                                            if (!selectedItems.any { it.id == item.id }) {
+                                                if (selectedItems.size >= maxLimit) {
+                                                    hitLimit = true
+                                                    break
+                                                }
+                                                selectedItems.add(item)
+                                            }
+                                        }
+                                        if (hitLimit) {
+                                            Toast.makeText(context, "Maximum limit reached ($maxLimit items)", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (allSelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = if (allSelected) "Deselect All" else "Select All (${minOf(items.size, maxLimit)})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (allSelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (items.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isLoading) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "Loading designs, please wait...",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "No designs match \"$searchQuery\"" else if (isOffersTab) "No revised price / offer designs currently available." else "No available items found in this section.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items, key = { it.id }) { item ->
+                                val isSelected = selectedItems.any { it.id == item.id }
+                                SalesItemCard(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    sessionManager = sessionManager,
+                                    apiService = apiService,
+                                    onSelectToggle = {
+                                        if (isSelected) {
+                                            selectedItems.removeAll { it.id == item.id }
+                                        } else {
+                                            val userRole = sessionManager.getUserRole()
+                                            val canSelectAll = sessionManager.canSelectAllArticles() || userRole == "superadmin" || userRole == "manager"
+                                            val maxLimit = if (canSelectAll) 100 else 20
+                                            if (selectedItems.size >= maxLimit) {
+                                                Toast.makeText(context, "Maximum $maxLimit items can be selected at a time", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                selectedItems.add(item)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
+                            if (hasMoreItems && items.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Button(
+                                            onClick = { 
+                                                if (selectedCategory != null) {
+                                                    loadItems(selectedCategory!!, currentPage + 1) 
+                                                } else {
+                                                    loadRevisedItems(currentPage + 1)
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Load More Articles", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sharing Progress Modal Dialog
+            if (isSharing) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    confirmButton = {},
+                    title = { Text("Preparing Share Bundle") },
+                    text = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp)
+                        ) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = shareProgressMsg,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                )
+            }
+
+            // Visual AI Search Dialog
+            if (showVisualSearchDialog) {
+                VisualSearchDialog(
+                    sessionManager = sessionManager,
+                    onDismiss = { showVisualSearchDialog = false },
+                    onSelectSKU = { matchedItem ->
+                        showVisualSearchDialog = false
+                        openMatchedItemInCatalog(matchedItem)
+                        Toast.makeText(context, "Opened ${matchedItem.sku_id} in Catalog", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SalesItemCard(
+    item: SKUItemDto,
+    isSelected: Boolean,
+    sessionManager: SessionManager,
+    apiService: CatalogApiService,
+    onSelectToggle: () -> Unit
+) {
+    var imageUrl by remember { mutableStateOf(item.getThumbnailImageUrl(sessionManager.getServerUrl())) }
+    var showZoomDialog by remember { mutableStateOf(false) }
+    var showEditRateDialog by remember { mutableStateOf(false) }
+    var currentRate by remember { mutableStateOf(item.rate) }
+    var currentRevisedRate by remember { mutableStateOf(item.revised_rate) }
+    var currentHikeRate by remember { mutableStateOf(item.hike_rate) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelectToggle() }
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // High-Performance Thumbnail Image Box with overlays
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.75f) // Beautiful Portrait 3:4 aspect ratio
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.sku_id,
+                    onError = {
+                        val fallback = item.getFullImageUrl(sessionManager.getServerUrl())
+                        if (imageUrl != fallback) {
+                            imageUrl = fallback
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+
+                // Top-Left SKU Badge
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = item.sku_id,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Top-Right Stock Sets Badge
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .align(Alignment.TopEnd)
+                ) {
+                    Text(
+                        text = "${item.sets_count} sets",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Bottom-Left Zoom Icon Trigger Button
+                IconButton(
+                    onClick = { showZoomDialog = true },
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .align(Alignment.BottomStart)
+                        .size(26.dp)
+                        .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Zoom Design",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                // Overlay Selection indicator checkmark icon
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                    )
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .align(Alignment.BottomEnd)
+                            .size(24.dp)
+                            .background(Color.White, shape = RoundedCornerShape(percent = 50))
+                    )
+                }
+            }
+
+            // Compact bottom information container
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable(enabled = sessionManager.canEditRates()) {
+                        showEditRateDialog = true
+                    }
+                ) {
+                    if (currentHikeRate != null && currentHikeRate!! > 0) {
+                        Column {
+                            Text(
+                                text = "▲ HIKE",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFEF4444)
+                            )
+                            Text(
+                                text = "₹$currentHikeRate",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFEF4444)
+                            )
+                        }
+                    } else if (currentRevisedRate != null && currentRevisedRate!! > 0) {
+                        Column {
+                            Text(
+                                text = "🔥 OFFER",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706)
+                            )
+                            Text(
+                                text = "₹$currentRevisedRate",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "₹$currentRate",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    if (sessionManager.canEditRates()) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Price",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(12.dp)
+                        )
+                    }
+                }
+
+                val detailText = when {
+                    !item.category_name.isNullOrBlank() && !item.work.isNullOrBlank() -> "${item.category_name} • ${item.work}"
+                    !item.category_name.isNullOrBlank() -> item.category_name
+                    !item.work.isNullOrBlank() && !item.material.isNullOrBlank() -> "${item.work} | ${item.material}"
+                    !item.work.isNullOrBlank() -> item.work
+                    !item.material.isNullOrBlank() -> item.material
+                    else -> SharingUtils.sanitizeDescription(item.description)
+                }
+                if (detailText.isNotEmpty()) {
+                    Text(
+                        text = detailText,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 6.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showZoomDialog) {
+        ImageZoomDialog(
+            item = item,
+            serverUrl = sessionManager.getServerUrl(),
+            sessionManager = sessionManager,
+            onDismiss = { showZoomDialog = false }
+        )
+    }
+
+    if (showEditRateDialog) {
+        var editBaseRate by remember { mutableStateOf(currentRate.toString()) }
+        var editRevisedRate by remember { mutableStateOf(currentRevisedRate?.toString() ?: "") }
+        var editHikeRate by remember { mutableStateOf(currentHikeRate?.toString() ?: "") }
+        var isSaving by remember { mutableStateOf(false) }
+        var saveError by remember { mutableStateOf<String?>(null) }
+        val scope = rememberCoroutineScope()
+
+        AlertDialog(
+            onDismissRequest = { if (!isSaving) showEditRateDialog = false },
+            title = {
+                Text(
+                    text = "Edit Pricing: ${item.sku_id}",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editBaseRate,
+                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) editBaseRate = it },
+                        label = { Text("Base Rate (₹)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editRevisedRate,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.all { c -> c.isDigit() }) {
+                                editRevisedRate = it
+                                if (it.isNotEmpty()) editHikeRate = ""
+                            }
+                        },
+                        label = { Text("🔥 Offer / Revised Rate (₹)") },
+                        placeholder = { Text("Leave blank to remove offer") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editHikeRate,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.all { c -> c.isDigit() }) {
+                                editHikeRate = it
+                                if (it.isNotEmpty()) editRevisedRate = ""
+                            }
+                        },
+                        label = { Text("▲ Hike Price (₹)") },
+                        placeholder = { Text("Leave blank to remove hike") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (saveError != null) {
+                        Text(
+                            text = saveError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSaving = true
+                        saveError = null
+                        scope.launch {
+                            try {
+                                val baseVal = editBaseRate.toIntOrNull() ?: currentRate
+                                val hikeVal = if (editHikeRate.isBlank()) null else editHikeRate.toIntOrNull()
+                                // If hike is available, revised is not required
+                                val revVal = if (hikeVal != null && hikeVal > 0) null else (if (editRevisedRate.isBlank()) null else editRevisedRate.toIntOrNull())
+                                val response = apiService.updateStock(
+                                    item.id,
+                                    StockUpdateRequest(
+                                        setsCount = null,
+                                        isAvailable = null,
+                                        rate = baseVal,
+                                        revisedRate = revVal,
+                                        hikeRate = hikeVal
+                                    )
+                                )
+                                currentRate = response.rate ?: baseVal
+                                currentRevisedRate = response.revised_rate
+                                currentHikeRate = response.hike_rate
+                                showEditRateDialog = false
+                            } catch (e: Exception) {
+                                saveError = e.message ?: "Failed to update pricing"
+                            } finally {
+                                isSaving = false
+                            }
+                        }
+                    },
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Save Rates")
+                    }
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showEditRateDialog = false },
+                    enabled = !isSaving
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}

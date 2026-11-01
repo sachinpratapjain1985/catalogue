@@ -260,6 +260,7 @@ export const runMigrations = async () => {
     // 6.6 Hike Rate migration on items table
     await pool.query('ALTER TABLE items ADD COLUMN IF NOT EXISTS hike_rate INTEGER DEFAULT NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_items_hike_rate ON items(hike_rate) WHERE hike_rate IS NOT NULL');
+    await pool.query('UPDATE items SET revised_rate = NULL WHERE hike_rate IS NOT NULL AND hike_rate > 0 AND revised_rate IS NOT NULL');
     console.log('[Migration] hike_rate column verified on items table.');
 
     // 7. Showcase Feature (24-Hour VIP Client Links)
