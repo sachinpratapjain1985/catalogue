@@ -285,8 +285,8 @@ object SharingUtils {
         val lineSpacing = labelFontSize * 0.20f
         val cornerRadius = labelFontSize * 0.35f
 
-        val marginLeft = width * 0.030f
-        val marginBottom = height * 0.035f
+        val marginLeft = (width * 0.010f).coerceAtLeast(10f)
+        val marginBottom = (height * 0.022f).coerceAtLeast(14f)
 
         val labelText = "RATE"
         val amountText = if (rateText.startsWith("₹")) rateText else "₹$rateText"
@@ -318,8 +318,8 @@ object SharingUtils {
 
         val contentWidth = maxOf(labelWidth, amountWidth)
         // Ensure badge is wide and tall enough to cover any legacy marka stamp completely
-        val badgeWidth = (contentWidth + (paddingHorizontal * 2f)).coerceAtLeast(width * 0.18f)
-        val badgeHeight = (labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)).coerceAtLeast(height * 0.065f)
+        val badgeWidth = (contentWidth + (paddingHorizontal * 2f)).coerceAtLeast(width * 0.16f)
+        val badgeHeight = (labelHeight + lineSpacing + amountHeight + (paddingVertical * 2f)).coerceAtLeast(height * 0.075f)
 
         val left = marginLeft
         val right = left + badgeWidth
