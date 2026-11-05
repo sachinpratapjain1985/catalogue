@@ -57,6 +57,17 @@ export const runMigrations = async () => {
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_select_all_articles BOOLEAN NOT NULL DEFAULT FALSE');
     console.log('[Migration] Users columns verified.');
 
+    // Ensure user_categories table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_categories (
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+          PRIMARY KEY (user_id, category_id)
+      )
+    `);
+    console.log('[Migration] user_categories table verified.');
+
+
     // 3. Create rate_logs table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rate_logs (
