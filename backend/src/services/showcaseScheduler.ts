@@ -10,20 +10,23 @@ export const SALES_CONTACTS = [
 
 export const CALL_CONTACTS = [
   {
+    name: 'Important Old Number (Call & Telegram)',
+    phone: '+919718503340',
+    rawPhone: '9718503340',
+    timing: 'Direct Call & Telegram (24x7 Helpdesk)',
+    note: 'Important Old Registered Number for Call & Telegram',
+    telegram: 'https://t.me/+919718503340',
+    isPrimary: true,
+    isOldNumber: true
+  },
+  {
     name: 'Direct Team Desk (Daytime)',
     phone: '+919240202545',
     rawPhone: '9240202545',
     timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
     note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
-    isPrimary: true
-  },
-  {
-    name: 'Wholesale Helpdesk (24x7)',
-    phone: '+919718503340',
-    rawPhone: '9718503340',
-    timing: 'Call for any query anytime',
-    note: 'Call for any query anytime (24x7 Helpdesk)',
-    isPrimary: false
+    isPrimary: false,
+    isOldNumber: false
   }
 ];
 
@@ -38,6 +41,7 @@ export const BRAND_DETAILS = {
   gstNumber: '07AKCPJ2754N1ZX',
   email: 'wholesale@desukafashion.com',
   website: 'https://www.desukafashion.com',
+  telegram: 'https://t.me/+919718503340',
   instagram: 'https://instagram.com/desukab2b',
   facebook: 'https://facebook.com/desukab2b',
   youtube: 'https://youtube.com/@DesukaByVSFashion',
@@ -135,14 +139,17 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
     const whatsappShareText = encodeURIComponent(
       `*DESUKA by VS FASHION — Exclusive Wholesale Showcase*\n\n` +
       `📢 *ये सारे सैंपल कलेक्शन हैं, और डिटेल्स में देखने के लिए नीचे दिए हुए नंबर पर संपर्क करें*\n\n` +
-      `Looking for more wholesale designs or customized sets? Chat directly with our Gandhi Nagar sales desk on WhatsApp for live video preview and catalogs:\n` +
+      `Looking for more wholesale designs or customized sets? Chat directly with our Gandhi Nagar sales desk on WhatsApp or Telegram for live video preview and catalogs:\n` +
       `${showcaseUrl}\n\n` +
       `📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031\n` +
       `🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)\n` +
-      `📞 Direct Call: 9240202545 / 9718503340 | WhatsApp: 8796333844\n` +
+      `⭐ Direct Call & Telegram (Important Old No.): +91 9718503340\n` +
+      `✈️ Telegram Link: https://t.me/+919718503340\n` +
+      `📞 Daytime Desk: 9240202545 | WhatsApp: 8796333844\n` +
       `🌐 https://www.desukafashion.com`
     );
     const whatsappShareLink = `https://api.whatsapp.com/send?text=${whatsappShareText}`;
+    const telegramShareLink = `https://t.me/share/url?url=${encodeURIComponent(showcaseUrl)}&text=${encodeURIComponent('DESUKA by VS FASHION — Exclusive Wholesale Showcase (Important Old No. Call/Telegram: +91 9718503340)')}`;
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
@@ -167,9 +174,12 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
             </p>
           </div>
 
-          <div style="text-align: center; margin-bottom: 24px;">
-            <a href="${whatsappShareLink}" target="_blank" style="display: inline-block; background: #25d366; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px;">
+          <div style="text-align: center; margin-bottom: 24px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+            <a href="${whatsappShareLink}" target="_blank" style="display: inline-block; background: #25d366; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; font-size: 14px;">
               💬 Share Directly to WhatsApp
+            </a>
+            <a href="https://t.me/+919718503340" target="_blank" style="display: inline-block; background: #229ED9; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; font-size: 14px;">
+              ✈️ Chat on Telegram (+91 9718503340)
             </a>
           </div>
 
@@ -186,7 +196,7 @@ export async function sendShowcaseEmail(token: string, targetEmail?: string): Pr
             <p style="margin: 2px 0;"><strong>VS FASHION — DESUKA</strong></p>
             <p style="margin: 2px 0;">📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031</p>
             <p style="margin: 2px 0;">🧾 GSTIN: <strong style="color: #38bdf8;">07AKCPJ2754N1ZX</strong> (Verified B2B Wholesale)</p>
-            <p style="margin: 2px 0;">📞 Call: 9240202545 / 9718503340 | 📧 wholesale@desukafashion.com</p>
+            <p style="margin: 2px 0;">⭐ <strong>Call & Telegram (Important Old No.):</strong> <a href="https://t.me/+919718503340" style="color: #38bdf8; text-decoration: none;">+91 9718503340</a> | 📞 Daytime: 9240202545 | 📧 wholesale@desukafashion.com</p>
             <p style="margin: 2px 0;">🌐 <a href="https://www.desukafashion.com" style="color: #64748b;">https://www.desukafashion.com</a></p>
           </div>
         </div>

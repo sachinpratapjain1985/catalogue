@@ -408,7 +408,9 @@ ${clientUrl}
 
 📍 IX/6362, Netaji Gali, Gandhi Nagar, Delhi — 110031
 🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)
-📞 Daytime Desk: +91 9240202545 | +91 9718503340
+⭐ Direct Call & Telegram (Important Old No.): +91 9718503340
+✈️ Telegram Link: https://t.me/+919718503340
+📞 Daytime Desk: +91 9240202545
 🌐 https://www.desukafashion.com`;
 
     navigator.clipboard.writeText(shareText);
@@ -3419,6 +3421,28 @@ ${clientUrl}
                       <Share2 size={15} />
                       {copiedShowcaseText ? 'Copied WhatsApp Text!' : 'Copy WhatsApp Share Message'}
                     </button>
+
+                    <a
+                      href={`https://t.me/share/url?url=${encodeURIComponent(showcaseActiveLink.token ? `${window.location.origin}/showcase/${showcaseActiveLink.token}` : (showcaseActiveLink.url || '').replace(/https?:\/\/[^/]+/, window.location.origin))}&text=${encodeURIComponent('DESUKA by VS FASHION — Exclusive Wholesale Showcase (Important Old No. Call/Telegram: +91 9718503340)')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn"
+                      style={{
+                        background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        textDecoration: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✈️ Share on Telegram (+91 9718503340)
+                    </a>
 
                     <button
                       type="button"

@@ -69,7 +69,7 @@ object SharingUtils {
             if (item.pieces_per_set > 0) {
                 lines.add("Pack Details: ${item.pieces_per_set} pcs/set")
             }
-            lines.add("\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+            lines.add("\nDESUKA by VS FASHION Gandhi Nagar Delhi\n⭐ Call & Telegram (Important Old No.): +91 9718503340 | https://t.me/+919718503340")
             return lines.joinToString("\n").trim()
         } else {
             return buildString {
@@ -93,7 +93,7 @@ object SharingUtils {
                     }
                     append("\n")
                 }
-                append("Shared via Desuka Catalog\nDESUKA by VS FASHION Gandhi Nagar Delhi")
+                append("Shared via Desuka Catalog\nDESUKA by VS FASHION Gandhi Nagar Delhi\n⭐ Call & Telegram (Important Old No.): +91 9718503340 | https://t.me/+919718503340")
             }.trim()
         }
     }

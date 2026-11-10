@@ -238,7 +238,9 @@ export default function ShowcaseManager({ token, user: _user, onNavigateToCatalo
       `⏰ *Note:* This showcase page is active for a limited time.\n\n` +
       `📍 *VS FASHION* | Netaji Gali, Gandhi Nagar, Delhi — 110031\n` +
       `🧾 GSTIN: 07AKCPJ2754N1ZX (Govt. Verified B2B Wholesale)\n` +
-      `📞 Daytime Desk: +91 9240202545 | +91 9718503340\n` +
+      `⭐ Direct Call & Telegram (Important Old No.): +91 9718503340\n` +
+      `✈️ Telegram Link: https://t.me/+919718503340\n` +
+      `📞 Daytime Desk: +91 9240202545\n` +
       `🌐 https://www.desukafashion.com`;
     
     navigator.clipboard.writeText(text);
@@ -778,6 +780,28 @@ export default function ShowcaseManager({ token, user: _user, onNavigateToCatalo
                     {copiedShareToken === link.token ? <Check size={14} /> : <Share2 size={14} />}
                     {copiedShareToken === link.token ? 'Copied Message!' : 'WhatsApp Text'}
                   </button>
+
+                  {/* Share on Telegram */}
+                  <a
+                    href={`https://t.me/share/url?url=${encodeURIComponent(link.url)}&text=${encodeURIComponent('DESUKA by VS FASHION — Exclusive Wholesale Showcase (Important Old No. Call/Telegram: +91 9718503340)')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.5rem 0.85rem',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      background: 'rgba(34, 158, 217, 0.1)',
+                      border: '1px solid rgba(34, 158, 217, 0.3)',
+                      color: '#38bdf8',
+                      textDecoration: 'none'
+                    }}
+                    title="Share showcase link directly on Telegram (+91 9718503340)"
+                  >
+                    ✈️ Telegram
+                  </a>
 
                   {/* Open in new tab */}
                   <a

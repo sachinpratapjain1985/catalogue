@@ -10,8 +10,7 @@ import {
   MessageSquare, 
   ZoomIn, 
   X, 
-  Share2,
-  Bookmark
+  Share2
 } from 'lucide-react';
 
 const InstagramIcon = () => (
@@ -35,6 +34,15 @@ const YoutubeIcon = () => (
   </svg>
 );
 
+export const TelegramIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M21.5 3.5L2.5 10.8C1.2 11.3 1.2 12.1 2.3 12.4L7.2 13.9L18.5 6.8C19 6.5 19.5 6.7 19.1 7.1L10 15.3H9.99L9.6 20.8C10.2 20.8 10.4 20.5 10.7 20.2L13.4 17.6L18.9 21.7C19.9 22.3 20.6 22 20.9 20.8L22.9 4.8C23.3 3.3 22.4 2.6 21.5 3.5Z"
+      fill="#229ED9"
+    />
+  </svg>
+);
+
 interface ShowcaseItem {
   id: number;
   sku_id: string;
@@ -53,8 +61,11 @@ interface CallContact {
   name: string;
   phone: string;
   rawPhone: string;
+  timing?: string;
   note: string;
   isPrimary?: boolean;
+  telegram?: string;
+  isOldNumber?: boolean;
 }
 
 interface ShowcaseResponse {
@@ -77,6 +88,7 @@ interface ShowcaseResponse {
     gstNumber?: string;
     email: string;
     website: string;
+    telegram?: string;
     instagram: string;
     facebook: string;
     youtube: string;
@@ -104,6 +116,14 @@ export const formatWhatsAppUrl = (rawPhone: string, text?: string) => {
 export const formatCallUrl = (rawPhone: string) => {
   const clean = (rawPhone || '').replace(/\D/g, '');
   return clean.length === 10 ? `tel:+91${clean}` : `tel:+${clean}`;
+};
+
+export const formatTelegramUrl = (rawPhone: string = '9718503340') => {
+  let clean = (rawPhone || '9718503340').replace(/\D/g, '');
+  if (clean.length === 10) {
+    clean = '91' + clean;
+  }
+  return `https://t.me/+${clean}`;
 };
 
 export const getThumbnailUrl = (imagePath: string) => {
@@ -209,6 +229,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
     gstNumber: '07AKCPJ2754N1ZX',
     email: 'wholesale@desukafashion.com',
     website: 'https://www.desukafashion.com',
+    telegram: 'https://t.me/+919718503340',
     instagram: 'https://instagram.com/desukab2b',
     facebook: 'https://facebook.com/desukab2b',
     youtube: 'https://youtube.com/@DesukaByVSFashion',
@@ -225,25 +246,37 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
 
   const callContacts = data?.callContacts || [
     {
+      name: 'Important Old Number (Call & Telegram)',
+      phone: '+919718503340',
+      rawPhone: '9718503340',
+      timing: 'Direct Call & Telegram (24x7 Helpdesk)',
+      note: 'Important Old Registered Number for Call & Telegram',
+      telegram: 'https://t.me/+919718503340',
+      isPrimary: true,
+      isOldNumber: true
+    },
+    {
       name: 'Direct Team Desk (Daytime)',
       phone: '+919240202545',
       rawPhone: '9240202545',
       timing: 'Office Timings: 10:00 AM – 7:00 PM for Call',
       note: 'Office Timings: 10:00 AM – 7:00 PM for Call',
-      isPrimary: true
-    },
-    {
-      name: 'Wholesale Helpdesk (24x7)',
-      phone: '+919718503340',
-      rawPhone: '9718503340',
-      timing: 'Call for any query anytime',
-      note: 'Call for any query anytime (24x7 Helpdesk)',
-      isPrimary: false
+      isPrimary: false,
+      isOldNumber: false
     }
   ];
 
-  const primaryCallContact = callContacts[0];
-  const secondaryCallContact = callContacts[1] || callContacts[0];
+  const oldTelegramContact = callContacts.find(c => c.rawPhone.includes('9718503340')) || {
+    name: 'Important Old Number (Call & Telegram)',
+    phone: '+919718503340',
+    rawPhone: '9718503340',
+    timing: 'Direct Call & Telegram (24x7 Helpdesk)',
+    note: 'Important Old Registered Number for Call & Telegram',
+    telegram: 'https://t.me/+919718503340',
+    isPrimary: true,
+    isOldNumber: true
+  };
+  const daytimeDeskContact = callContacts.find(c => c.rawPhone.includes('9240202545')) || callContacts.find(c => !c.rawPhone.includes('9718503340')) || callContacts[0];
 
   const communityLink = data?.communityLink || 'https://chat.whatsapp.com/ExHwDAh5AuRGpY5WkHGSpl';
 
@@ -411,34 +444,77 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
         <p style={{ color: '#94a3b8', fontSize: '0.9rem', maxWidth: '420px', marginBottom: '1.5rem', lineHeight: 1.5 }}>
           {error}
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', width: '100%', maxWidth: '340px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%', maxWidth: '380px' }}>
+          {/* Highlighted Old Number: 9718503340 Call & Telegram */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(34, 158, 217, 0.18), rgba(99, 102, 241, 0.22))',
+            border: '1.5px solid #229ED9',
+            borderRadius: '12px',
+            padding: '0.85rem 1rem',
+            textAlign: 'center',
+            boxShadow: '0 0 20px rgba(34, 158, 217, 0.25)'
+          }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#000', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+              ⭐ Important Old Number
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', letterSpacing: '0.5px' }}>
+              +91 9718503340
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginBottom: '0.65rem' }}>
+              Call or Telegram anytime (Old Registered Line)
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              <a 
+                href="tel:+919718503340"
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <Phone size={14} /> Call
+              </a>
+              <a 
+                href="https://t.me/+919718503340"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                  color: '#fff',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  boxShadow: '0 2px 10px rgba(34, 158, 217, 0.4)'
+                }}
+              >
+                <TelegramIcon /> Telegram
+              </a>
+            </div>
+          </div>
+
           <a 
             href="tel:+919240202545"
-            style={{
-              background: 'linear-gradient(135deg, #25d366, #128c7e)',
-              color: '#fff',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '10px',
-              textDecoration: 'none',
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              boxShadow: '0 4px 14px rgba(37, 211, 102, 0.3)'
-            }}
-          >
-            <Phone size={18} />
-            Direct Call Desk: +91 9240202545
-          </a>
-          <a 
-            href="tel:+919718503340"
             style={{
               background: 'rgba(255, 255, 255, 0.08)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               color: '#f8fafc',
-              padding: '0.6rem 1.25rem',
+              padding: '0.65rem 1.25rem',
               borderRadius: '10px',
               textDecoration: 'none',
               fontWeight: 600,
@@ -450,7 +526,7 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             }}
           >
             <Phone size={15} />
-            Helpdesk: +91 9718503340
+            Daytime Desk: +91 9240202545 (10 AM – 7 PM)
           </a>
         </div>
       </div>
@@ -508,6 +584,28 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
         </a>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <a
+            href="https://t.me/+919718503340"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: 'linear-gradient(135deg, rgba(34, 158, 217, 0.2), rgba(0, 136, 204, 0.25))',
+              border: '1px solid rgba(34, 158, 217, 0.45)',
+              color: '#38bdf8',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              textDecoration: 'none'
+            }}
+            title="Chat on Telegram: +91 9718503340 (Important Old Number)"
+          >
+            <TelegramIcon />
+            <span>Telegram</span>
+          </a>
           <button
             onClick={handleShare}
             style={{
@@ -613,11 +711,93 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 Direct Call Helpline
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {/* Primary: 9240202545 Direct Daytime */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {/* Highlighted Old Number: 9718503340 Call & Telegram */}
                 <div style={{
-                  background: 'linear-gradient(135deg, rgba(37, 211, 102, 0.12), rgba(16, 185, 129, 0.18))',
-                  border: '1px solid rgba(37, 211, 102, 0.4)',
+                  background: 'linear-gradient(135deg, rgba(34, 158, 217, 0.16), rgba(99, 102, 241, 0.22))',
+                  border: '1.5px solid #229ED9',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.65rem',
+                  boxShadow: '0 0 20px rgba(34, 158, 217, 0.25)'
+                }}>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                      <span style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#000',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '4px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        ⭐ Important Old Number
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700 }}>
+                        Call & Telegram (24x7)
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', letterSpacing: '0.5px' }}>
+                      +91 {oldTelegramContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '0.15rem' }}>
+                      Our original registered number • Available on Direct Call & Telegram
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <a
+                      href={formatCallUrl(oldTelegramContact.rawPhone)}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#fff',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        boxShadow: '0 2px 10px rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      <Phone size={15} />
+                      Call
+                    </a>
+                    <a
+                      href={formatTelegramUrl(oldTelegramContact.rawPhone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                        color: '#fff',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        boxShadow: '0 2px 12px rgba(34, 158, 217, 0.4)'
+                      }}
+                    >
+                      <TelegramIcon />
+                      Telegram
+                    </a>
+                  </div>
+                </div>
+
+                {/* Daytime Team Desk: 9240202545 */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(37, 211, 102, 0.1), rgba(16, 185, 129, 0.15))',
+                  border: '1px solid rgba(37, 211, 102, 0.3)',
                   borderRadius: '10px',
                   padding: '0.85rem 1rem',
                   display: 'flex',
@@ -628,17 +808,17 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 }}>
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ⚡ Direct Team Desk (Office Timings: 10:00 AM – 7:00 PM)
+                      ⚡ Direct Team Desk (Daytime Desk)
                     </div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
-                      +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                      +91 {daytimeDeskContact.rawPhone.replace(/\D/g, '').slice(-10)}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>
-                      Call between 10:00 AM – 7:00 PM for direct team assistance
+                      Office Timings: 10:00 AM – 7:00 PM for direct team assistance
                     </div>
                   </div>
                   <a
-                    href={formatCallUrl(primaryCallContact.rawPhone)}
+                    href={formatCallUrl(daytimeDeskContact.rawPhone)}
                     style={{
                       background: 'linear-gradient(135deg, #25d366, #128c7e)',
                       color: '#fff',
@@ -657,53 +837,6 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                     Call Now
                   </a>
                 </div>
-
-                {/* Secondary: 9718503340 Wholesale Helpdesk */}
-                {secondaryCallContact && (
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '10px',
-                    padding: '0.75rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem'
-                  }}>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
-                        🏢 Wholesale Helpdesk (Call for any query anytime)
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0' }}>
-                        +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
-                      </div>
-                      <div style={{ fontSize: '0.68rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Bookmark size={11} />
-                        Call for any query anytime (24x7 Helpdesk)
-                      </div>
-                    </div>
-                    <a
-                      href={formatCallUrl(secondaryCallContact.rawPhone)}
-                      style={{
-                        background: 'rgba(99, 102, 241, 0.2)',
-                        border: '1px solid rgba(99, 102, 241, 0.4)',
-                        color: '#a5b4fc',
-                        padding: '0.5rem 0.9rem',
-                        borderRadius: '8px',
-                        fontWeight: 600,
-                        fontSize: '0.8rem',
-                        textDecoration: 'none',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem'
-                      }}
-                    >
-                      <Phone size={14} />
-                      Call
-                    </a>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1214,51 +1347,108 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 ))}
               </div>
 
-              {/* Direct call desk quick connect */}
+              {/* Direct call desk & Telegram quick connect */}
               <div style={{
-                marginTop: '1rem',
-                paddingTop: '0.75rem',
+                marginTop: '1.25rem',
+                paddingTop: '1rem',
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.8rem',
-                flexWrap: 'wrap'
+                flexDirection: 'column',
+                gap: '0.65rem'
               }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Direct Call Desk:</span>
-                <a
-                  href={formatCallUrl(primaryCallContact.rawPhone)}
-                  style={{
-                    color: '#60a5fa',
-                    textDecoration: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.3rem'
-                  }}
-                  title="Direct Team Desk (Office Timings: 10:00 AM – 7:00 PM)"
-                >
-                  <Phone size={14} />
-                  +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (10 AM – 7 PM)
-                </a>
-                {secondaryCallContact && (
+                {/* Highlighted Old Registered Number for Call & Telegram */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(34, 158, 217, 0.16), rgba(99, 102, 241, 0.22))',
+                  border: '1.5px solid #229ED9',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  boxShadow: '0 0 15px rgba(34, 158, 217, 0.25)'
+                }}>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.15rem' }}>
+                      <span style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#000',
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
+                        padding: '0.1rem 0.45rem',
+                        borderRadius: '3px',
+                        textTransform: 'uppercase'
+                      }}>
+                        ⭐ Important Old Number
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700 }}>
+                        Call & Telegram
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
+                      +91 {oldTelegramContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <a
+                      href={formatCallUrl(oldTelegramContact.rawPhone)}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#fff',
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem'
+                      }}
+                    >
+                      <Phone size={13} /> Call
+                    </a>
+                    <a
+                      href={formatTelegramUrl(oldTelegramContact.rawPhone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                        color: '#fff',
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        boxShadow: '0 2px 10px rgba(34, 158, 217, 0.4)'
+                      }}
+                    >
+                      <TelegramIcon /> Telegram
+                    </a>
+                  </div>
+                </div>
+
+                {/* Daytime Team Desk */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.8rem', color: '#94a3b8' }}>
+                  <span>Direct Team Desk (Office Timings 10 AM – 7 PM):</span>
                   <a
-                    href={formatCallUrl(secondaryCallContact.rawPhone)}
+                    href={formatCallUrl(daytimeDeskContact.rawPhone)}
                     style={{
-                      color: '#cbd5e1',
+                      color: '#60a5fa',
                       textDecoration: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.8rem',
+                      fontWeight: 700,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.25rem'
                     }}
-                    title="Wholesale Helpdesk (Call for any query anytime)"
                   >
-                    +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)} (Anytime)
+                    <Phone size={13} />
+                    +91 {daytimeDeskContact.rawPhone.replace(/\D/g, '').slice(-10)}
                   </a>
-                )}
+                </div>
               </div>
             </div>
           </>
@@ -1352,27 +1542,69 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
             <div style={{ display: 'flex', gap: '0.6rem' }}>
               <Phone size={18} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <strong style={{ color: '#fff' }}>Direct Call Helpline:</strong>
-                <div>
-                  <a href={formatCallUrl(primaryCallContact.rawPhone)} style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}>
-                    +91 {primaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
-                  </a>
-                  <span style={{ fontSize: '0.7rem', color: '#86efac', marginLeft: '0.4rem', fontWeight: 600 }}>
-                    (Daytime Direct Desk)
-                  </span>
-                </div>
-                {secondaryCallContact && (
-                  <div style={{ marginTop: '0.2rem' }}>
-                    <a href={formatCallUrl(secondaryCallContact.rawPhone)} style={{ color: '#cbd5e1', textDecoration: 'none', fontSize: '0.82rem', fontWeight: 600 }}>
-                      +91 {secondaryCallContact.rawPhone.replace(/\D/g, '').slice(-10)}
-                    </a>
-                    <span style={{ fontSize: '0.68rem', color: '#fbbf24', marginLeft: '0.35rem' }}>
-                      (Helpdesk)
+                <strong style={{ color: '#fff' }}>Direct Call Helpline & Telegram:</strong>
+
+                {/* Highlighted Old Number: 9718503340 */}
+                <div style={{
+                  marginTop: '0.4rem',
+                  background: 'linear-gradient(135deg, rgba(34, 158, 217, 0.15), rgba(99, 102, 241, 0.2))',
+                  border: '1.5px solid #229ED9',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '8px',
+                  boxShadow: '0 0 12px rgba(34, 158, 217, 0.2)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#000',
+                      fontSize: '0.62rem',
+                      fontWeight: 800,
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '3px',
+                      textTransform: 'uppercase'
+                    }}>
+                      ⭐ Important Old Number
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 700 }}>
+                      Call & Telegram (24x7)
                     </span>
                   </div>
-                )}
-                <div style={{ fontSize: '0.7rem', color: '#fbbf24', marginTop: '2px' }}>
-                  ⭐ Please save these numbers for future connect
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                    <a href={formatCallUrl(oldTelegramContact.rawPhone)} style={{ color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: '0.95rem' }}>
+                      +91 {oldTelegramContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                    </a>
+                    <a
+                      href={formatTelegramUrl(oldTelegramContact.rawPhone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                        color: '#fff',
+                        textDecoration: 'none',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.55rem',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        boxShadow: '0 2px 8px rgba(34, 158, 217, 0.35)'
+                      }}
+                    >
+                      <TelegramIcon /> Chat on Telegram
+                    </a>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '0.4rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Direct Team Desk (10 AM – 7 PM): </span>
+                  <a href={formatCallUrl(daytimeDeskContact.rawPhone)} style={{ color: '#60a5fa', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem' }}>
+                    +91 {daytimeDeskContact.rawPhone.replace(/\D/g, '').slice(-10)}
+                  </a>
+                </div>
+
+                <div style={{ fontSize: '0.7rem', color: '#fbbf24', marginTop: '4px' }}>
+                  ⭐ Please save +91 9718503340 for future connect
                 </div>
                 <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Mail size={14} color="#94a3b8" />
@@ -1534,6 +1766,29 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                 }}
               >
                 💬 Join WhatsApp Community
+              </a>
+
+              {/* Telegram Channel / Direct Link */}
+              <a
+                href={brand.telegram || "https://t.me/+919718503340"}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  background: 'rgba(34, 158, 217, 0.15)',
+                  border: '1px solid rgba(34, 158, 217, 0.4)',
+                  color: '#38bdf8',
+                  padding: '0.5rem 0.85rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontWeight: 600
+                }}
+              >
+                <TelegramIcon />
+                Telegram: +91 9718503340
               </a>
             </div>
           </div>
