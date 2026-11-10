@@ -118,12 +118,13 @@ export const formatCallUrl = (rawPhone: string) => {
   return clean.length === 10 ? `tel:+91${clean}` : `tel:+${clean}`;
 };
 
-export const formatTelegramUrl = (rawPhone: string = '9718503340') => {
+export const formatTelegramUrl = (rawPhone: string = '9718503340', text?: string) => {
   let clean = (rawPhone || '9718503340').replace(/\D/g, '');
   if (clean.length === 10) {
     clean = '91' + clean;
   }
-  return `https://t.me/+${clean}`;
+  const baseUrl = `https://t.me/+${clean}`;
+  return text ? `${baseUrl}?text=${encodeURIComponent(text)}` : baseUrl;
 };
 
 export const getThumbnailUrl = (imagePath: string) => {
@@ -1103,6 +1104,8 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                   const salesRep = getRotatedSalesNumber(index);
                   const whatsappMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated showcase: ${window.location.href}`;
                   const whatsappUrl = formatWhatsAppUrl(salesRep.rawPhone, whatsappMsg);
+                  const telegramMsg = `Hello VS FASHION, I am interested in design SKU: ${item.sku_id} from your curated showcase: ${window.location.href}`;
+                  const telegramUrl = formatTelegramUrl(oldTelegramContact.rawPhone || '9718503340', telegramMsg);
 
                   return (
                     <div
@@ -1226,30 +1229,65 @@ export default function ShowcaseView({ token }: ShowcaseViewProps) {
                           </div>
                         </div>
 
-                        {/* WhatsApp Inquire Button */}
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            marginTop: '0.65rem',
-                            background: '#25d366',
-                            color: '#fff',
-                            padding: '0.45rem',
-                            borderRadius: '6px',
-                            textDecoration: 'none',
-                            fontWeight: 700,
-                            fontSize: '0.75rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.35rem',
-                            boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)'
-                          }}
-                        >
-                          <MessageSquare size={13} />
-                          WhatsApp Quote
-                        </a>
+                        {/* WhatsApp & Telegram Inquire Buttons */}
+                        <div style={{
+                          marginTop: '0.65rem',
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '0.35rem'
+                        }}>
+                          {/* WhatsApp Inquire Button */}
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              background: '#25d366',
+                              color: '#fff',
+                              padding: '0.45rem 0.2rem',
+                              borderRadius: '6px',
+                              textDecoration: 'none',
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.25rem',
+                              boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title="Inquire on WhatsApp"
+                          >
+                            <MessageSquare size={13} />
+                            WhatsApp
+                          </a>
+
+                          {/* Telegram Inquire Button */}
+                          <a
+                            href={telegramUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              background: 'linear-gradient(135deg, #229ED9, #0088cc)',
+                              color: '#fff',
+                              padding: '0.45rem 0.2rem',
+                              borderRadius: '6px',
+                              textDecoration: 'none',
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.25rem',
+                              boxShadow: '0 2px 8px rgba(34, 158, 217, 0.3)',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title="Inquire on Telegram (+91 9718503340)"
+                          >
+                            <TelegramIcon />
+                            Telegram
+                          </a>
+                        </div>
                       </div>
                     </div>
                   );
