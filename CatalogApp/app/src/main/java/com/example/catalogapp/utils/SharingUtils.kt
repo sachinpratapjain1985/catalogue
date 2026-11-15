@@ -236,34 +236,18 @@ object SharingUtils {
         return mutableBitmap
     }
 
-    /**
-     * Calculates the coded internal price number:
-     * - Takes first 2 digits of the price
-     * - Adds range-based offset:
-     *   - Below 2095: +2 (e.g. 1495 -> 14 + 2 = 16)
-     *   - 2095 to 3095: +3 (e.g. 2495 -> 24 + 3 = 27)
-     *   - 3095 to 4095: +4 (e.g. 4095 -> 40 + 4 = 44)
-     *   - Above 4095: +5
-     */
-    fun encodePriceCode(price: Int): String {
-        if (price <= 0) return ""
-        val priceStr = price.toString()
-        val firstTwoDigits = if (priceStr.length >= 2) {
-            priceStr.substring(0, 2).toIntOrNull() ?: 0
-        } else {
-            priceStr.toIntOrNull() ?: 0
-        }
-
-        val offset = when {
-            price <= 2095 -> 2
-            price <= 3095 -> 3
-            price <= 4095 -> 4
-            price <= 5095 -> 5
-            else -> 2 + ((price - 1000) / 1000).coerceAtLeast(0)
-        }
-
-        val coded = firstTwoDigits + offset
-        return coded.toString()
+    /**
+     * Extracts the actual first 2 digits of the base price without any offset addition.
+     * E.g. Rate 1495 -> "14", Rate 795 -> "79", Rate 2495 -> "24"
+     */
+    fun encodePriceCode(price: Int): String {
+        if (price <= 0) return ""
+        val priceStr = price.toString().trim()
+        return if (priceStr.length >= 2) {
+            priceStr.substring(0, 2)
+        } else {
+            priceStr
+        }
     }
 
     /**
@@ -601,8 +585,8 @@ object SharingUtils {
                                         processedBitmap = wmBitmap
 
                                         // 2. Add SKU-ID and coded price in Left corner for RAW images
-                                        val activeRate = if (task.item.hike_rate != null && task.item.hike_rate > 0) task.item.hike_rate else if (task.item.revised_rate != null && task.item.revised_rate > 0) task.item.revised_rate else task.item.rate
-                                        val priceCode = encodePriceCode(activeRate)
+                                        val actualRate = task.item.rate
+                                        val priceCode = encodePriceCode(actualRate)
                                         val skuBadgeBitmap = addTopLeftSkuBadge(processedBitmap, task.item.sku_id, priceCode)
                                         if (processedBitmap != rawBitmap && processedBitmap != wmBitmap && processedBitmap != skuBadgeBitmap) {
                                             processedBitmap.recycle()
@@ -611,7 +595,7 @@ object SharingUtils {
                                     }
 
                                     // 3. Apply NEW OFFER PRICE top-right watermark badge ONLY if hike rate is NOT active
-                                    if (task.hasRevisedRate && !task.hasHikeRate) {
+                                    if (!task.isRealImage && task.hasRevisedRate && !task.hasHikeRate) {
                                         val rateBadgeBitmap = addTopRightRateBadge(processedBitmap, "₹${task.item.revised_rate}")
                                         if (processedBitmap != rawBitmap && processedBitmap != rateBadgeBitmap) {
                                             processedBitmap.recycle()
@@ -620,7 +604,7 @@ object SharingUtils {
                                     }
 
                                     // 3.5 Apply HIKE RATE bottom-left watermark badge to overwrite old marka if hike rate exists
-                                    if (task.hasHikeRate && task.item.hike_rate != null && task.item.hike_rate > 0) {
+                                    if (!task.isRealImage && task.hasHikeRate && task.item.hike_rate != null && task.item.hike_rate > 0) {
                                         val hikeBadgeBitmap = addBottomLeftHikeRateBadge(processedBitmap, "₹${task.item.hike_rate}")
                                         if (processedBitmap != rawBitmap && processedBitmap != hikeBadgeBitmap) {
                                             processedBitmap.recycle()
@@ -629,7 +613,7 @@ object SharingUtils {
                                     }
 
                                     // 4. Apply Stitcher Name in bottom center (small, discreet, not highlighted) if present
-                                    if (task.hasStitcher && !task.item.stitcher_name.isNullOrBlank()) {
+                                    if (!task.isRealImage && task.hasStitcher && !task.item.stitcher_name.isNullOrBlank()) {
                                         val stitcherBitmap = addBottomCenterStitcherBadge(processedBitmap, task.item.stitcher_name)
                                         if (processedBitmap != rawBitmap && processedBitmap != stitcherBitmap) {
                                             processedBitmap.recycle()
