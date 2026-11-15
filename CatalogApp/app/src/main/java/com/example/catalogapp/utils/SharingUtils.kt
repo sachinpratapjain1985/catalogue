@@ -623,12 +623,12 @@ object SharingUtils {
                                         processedBitmap = stitcherBitmap
                                     }
 
-                                    // 5. Save at 96% high quality JPEG or 100% PNG (indistinguishable visual clarity with 3-5x faster file writing)
+                                    // 5. Save at 100% maximum studio-quality JPEG or 100% PNG (zero compression degradation)
                                     FileOutputStream(task.targetFile).use { out ->
                                         if (task.suffix.equals(".png", ignoreCase = true)) {
                                             processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                                         } else {
-                                            processedBitmap.compress(Bitmap.CompressFormat.JPEG, 96, out)
+                                            processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
                                         }
                                     }
 
