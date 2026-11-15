@@ -237,14 +237,16 @@ object SharingUtils {
     }
 
     /**
-     * Extracts the actual first 2 digits of the base price without any offset addition.
-     * E.g. Rate 1495 -> "14", Rate 795 -> "79", Rate 2495 -> "24"
+     * Extracts the leading rate number for RAW images:
+     * - If 3 digits (e.g. 795): takes 1 digit only -> "7" (omits trailing 95/tens)
+     * - If 4 digits (e.g. 1495): takes 2 digits -> "14"
+     * - If 5 digits (e.g. 10495): takes 3 digits -> "104"
      */
     fun encodePriceCode(price: Int): String {
         if (price <= 0) return ""
         val priceStr = price.toString().trim()
-        return if (priceStr.length >= 2) {
-            priceStr.substring(0, 2)
+        return if (priceStr.length >= 3) {
+            priceStr.substring(0, priceStr.length - 2)
         } else {
             priceStr
         }
